@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-pm.local/schemas/requirement.schema.json",
+  "title": "Requirement",
+  "description": "Single requirement record captured from stakeholders and managed through the product lifecycle.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "source",
+    "rawContent",
+    "status",
+    "version",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^req-[0-9]{3,}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "sourceDetail": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "rawContent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "context": {
+      "type": "string",
+      "maxLength": 10000
+    },
+    "problemStatement": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "businessBackground": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "targetUsers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tagLike"
+      },
+      "default": []
+    },
+    "priorityLevel": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "valueScore": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "priorityScore": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "scoreReasoning": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "scoreRef": {
+      "type": "string",
+      "pattern": "^score-[0-9]{3,}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "captured",
+        "triaged",
+        "clarifying",
+        "modeled",
+        "prd_ready",
+        "wireframe_ready",
+        "ui_ready",
+        "reviewing",
+        "approved",
+        "archived"
+      ]
+    },
+    "owner": {
+      "$ref": "#/$defs/personRef"
+    },
+    "reporter": {
+      "$ref": "#/$defs/personRef"
+    },
+    "linkedProjectIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "linkedArtifactIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "relatedRequirementIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^req-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tagLike"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/attachment"
+      },
+      "default": []
+    },
+    "decision": {
+      "$ref": "#/$defs/decision"
+    },
+    "stageHistory": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stageEvent"
+      },
+      "default": []
+    },
+    "customFields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "integer",
+          "boolean",
+          "null"
+        ]
+      },
+      "default": {}
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdBy": {
+      "$ref": "#/$defs/personRef"
+    },
+    "updatedBy": {
+      "$ref": "#/$defs/personRef"
+    }
+  },
+  "$defs": {
+    "tagLike": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50
+    },
+    "personRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "boss",
+            "customer",
+            "sales",
+            "operations",
+            "product",
+            "design",
+            "engineering",
+            "support",
+            "data",
+            "market",
+            "other"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "meeting",
+            "chat",
+            "email",
+            "doc",
+            "ticket",
+            "call",
+            "other"
+          ]
+        },
+        "externalRef": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "path"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mimeType": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "deferred",
+            "rejected",
+            "merged",
+            "needs_more_info"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "decidedBy": {
+          "$ref": "#/$defs/personRef"
+        }
+      }
+    },
+    "stageEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "changedAt"
+      ],
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "captured",
+                "triaged",
+                "clarifying",
+                "modeled",
+                "prd_ready",
+                "wireframe_ready",
+                "ui_ready",
+                "reviewing",
+                "approved",
+                "archived"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "type": "string",
+          "enum": [
+            "captured",
+            "triaged",
+            "clarifying",
+            "modeled",
+            "prd_ready",
+            "wireframe_ready",
+            "ui_ready",
+            "reviewing",
+            "approved",
+            "archived"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "changedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "changedBy": {
+          "$ref": "#/$defs/personRef"
+        },
+        "versionRef": {
+          "type": "string",
+          "maxLength": 100
+        }
+      }
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "revision"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "snapshotId": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    }
+  }
+}

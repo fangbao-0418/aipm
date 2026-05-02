@@ -1,0 +1,64 @@
+{
+  "id": "review-001",
+  "requirementId": "req-001",
+  "stage": "clarify",
+  "artifactRef": "clarify/question-pack.json",
+  "reviewer": {
+    "kind": "rule_engine",
+    "name": "clarify-gate-reviewer",
+    "version": "1.0.0"
+  },
+  "status": "block",
+  "score": 40,
+  "confidence": 0.88,
+  "summary": "仍缺少 3 个关键澄清字段，当前必须阻断建模与 PRD。",
+  "canContinue": false,
+  "blockingReason": "缺少关键澄清字段：targetUsers、coreScenario、launchScope",
+  "findings": [
+    {
+      "id": "finding-001",
+      "severity": "critical",
+      "category": "coverage",
+      "title": "缺少关键澄清字段：targetUsers",
+      "message": "当前还没有补齐“目标用户”，系统不应继续进入建模或 PRD 生成。",
+      "suggestion": "请明确 交友app 的目标用户是谁，他们最核心的需求是什么。",
+      "location": {
+        "artifactType": "clarify",
+        "fieldPath": "/answeredFieldMap/targetUsers"
+      }
+    },
+    {
+      "id": "finding-002",
+      "severity": "critical",
+      "category": "coverage",
+      "title": "缺少关键澄清字段：coreScenario",
+      "message": "当前还没有补齐“核心场景”，系统不应继续进入建模或 PRD 生成。",
+      "suggestion": "请说明 交友app 第一版最核心的使用场景和主流程。",
+      "location": {
+        "artifactType": "clarify",
+        "fieldPath": "/answeredFieldMap/coreScenario"
+      }
+    },
+    {
+      "id": "finding-003",
+      "severity": "critical",
+      "category": "coverage",
+      "title": "缺少关键澄清字段：launchScope",
+      "message": "当前还没有补齐“首发范围”，系统不应继续进入建模或 PRD 生成。",
+      "suggestion": "请明确 交友app 首发版本做什么、不做什么。",
+      "location": {
+        "artifactType": "clarify",
+        "fieldPath": "/answeredFieldMap/launchScope"
+      }
+    }
+  ],
+  "requiredPatches": [],
+  "recommendedActions": [
+    {
+      "label": "继续澄清",
+      "action": "request_clarification",
+      "reason": "仍有硬门禁字段缺失。"
+    }
+  ],
+  "generatedAt": "2026-04-07T14:38:15.461Z"
+}

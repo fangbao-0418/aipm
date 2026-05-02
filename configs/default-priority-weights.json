@@ -1,0 +1,61 @@
+{
+  "modelVersion": "1.0.0",
+  "scale": {
+    "min": 1,
+    "max": 5
+  },
+  "positiveDimensions": {
+    "userValue": {
+      "weight": 0.28,
+      "direction": "positive"
+    },
+    "businessValue": {
+      "weight": 0.22,
+      "direction": "positive"
+    },
+    "strategicFit": {
+      "weight": 0.18,
+      "direction": "positive"
+    },
+    "urgency": {
+      "weight": 0.16,
+      "direction": "positive"
+    },
+    "reach": {
+      "weight": 0.16,
+      "direction": "positive"
+    }
+  },
+  "negativeDimensions": {
+    "implementationCost": {
+      "weight": 0.6,
+      "direction": "negative"
+    },
+    "deliveryRisk": {
+      "weight": 0.4,
+      "direction": "negative"
+    }
+  },
+  "scoreMix": {
+    "valueWeight": 0.75,
+    "feasibilityWeight": 0.25
+  },
+  "manualAdjustment": {
+    "min": -15,
+    "max": 15
+  },
+  "priorityThresholds": {
+    "P0": {
+      "min": 85
+    },
+    "P1": {
+      "min": 70
+    },
+    "P2": {
+      "min": 50
+    },
+    "P3": {
+      "min": 0
+    }
+  }
+}

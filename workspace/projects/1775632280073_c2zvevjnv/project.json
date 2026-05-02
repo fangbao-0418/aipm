@@ -1,0 +1,20 @@
+{
+  "id": "1775632280073_c2zvevjnv",
+  "name": "2",
+  "description": "22",
+  "industry": "ecommerce",
+  "systemPrompt": "222",
+  "createdAt": "2026-04-25T09:26:22.128Z",
+  "updatedAt": "2026-04-25T09:26:22.128Z",
+  "currentStage": "requirement-collection",
+  "llmSettings": {
+    "provider": "openai",
+    "modelProfile": "balanced",
+    "apiKeyConfigured": false,
+    "stageModelRouting": {
+      "capture": "deepseek-reasoner",
+      "structure": "deepseek-reasoner"
+    },
+    "baseUrl": "https://api.deepseek.com/v1"
+  }
+}

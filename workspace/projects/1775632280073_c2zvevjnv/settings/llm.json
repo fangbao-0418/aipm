@@ -1,0 +1,10 @@
+{
+  "provider": "openai",
+  "modelProfile": "balanced",
+  "apiKeyConfigured": false,
+  "stageModelRouting": {
+    "capture": "deepseek-reasoner",
+    "structure": "deepseek-reasoner"
+  },
+  "baseUrl": "https://api.deepseek.com/v1"
+}

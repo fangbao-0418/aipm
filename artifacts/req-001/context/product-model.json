@@ -1,0 +1,107 @@
+{
+  "meta": {
+    "requirementId": "req-001",
+    "generatedAt": "2026-04-06T10:57:38.633Z",
+    "version": "0.2.0",
+    "generator": "template"
+  },
+  "positioning": {
+    "title": "交友app",
+    "summary": "交友app 的第一版产品模型，基于当前需求记录和优先级信息整理。",
+    "targetUsers": [
+      "aipm"
+    ],
+    "problem": "设计一个交友app",
+    "valueProposition": "帮助用户围绕“交友app”完成核心任务，并减少流程阻塞与信息流失。"
+  },
+  "goals": [
+    "明确 交友app 的核心用户价值",
+    "支撑当前优先级 未评分 的功能范围判断",
+    "为后续 PRD、原型和 UI 提供结构化输入"
+  ],
+  "assumptions": [
+    "当前需求未覆盖所有边界条件，默认以最小可落地方案建模。",
+    "如评分、评审或竞品分析变化，应重新生成产物链路。"
+  ],
+  "features": [
+    {
+      "id": "feature-001",
+      "name": "交友app 核心入口",
+      "description": "围绕需求“设计一个交友app”提供统一入口和关键动作触发。"
+    },
+    {
+      "id": "feature-002",
+      "name": "状态与提醒",
+      "description": "对关键节点、变化和例外情况提供清晰反馈。"
+    },
+    {
+      "id": "feature-003",
+      "name": "管理与配置",
+      "description": "允许用户查看详情、修改偏好和完成闭环操作。"
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow-001",
+      "name": "交友app 首次使用流程",
+      "steps": [
+        "进入产品并理解当前问题背景",
+        "完成与“设计一个交友app”相关的首次设置",
+        "看到可执行的下一步动作"
+      ]
+    },
+    {
+      "id": "flow-002",
+      "name": "日常使用闭环",
+      "steps": [
+        "查看当前状态",
+        "处理关键提醒或待办",
+        "执行主任务并返回结果页"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "id": "page-home",
+      "name": "首页",
+      "purpose": "帮助用户快速进入 交友app 的主工作流。",
+      "modules": [
+        "页面摘要",
+        "主行动入口",
+        "状态提示"
+      ]
+    },
+    {
+      "id": "page-detail",
+      "name": "详情页",
+      "purpose": "展示核心对象详情、状态和操作历史。",
+      "modules": [
+        "详情信息",
+        "状态区",
+        "操作区"
+      ]
+    },
+    {
+      "id": "page-manage",
+      "name": "管理页",
+      "purpose": "承接配置、管理和例外处理。",
+      "modules": [
+        "交友app 核心入口",
+        "状态与提醒",
+        "管理与配置"
+      ]
+    }
+  ],
+  "designStyle": {
+    "tone": "calm, precise, editorial-product",
+    "keywords": [
+      "clarity",
+      "structure",
+      "follow-through"
+    ]
+  },
+  "openQuestions": [
+    "是否存在必须优先保障的业务指标或时间窗口？",
+    "是否有明确对标产品、已有流程或组织约束？"
+  ]
+}

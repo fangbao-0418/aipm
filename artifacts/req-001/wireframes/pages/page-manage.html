@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>管理页 - Wireframe</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f1e8;
+        --paper: #fffcf6;
+        --ink: #171411;
+        --line: #b9b0a0;
+        --muted: #6b645a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.82), rgba(245,241,232,0.94)),
+          repeating-linear-gradient(90deg, transparent 0, transparent 62px, rgba(23,20,17,0.045) 62px, rgba(23,20,17,0.045) 63px);
+        color: var(--ink);
+      }
+      header {
+        padding: 32px 28px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      header p {
+        margin: 0 0 10px;
+        color: var(--muted);
+        letter-spacing: 0.16em;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+      header h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 42px);
+        line-height: 1.02;
+      }
+      main {
+        display: grid;
+        gap: 18px;
+        padding: 24px 20px 40px;
+      }
+      .wf-section {
+        border: 1px solid var(--line);
+        background: rgba(255, 252, 246, 0.92);
+        min-height: 180px;
+        padding: 18px;
+        display: grid;
+        gap: 12px;
+      }
+      .wf-kicker {
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
+      h2 {
+        margin: 0;
+        font-size: 22px;
+      }
+      ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+      .wf-cta {
+        justify-self: start;
+        padding: 10px 16px;
+        border: 1px dashed var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <p>wireframe</p>
+      <h1>管理页</h1>
+    </header>
+    <main>
+      <section class="wf-section" id="page-manage-section-1">
+        <div class="wf-kicker">交友app 核心入口</div>
+        <h2>承接 交友app 核心入口 相关信息与动作</h2>
+        <ul>
+          <li>突出 交友app 核心入口 的核心信息层级</li><li>保留清晰的状态反馈与下一步动作</li><li>避免一次性展示过多字段</li>
+        </ul>
+        <div class="wf-cta">继续</div>
+      </section>
+    
+      <section class="wf-section" id="page-manage-section-2">
+        <div class="wf-kicker">状态与提醒</div>
+        <h2>承接 状态与提醒 相关信息与动作</h2>
+        <ul>
+          <li>突出 状态与提醒 的核心信息层级</li><li>保留清晰的状态反馈与下一步动作</li><li>避免一次性展示过多字段</li>
+        </ul>
+        
+      </section>
+    
+      <section class="wf-section" id="page-manage-section-3">
+        <div class="wf-kicker">管理与配置</div>
+        <h2>承接 管理与配置 相关信息与动作</h2>
+        <ul>
+          <li>突出 管理与配置 的核心信息层级</li><li>保留清晰的状态反馈与下一步动作</li><li>避免一次性展示过多字段</li>
+        </ul>
+        
+      </section>
+    </main>
+  </body>
+</html>

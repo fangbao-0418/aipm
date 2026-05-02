@@ -1,0 +1,10 @@
+{
+  "stage": "requirement-collection",
+  "step": "collection-organize-error",
+  "model": "glm-5.1",
+  "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+  "systemPrompt": "你是资深产品经理。\n请基于全部来源内容，一次性整理需求采集结果。重点是保留全部需求点，做去重、合并、轻度润色和层级整理，不要把内容过度压缩成少量摘要。不要遗漏后面的来源。requirementsDocument 应该是一份完整、可继续编辑的需求点文档。",
+  "userPrompt": "{\n  \"projectName\": \"智能日历\",\n  \"rawInputs\": [\n    \"你给我补充语音录入具体细节\"\n  ],\n  \"sourceRecords\": [\n    {\n      \"id\": \"1775962844259-qs9w77\",\n      \"content\": \"你给我补充语音录入具体细节\",\n      \"createdAt\": \"2026-04-12T03:00:44.259Z\",\n      \"updatedAt\": \"2026-04-12T03:00:44.259Z\"\n    }\n  ],\n  \"currentDocument\": \"# 智能日历 需求采集文档\\n\\n## 当前状态\\n- 尚未输入需求点\\n\",\n  \"sourceContext\": \"来源标题：需求点记录 1\\n来源类型：record\\n来源内容：\\n记录： 你给我补充语音录入具体细节\",\n  \"sourceSummaries\": [\n    {\n      \"id\": \"1775962844259-qs9w77\",\n      \"title\": \"需求点记录 1\",\n      \"sourceType\": \"record\",\n      \"summary\": \"记录： 你给我补充语音录入具体细节\",\n      \"keyPoints\": [\n        \"记录： 你给我补充语音录入具体细节\"\n      ],\n      \"candidateUserGoals\": [],\n      \"candidateScenarios\": [],\n      \"candidateFunctions\": [],\n      \"candidateConstraints\": [],\n      \"openQuestions\": []\n    }\n  ],\n  \"uploadedFiles\": [],\n  \"extractedHighlights\": [\n    \"记录： 你给我补充语音录入具体细节\"\n  ]\n}",
+  "error": "OpenAI request failed: 429 {\"error\":{\"code\":\"1302\",\"message\":\"您的账户已达到速率限制，请您控制请求频率\"}}",
+  "createdAt": "2026-04-12T03:00:44.344Z"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "1777632612689_ktwqj23jw",
+  "name": "11",
+  "description": "11",
+  "industry": "fintech",
+  "systemPrompt": "11",
+  "createdAt": "2026-05-02T03:05:18.570Z",
+  "updatedAt": "2026-05-02T03:05:18.570Z",
+  "currentStage": "requirement-collection",
+  "llmSettings": {
+    "provider": "openai",
+    "modelProfile": "balanced",
+    "apiKeyConfigured": false,
+    "stageModelRouting": {
+      "capture": "gpt-5-mini",
+      "structure": "gpt-5.2"
+    }
+  }
+}

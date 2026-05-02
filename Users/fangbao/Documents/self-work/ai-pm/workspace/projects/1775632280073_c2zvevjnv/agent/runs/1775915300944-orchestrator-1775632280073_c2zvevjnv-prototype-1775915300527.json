@@ -1,0 +1,90 @@
+{
+  "id": "1775915300944-orchestrator-1775632280073_c2zvevjnv-prototype-1775915300527",
+  "projectId": "1775632280073_c2zvevjnv",
+  "currentStage": "prototype",
+  "loggedAt": "2026-04-11T13:48:20.943Z",
+  "decision": {
+    "runId": "orchestrator-1775632280073_c2zvevjnv-prototype-1775915300527",
+    "currentStage": "prototype",
+    "orchestrationStatus": "awaiting_user_confirmation",
+    "stageGoal": "把 PRD 转成页面结构和交互骨架。",
+    "shouldRunStageAgent": false,
+    "stageAgentType": "wireframe-agent",
+    "shouldRunReview": true,
+    "canAdvance": true,
+    "suggestedNextStage": "prototype-annotation",
+    "userConfirmationRequired": true,
+    "blockers": [],
+    "warnings": [
+      "当前阶段详细门禁还在持续接入。"
+    ],
+    "suggestedActions": [
+      "当前阶段详细门禁还在持续接入。"
+    ],
+    "responseCard": {
+      "status": "ready",
+      "headline": "当前阶段已经具备推进条件",
+      "summary": "需求点文档已经达到当前门禁要求，可以进入下一阶段，但建议先由你确认。",
+      "bullets": [
+        "当前阶段目标：把 PRD 转成页面结构和交互骨架。",
+        "当前阶段详细门禁还在持续接入。"
+      ],
+      "ctaLabel": "进入原型标注"
+    },
+    "chatResponse": "当前阶段已满足进入条件，是否进入下一阶段：prototype-annotation？"
+  },
+  "taskPlan": {
+    "planId": "plan-1775632280073_c2zvevjnv-prototype",
+    "projectId": "1775632280073_c2zvevjnv",
+    "stage": "prototype",
+    "agentType": "wireframe-agent",
+    "generatedAt": "2026-04-11T13:48:20.526Z",
+    "status": "running",
+    "stageGoal": "把 PRD 转成页面结构和交互骨架。",
+    "inputs": [
+      {
+        "sourceType": "artifact",
+        "sourceId": "prototype",
+        "label": "原型输入",
+        "required": true,
+        "satisfied": true
+      }
+    ],
+    "tasks": [
+      {
+        "taskId": "prototype-plan",
+        "title": "准备原型阶段",
+        "description": "当前阶段的详细自动执行能力还在继续接入。",
+        "taskType": "analyze",
+        "status": "pending",
+        "outputTargets": [
+          "prototype"
+        ],
+        "doneWhen": [
+          "阶段能力已接入"
+        ]
+      }
+    ],
+    "reviewChecklist": [
+      {
+        "id": "prototype-review",
+        "label": "原型阶段已接入",
+        "required": true,
+        "passed": false,
+        "message": "后续继续补齐该阶段的执行与审视规则"
+      }
+    ],
+    "advanceGate": {
+      "nextStage": "prototype-annotation",
+      "canAdvance": true,
+      "blockingIssues": [],
+      "warnings": [
+        "当前阶段详细门禁还在持续接入。"
+      ],
+      "requiresUserConfirmation": true
+    },
+    "recommendedUserActions": [
+      "当前阶段详细门禁还在持续接入。"
+    ]
+  }
+}

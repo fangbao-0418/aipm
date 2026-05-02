@@ -1,0 +1,1775 @@
+{
+  "projectName": "智能日历",
+  "rawInputs": [
+    "## 文档说明",
+    "已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档",
+    "## 需求内容",
+    "### 目标与价值",
+    "- 记录： ### 目标与价值",
+    "- 记录： - 记录： ### 用户目标",
+    "- 记录： - 记录： - 最优先要解决的业务目标是什么",
+    "- 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品",
+    "- 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+    "- 记录： ### 用户目标",
+    "- 记录： - ### 用户目标",
+    "- 记录： - - 最优先要解决的业务目标是什么",
+    "- 记录： - - 目标用户会在什么具体场景下使用这个产品",
+    "- 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+    "- 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文",
+    "### 场景与流程",
+    "- 记录： ### 场景与流程",
+    "- 记录： - 记录： ### 核心场景",
+    "- 记录： ### 核心场景",
+    "- 记录： - ### 核心场景",
+    "### 功能与交互",
+    "- 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+    "- 记录： ### 功能与交互",
+    "- 记录： - 记录： ### 核心功能",
+    "- 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+    "- 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+    "- 记录： ### 核心功能",
+    "- 记录： - ### 核心功能",
+    "- 记录： - - 第一版必须包含的 3 个核心功能分别是什么",
+    "- 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+    "### 数据与内容",
+    "- 记录： # 智能日历 需求点文档",
+    "- 记录： ## 文档说明",
+    "- 记录： ## 需求内容",
+    "- 记录： ### 数据与内容",
+    "- 记录： - 记录： ## 当前可提炼出的重点",
+    "- 记录： - 记录： ### 约束条件",
+    "- 记录： - 记录： - 暂未明确约束条件",
+    "- 记录： ## 当前可提炼出的重点",
+    "- 记录： ### 约束条件",
+    "- 记录： - ### 约束条件",
+    "- 记录： - - 暂未明确约束条件",
+    "- 记录： ## 待补充问题",
+    "## 当前可提炼出的重点",
+    "### 用户目标",
+    "- ### 目标与价值",
+    "- - 记录： ### 用户目标",
+    "- - 记录： - 最优先要解决的业务目标是什么",
+    "- - 记录： - 目标用户会在什么具体场景下使用这个产品",
+    "### 核心场景",
+    "- 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+    "- - 记录： - 目标用户会在什么具体场景下使用这个产品",
+    "- ### 场景与流程",
+    "- - 记录： ### 核心场景",
+    "### 核心功能",
+    "- 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+    "- ### 功能与交互",
+    "- - 记录： ### 核心功能",
+    "- - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+    "- - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+    "### 约束条件",
+    "- - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+    "- - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+    "- - 记录： ### 约束条件",
+    "- - 记录： - 暂未明确约束条件",
+    "## 待补充问题",
+    "- 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+  ],
+  "sourceRecords": [
+    {
+      "id": "1776000147158-pk482k",
+      "content": "## 文档说明",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-o4icjx",
+      "content": "已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-kffl45",
+      "content": "## 需求内容",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-u6cs52",
+      "content": "### 目标与价值",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-swbikn",
+      "content": "- 记录： ### 目标与价值",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-mgegrm",
+      "content": "- 记录： - 记录： ### 用户目标",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-c7ilnn",
+      "content": "- 记录： - 记录： - 最优先要解决的业务目标是什么",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-ycr6g4",
+      "content": "- 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-zpn24q",
+      "content": "- 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-m1ue3n",
+      "content": "- 记录： ### 用户目标",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-xgn15z",
+      "content": "- 记录： - ### 用户目标",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-n4nnoo",
+      "content": "- 记录： - - 最优先要解决的业务目标是什么",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-vpszqn",
+      "content": "- 记录： - - 目标用户会在什么具体场景下使用这个产品",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-3t5wdc",
+      "content": "- 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-ajzl6f",
+      "content": "- 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-g9osqu",
+      "content": "### 场景与流程",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-qqgudd",
+      "content": "- 记录： ### 场景与流程",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-5sg6h3",
+      "content": "- 记录： - 记录： ### 核心场景",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-hzncv9",
+      "content": "- 记录： ### 核心场景",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-ic7tto",
+      "content": "- 记录： - ### 核心场景",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-3fgog6",
+      "content": "### 功能与交互",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-n9tnpx",
+      "content": "- 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-naxkb6",
+      "content": "- 记录： ### 功能与交互",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-lldpft",
+      "content": "- 记录： - 记录： ### 核心功能",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-pbpsdy",
+      "content": "- 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-7qpt4k",
+      "content": "- 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-w1gl98",
+      "content": "- 记录： ### 核心功能",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-5r4859",
+      "content": "- 记录： - ### 核心功能",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-g6dq0z",
+      "content": "- 记录： - - 第一版必须包含的 3 个核心功能分别是什么",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-07902g",
+      "content": "- 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-cu1jta",
+      "content": "### 数据与内容",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-9qs8z5",
+      "content": "- 记录： # 智能日历 需求点文档",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-ey8wv2",
+      "content": "- 记录： ## 文档说明",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-hurq0o",
+      "content": "- 记录： ## 需求内容",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-eezkib",
+      "content": "- 记录： ### 数据与内容",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-gz5blv",
+      "content": "- 记录： - 记录： ## 当前可提炼出的重点",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-gwiecv",
+      "content": "- 记录： - 记录： ### 约束条件",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-9qydgd",
+      "content": "- 记录： - 记录： - 暂未明确约束条件",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-r51qz7",
+      "content": "- 记录： ## 当前可提炼出的重点",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-rzoesx",
+      "content": "- 记录： ### 约束条件",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-71y4g0",
+      "content": "- 记录： - ### 约束条件",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-zywt0m",
+      "content": "- 记录： - - 暂未明确约束条件",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-slxpox",
+      "content": "- 记录： ## 待补充问题",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-2kvgzj",
+      "content": "## 当前可提炼出的重点",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-mv3i1h",
+      "content": "### 用户目标",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-oiyi9p",
+      "content": "- ### 目标与价值",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-7azl9m",
+      "content": "- - 记录： ### 用户目标",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-146m23",
+      "content": "- - 记录： - 最优先要解决的业务目标是什么",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-ds6gy3",
+      "content": "- - 记录： - 目标用户会在什么具体场景下使用这个产品",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-m9irei",
+      "content": "### 核心场景",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-qyemiu",
+      "content": "- 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-z0xvq0",
+      "content": "- - 记录： - 目标用户会在什么具体场景下使用这个产品",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-43vqmu",
+      "content": "- ### 场景与流程",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-h98ot5",
+      "content": "- - 记录： ### 核心场景",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-9s29g3",
+      "content": "### 核心功能",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-s63txw",
+      "content": "- 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-osoe3l",
+      "content": "- ### 功能与交互",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-k0y1ma",
+      "content": "- - 记录： ### 核心功能",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-tynyhz",
+      "content": "- - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-wgxhem",
+      "content": "- - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-sk4x91",
+      "content": "### 约束条件",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-biaz3j",
+      "content": "- - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-dk55xf",
+      "content": "- - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-hjfjfw",
+      "content": "- - 记录： ### 约束条件",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-deofli",
+      "content": "- - 记录： - 暂未明确约束条件",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-1kavbv",
+      "content": "## 待补充问题",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    },
+    {
+      "id": "1776000147158-wgnadt",
+      "content": "- 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文",
+      "createdAt": "2026-04-12T13:22:27.158Z",
+      "updatedAt": "2026-04-12T13:22:27.158Z"
+    }
+  ],
+  "uploadedFiles": [],
+  "sourceSummaries": [
+    {
+      "id": "1776000147158-89rgp1",
+      "title": "需求点记录 1",
+      "sourceType": "record",
+      "summary": "记录： # 智能日历 需求点文档",
+      "keyPoints": [
+        "记录： # 智能日历 需求点文档"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-pk482k",
+      "title": "需求点记录 2",
+      "sourceType": "record",
+      "summary": "记录： ## 文档说明",
+      "keyPoints": [
+        "记录： ## 文档说明"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-o4icjx",
+      "title": "需求点记录 3",
+      "sourceType": "record",
+      "summary": "记录： 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "keyPoints": [
+        "记录： 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateFunctions": [
+        "记录： 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-kffl45",
+      "title": "需求点记录 4",
+      "sourceType": "record",
+      "summary": "记录： ## 需求内容",
+      "keyPoints": [
+        "记录： ## 需求内容"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-u6cs52",
+      "title": "需求点记录 5",
+      "sourceType": "record",
+      "summary": "记录： ### 目标与价值",
+      "keyPoints": [
+        "记录： ### 目标与价值"
+      ],
+      "candidateUserGoals": [
+        "记录： ### 目标与价值"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-swbikn",
+      "title": "需求点记录 6",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ### 目标与价值",
+      "keyPoints": [
+        "记录： - 记录： ### 目标与价值"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： ### 目标与价值"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-mgegrm",
+      "title": "需求点记录 7",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： ### 用户目标",
+      "keyPoints": [
+        "记录： - 记录： - 记录： ### 用户目标"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： - 记录： ### 用户目标"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-c7ilnn",
+      "title": "需求点记录 8",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： - 最优先要解决的业务目标是什么",
+      "keyPoints": [
+        "记录： - 记录： - 记录： - 最优先要解决的业务目标是什么"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： - 记录： - 最优先要解决的业务目标是什么"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-ycr6g4",
+      "title": "需求点记录 9",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品",
+      "keyPoints": [
+        "记录： - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateScenarios": [
+        "记录： - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-zpn24q",
+      "title": "需求点记录 10",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+      "keyPoints": [
+        "记录： - 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-m1ue3n",
+      "title": "需求点记录 11",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ### 用户目标",
+      "keyPoints": [
+        "记录： - 记录： ### 用户目标"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： ### 用户目标"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-xgn15z",
+      "title": "需求点记录 12",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - ### 用户目标",
+      "keyPoints": [
+        "记录： - 记录： - ### 用户目标"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： - ### 用户目标"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-n4nnoo",
+      "title": "需求点记录 13",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - - 最优先要解决的业务目标是什么",
+      "keyPoints": [
+        "记录： - 记录： - - 最优先要解决的业务目标是什么"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： - - 最优先要解决的业务目标是什么"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-vpszqn",
+      "title": "需求点记录 14",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - - 目标用户会在什么具体场景下使用这个产品",
+      "keyPoints": [
+        "记录： - 记录： - - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： - - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateScenarios": [
+        "记录： - 记录： - - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-3t5wdc",
+      "title": "需求点记录 15",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+      "keyPoints": [
+        "记录： - 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程"
+      ],
+      "candidateUserGoals": [
+        "记录： - 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-ajzl6f",
+      "title": "需求点记录 16",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文",
+      "keyPoints": [
+        "记录： - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+      ],
+      "candidateFunctions": [
+        "记录： - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-g9osqu",
+      "title": "需求点记录 17",
+      "sourceType": "record",
+      "summary": "记录： ### 场景与流程",
+      "keyPoints": [
+        "记录： ### 场景与流程"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： ### 场景与流程"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-qqgudd",
+      "title": "需求点记录 18",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ### 场景与流程",
+      "keyPoints": [
+        "记录： - 记录： ### 场景与流程"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 记录： ### 场景与流程"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-5sg6h3",
+      "title": "需求点记录 19",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： ### 核心场景",
+      "keyPoints": [
+        "记录： - 记录： - 记录： ### 核心场景"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 记录： - 记录： ### 核心场景"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-hzncv9",
+      "title": "需求点记录 20",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ### 核心场景",
+      "keyPoints": [
+        "记录： - 记录： ### 核心场景"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 记录： ### 核心场景"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-ic7tto",
+      "title": "需求点记录 21",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - ### 核心场景",
+      "keyPoints": [
+        "记录： - 记录： - ### 核心场景"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 记录： - ### 核心场景"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-3fgog6",
+      "title": "需求点记录 22",
+      "sourceType": "record",
+      "summary": "记录： ### 功能与交互",
+      "keyPoints": [
+        "记录： ### 功能与交互"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： ### 功能与交互"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-n9tnpx",
+      "title": "需求点记录 23",
+      "sourceType": "record",
+      "summary": "记录： - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "keyPoints": [
+        "记录： - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateFunctions": [
+        "记录： - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-naxkb6",
+      "title": "需求点记录 24",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ### 功能与交互",
+      "keyPoints": [
+        "记录： - 记录： ### 功能与交互"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - 记录： ### 功能与交互"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-lldpft",
+      "title": "需求点记录 25",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： ### 核心功能",
+      "keyPoints": [
+        "记录： - 记录： - 记录： ### 核心功能"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - 记录： - 记录： ### 核心功能"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-pbpsdy",
+      "title": "需求点记录 26",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+      "keyPoints": [
+        "记录： - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "candidateConstraints": [
+        "记录： - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-7qpt4k",
+      "title": "需求点记录 27",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "keyPoints": [
+        "记录： - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "candidateConstraints": [
+        "记录： - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-w1gl98",
+      "title": "需求点记录 28",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ### 核心功能",
+      "keyPoints": [
+        "记录： - 记录： ### 核心功能"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - 记录： ### 核心功能"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-5r4859",
+      "title": "需求点记录 29",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - ### 核心功能",
+      "keyPoints": [
+        "记录： - 记录： - ### 核心功能"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - 记录： - ### 核心功能"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-g6dq0z",
+      "title": "需求点记录 30",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - - 第一版必须包含的 3 个核心功能分别是什么",
+      "keyPoints": [
+        "记录： - 记录： - - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - 记录： - - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "candidateConstraints": [
+        "记录： - 记录： - - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-07902g",
+      "title": "需求点记录 31",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "keyPoints": [
+        "记录： - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "candidateConstraints": [
+        "记录： - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-cu1jta",
+      "title": "需求点记录 32",
+      "sourceType": "record",
+      "summary": "记录： ### 数据与内容",
+      "keyPoints": [
+        "记录： ### 数据与内容"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-9qs8z5",
+      "title": "需求点记录 33",
+      "sourceType": "record",
+      "summary": "记录： - 记录： # 智能日历 需求点文档",
+      "keyPoints": [
+        "记录： - 记录： # 智能日历 需求点文档"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-ey8wv2",
+      "title": "需求点记录 34",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ## 文档说明",
+      "keyPoints": [
+        "记录： - 记录： ## 文档说明"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-hurq0o",
+      "title": "需求点记录 35",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ## 需求内容",
+      "keyPoints": [
+        "记录： - 记录： ## 需求内容"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-eezkib",
+      "title": "需求点记录 36",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ### 数据与内容",
+      "keyPoints": [
+        "记录： - 记录： ### 数据与内容"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-gz5blv",
+      "title": "需求点记录 37",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： ## 当前可提炼出的重点",
+      "keyPoints": [
+        "记录： - 记录： - 记录： ## 当前可提炼出的重点"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-gwiecv",
+      "title": "需求点记录 38",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： ### 约束条件",
+      "keyPoints": [
+        "记录： - 记录： - 记录： ### 约束条件"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [
+        "记录： - 记录： - 记录： ### 约束条件"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-9qydgd",
+      "title": "需求点记录 39",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - 记录： - 暂未明确约束条件",
+      "keyPoints": [
+        "记录： - 记录： - 记录： - 暂未明确约束条件"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [
+        "记录： - 记录： - 记录： - 暂未明确约束条件"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-r51qz7",
+      "title": "需求点记录 40",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ## 当前可提炼出的重点",
+      "keyPoints": [
+        "记录： - 记录： ## 当前可提炼出的重点"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-rzoesx",
+      "title": "需求点记录 41",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ### 约束条件",
+      "keyPoints": [
+        "记录： - 记录： ### 约束条件"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [
+        "记录： - 记录： ### 约束条件"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-71y4g0",
+      "title": "需求点记录 42",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - ### 约束条件",
+      "keyPoints": [
+        "记录： - 记录： - ### 约束条件"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [
+        "记录： - 记录： - ### 约束条件"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-zywt0m",
+      "title": "需求点记录 43",
+      "sourceType": "record",
+      "summary": "记录： - 记录： - - 暂未明确约束条件",
+      "keyPoints": [
+        "记录： - 记录： - - 暂未明确约束条件"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [
+        "记录： - 记录： - - 暂未明确约束条件"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-slxpox",
+      "title": "需求点记录 44",
+      "sourceType": "record",
+      "summary": "记录： - 记录： ## 待补充问题",
+      "keyPoints": [
+        "记录： - 记录： ## 待补充问题"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-2kvgzj",
+      "title": "需求点记录 45",
+      "sourceType": "record",
+      "summary": "记录： ## 当前可提炼出的重点",
+      "keyPoints": [
+        "记录： ## 当前可提炼出的重点"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-mv3i1h",
+      "title": "需求点记录 46",
+      "sourceType": "record",
+      "summary": "记录： ### 用户目标",
+      "keyPoints": [
+        "记录： ### 用户目标"
+      ],
+      "candidateUserGoals": [
+        "记录： ### 用户目标"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-oiyi9p",
+      "title": "需求点记录 47",
+      "sourceType": "record",
+      "summary": "记录： - ### 目标与价值",
+      "keyPoints": [
+        "记录： - ### 目标与价值"
+      ],
+      "candidateUserGoals": [
+        "记录： - ### 目标与价值"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-7azl9m",
+      "title": "需求点记录 48",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： ### 用户目标",
+      "keyPoints": [
+        "记录： - - 记录： ### 用户目标"
+      ],
+      "candidateUserGoals": [
+        "记录： - - 记录： ### 用户目标"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-146m23",
+      "title": "需求点记录 49",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： - 最优先要解决的业务目标是什么",
+      "keyPoints": [
+        "记录： - - 记录： - 最优先要解决的业务目标是什么"
+      ],
+      "candidateUserGoals": [
+        "记录： - - 记录： - 最优先要解决的业务目标是什么"
+      ],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-ds6gy3",
+      "title": "需求点记录 50",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品",
+      "keyPoints": [
+        "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateUserGoals": [
+        "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateScenarios": [
+        "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-m9irei",
+      "title": "需求点记录 51",
+      "sourceType": "record",
+      "summary": "记录： ### 核心场景",
+      "keyPoints": [
+        "记录： ### 核心场景"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： ### 核心场景"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-qyemiu",
+      "title": "需求点记录 52",
+      "sourceType": "record",
+      "summary": "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "keyPoints": [
+        "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateFunctions": [
+        "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-z0xvq0",
+      "title": "需求点记录 53",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品",
+      "keyPoints": [
+        "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateUserGoals": [
+        "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateScenarios": [
+        "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-43vqmu",
+      "title": "需求点记录 54",
+      "sourceType": "record",
+      "summary": "记录： - ### 场景与流程",
+      "keyPoints": [
+        "记录： - ### 场景与流程"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - ### 场景与流程"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-h98ot5",
+      "title": "需求点记录 55",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： ### 核心场景",
+      "keyPoints": [
+        "记录： - - 记录： ### 核心场景"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - - 记录： ### 核心场景"
+      ],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-9s29g3",
+      "title": "需求点记录 56",
+      "sourceType": "record",
+      "summary": "记录： ### 核心功能",
+      "keyPoints": [
+        "记录： ### 核心功能"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： ### 核心功能"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-s63txw",
+      "title": "需求点记录 57",
+      "sourceType": "record",
+      "summary": "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "keyPoints": [
+        "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateFunctions": [
+        "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-osoe3l",
+      "title": "需求点记录 58",
+      "sourceType": "record",
+      "summary": "记录： - ### 功能与交互",
+      "keyPoints": [
+        "记录： - ### 功能与交互"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - ### 功能与交互"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-k0y1ma",
+      "title": "需求点记录 59",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： ### 核心功能",
+      "keyPoints": [
+        "记录： - - 记录： ### 核心功能"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - - 记录： ### 核心功能"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-tynyhz",
+      "title": "需求点记录 60",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+      "keyPoints": [
+        "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "candidateConstraints": [
+        "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-wgxhem",
+      "title": "需求点记录 61",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "keyPoints": [
+        "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "candidateConstraints": [
+        "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-sk4x91",
+      "title": "需求点记录 62",
+      "sourceType": "record",
+      "summary": "记录： ### 约束条件",
+      "keyPoints": [
+        "记录： ### 约束条件"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [
+        "记录： ### 约束条件"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-biaz3j",
+      "title": "需求点记录 63",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+      "keyPoints": [
+        "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "candidateConstraints": [
+        "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-dk55xf",
+      "title": "需求点记录 64",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "keyPoints": [
+        "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [
+        "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "candidateConstraints": [
+        "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-hjfjfw",
+      "title": "需求点记录 65",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： ### 约束条件",
+      "keyPoints": [
+        "记录： - - 记录： ### 约束条件"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [
+        "记录： - - 记录： ### 约束条件"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-deofli",
+      "title": "需求点记录 66",
+      "sourceType": "record",
+      "summary": "记录： - - 记录： - 暂未明确约束条件",
+      "keyPoints": [
+        "记录： - - 记录： - 暂未明确约束条件"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [
+        "记录： - - 记录： - 暂未明确约束条件"
+      ],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-1kavbv",
+      "title": "需求点记录 67",
+      "sourceType": "record",
+      "summary": "记录： ## 待补充问题",
+      "keyPoints": [
+        "记录： ## 待补充问题"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [],
+      "candidateFunctions": [],
+      "candidateConstraints": [],
+      "openQuestions": []
+    },
+    {
+      "id": "1776000147158-wgnadt",
+      "title": "需求点记录 68",
+      "sourceType": "record",
+      "summary": "记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文",
+      "keyPoints": [
+        "记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+      ],
+      "candidateUserGoals": [],
+      "candidateScenarios": [
+        "记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+      ],
+      "candidateFunctions": [
+        "记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+      ],
+      "candidateConstraints": [],
+      "openQuestions": []
+    }
+  ],
+  "requirementPointSections": [
+    {
+      "id": "goals",
+      "title": "目标与价值",
+      "items": [
+        "记录： ### 目标与价值",
+        "记录： - 记录： ### 目标与价值",
+        "记录： - 记录： - 记录： ### 用户目标",
+        "记录： - 记录： - 记录： - 最优先要解决的业务目标是什么",
+        "记录： - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品",
+        "记录： - 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+        "记录： - 记录： ### 用户目标",
+        "记录： - 记录： - ### 用户目标",
+        "记录： - 记录： - - 最优先要解决的业务目标是什么",
+        "记录： - 记录： - - 目标用户会在什么具体场景下使用这个产品",
+        "记录： - 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+        "记录： - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文",
+        "记录： ### 用户目标",
+        "记录： - ### 目标与价值",
+        "记录： - - 记录： ### 用户目标",
+        "记录： - - 记录： - 最优先要解决的业务目标是什么",
+        "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品",
+        "记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+      ]
+    },
+    {
+      "id": "scenarios",
+      "title": "场景与流程",
+      "items": [
+        "记录： ### 场景与流程",
+        "记录： - 记录： ### 场景与流程",
+        "记录： - 记录： - 记录： ### 核心场景",
+        "记录： - 记录： ### 核心场景",
+        "记录： - 记录： - ### 核心场景",
+        "记录： ### 核心场景",
+        "记录： - ### 场景与流程",
+        "记录： - - 记录： ### 核心场景"
+      ]
+    },
+    {
+      "id": "functions",
+      "title": "功能与交互",
+      "items": [
+        "记录： 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档",
+        "记录： ### 功能与交互",
+        "记录： - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+        "记录： - 记录： ### 功能与交互",
+        "记录： - 记录： - 记录： ### 核心功能",
+        "记录： - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+        "记录： - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+        "记录： - 记录： ### 核心功能",
+        "记录： - 记录： - ### 核心功能",
+        "记录： - 记录： - - 第一版必须包含的 3 个核心功能分别是什么",
+        "记录： - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+        "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+        "记录： ### 核心功能",
+        "记录： - ### 功能与交互",
+        "记录： - - 记录： ### 核心功能",
+        "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+        "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+      ]
+    },
+    {
+      "id": "data",
+      "title": "数据与内容",
+      "items": [
+        "记录： # 智能日历 需求点文档",
+        "记录： ## 文档说明",
+        "记录： ## 需求内容",
+        "记录： ### 数据与内容",
+        "记录： - 记录： # 智能日历 需求点文档",
+        "记录： - 记录： ## 文档说明",
+        "记录： - 记录： ## 需求内容",
+        "记录： - 记录： ### 数据与内容",
+        "记录： - 记录： - 记录： ## 当前可提炼出的重点",
+        "记录： - 记录： - 记录： ### 约束条件",
+        "记录： - 记录： - 记录： - 暂未明确约束条件",
+        "记录： - 记录： ## 当前可提炼出的重点",
+        "记录： - 记录： ### 约束条件",
+        "记录： - 记录： - ### 约束条件",
+        "记录： - 记录： - - 暂未明确约束条件",
+        "记录： - 记录： ## 待补充问题",
+        "记录： ## 当前可提炼出的重点",
+        "记录： ### 约束条件",
+        "记录： - - 记录： ### 约束条件",
+        "记录： - - 记录： - 暂未明确约束条件",
+        "记录： ## 待补充问题"
+      ]
+    }
+  ],
+  "extractedHighlights": [
+    "记录： # 智能日历 需求点文档",
+    "记录： ## 文档说明",
+    "记录： 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档",
+    "记录： ## 需求内容",
+    "记录： ### 目标与价值",
+    "记录： - 记录： ### 目标与价值",
+    "记录： - 记录： - 记录： ### 用户目标",
+    "记录： - 记录： - 记录： - 最优先要解决的业务目标是什么",
+    "记录： - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品",
+    "记录： - 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+    "记录： - 记录： ### 用户目标",
+    "记录： - 记录： - ### 用户目标",
+    "记录： - 记录： - - 最优先要解决的业务目标是什么",
+    "记录： - 记录： - - 目标用户会在什么具体场景下使用这个产品",
+    "记录： - 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程",
+    "记录： - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文",
+    "记录： ### 场景与流程",
+    "记录： - 记录： ### 场景与流程",
+    "记录： - 记录： - 记录： ### 核心场景",
+    "记录： - 记录： ### 核心场景",
+    "记录： - 记录： - ### 核心场景",
+    "记录： ### 功能与交互",
+    "记录： - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+    "记录： - 记录： ### 功能与交互",
+    "记录： - 记录： - 记录： ### 核心功能",
+    "记录： - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+    "记录： - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+    "记录： - 记录： ### 核心功能",
+    "记录： - 记录： - ### 核心功能",
+    "记录： - 记录： - - 第一版必须包含的 3 个核心功能分别是什么",
+    "记录： - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+    "记录： ### 数据与内容",
+    "记录： - 记录： # 智能日历 需求点文档",
+    "记录： - 记录： ## 文档说明",
+    "记录： - 记录： ## 需求内容",
+    "记录： - 记录： ### 数据与内容",
+    "记录： - 记录： - 记录： ## 当前可提炼出的重点",
+    "记录： - 记录： - 记录： ### 约束条件",
+    "记录： - 记录： - 记录： - 暂未明确约束条件",
+    "记录： - 记录： ## 当前可提炼出的重点",
+    "记录： - 记录： ### 约束条件",
+    "记录： - 记录： - ### 约束条件",
+    "记录： - 记录： - - 暂未明确约束条件",
+    "记录： - 记录： ## 待补充问题",
+    "记录： ## 当前可提炼出的重点",
+    "记录： ### 用户目标",
+    "记录： - ### 目标与价值",
+    "记录： - - 记录： ### 用户目标",
+    "记录： - - 记录： - 最优先要解决的业务目标是什么",
+    "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品",
+    "记录： ### 核心场景",
+    "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+    "记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品",
+    "记录： - ### 场景与流程",
+    "记录： - - 记录： ### 核心场景",
+    "记录： ### 核心功能",
+    "记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+    "记录： - ### 功能与交互",
+    "记录： - - 记录： ### 核心功能",
+    "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+    "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+    "记录： ### 约束条件",
+    "记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+    "记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+    "记录： - - 记录： ### 约束条件",
+    "记录： - - 记录： - 暂未明确约束条件",
+    "记录： ## 待补充问题",
+    "记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+  ],
+  "aiSummary": "已接收 68 条散落需求点，暂未上传文档，已整理为需求点文档。",
+  "requirementsDocument": "# 智能日历 需求点文档\n\n## 文档说明\n已接收 68 条散落需求点，暂未上传文档，已整理为需求点文档。\n\n## 需求内容\n\n### 目标与价值\n- 记录： ### 目标与价值\n- 记录： - 记录： ### 目标与价值\n- 记录： - 记录： - 记录： ### 用户目标\n- 记录： - 记录： - 记录： - 最优先要解决的业务目标是什么\n- 记录： - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品\n- 记录： - 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程\n- 记录： - 记录： ### 用户目标\n- 记录： - 记录： - ### 用户目标\n- 记录： - 记录： - - 最优先要解决的业务目标是什么\n- 记录： - 记录： - - 目标用户会在什么具体场景下使用这个产品\n- 记录： - 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程\n- 记录： - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文\n- 记录： ### 用户目标\n- 记录： - ### 目标与价值\n- 记录： - - 记录： ### 用户目标\n- 记录： - - 记录： - 最优先要解决的业务目标是什么\n- 记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品\n- 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文\n\n### 场景与流程\n- 记录： ### 场景与流程\n- 记录： - 记录： ### 场景与流程\n- 记录： - 记录： - 记录： ### 核心场景\n- 记录： - 记录： ### 核心场景\n- 记录： - 记录： - ### 核心场景\n- 记录： ### 核心场景\n- 记录： - ### 场景与流程\n- 记录： - - 记录： ### 核心场景\n\n### 功能与交互\n- 记录： 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档\n- 记录： ### 功能与交互\n- 记录： - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档\n- 记录： - 记录： ### 功能与交互\n- 记录： - 记录： - 记录： ### 核心功能\n- 记录： - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么\n- 记录： - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间\n- 记录： - 记录： ### 核心功能\n- 记录： - 记录： - ### 核心功能\n- 记录： - 记录： - - 第一版必须包含的 3 个核心功能分别是什么\n- 记录： - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间\n- 记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档\n- 记录： ### 核心功能\n- 记录： - ### 功能与交互\n- 记录： - - 记录： ### 核心功能\n- 记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么\n- 记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间\n\n### 数据与内容\n- 记录： # 智能日历 需求点文档\n- 记录： ## 文档说明\n- 记录： ## 需求内容\n- 记录： ### 数据与内容\n- 记录： - 记录： # 智能日历 需求点文档\n- 记录： - 记录： ## 文档说明\n- 记录： - 记录： ## 需求内容\n- 记录： - 记录： ### 数据与内容\n- 记录： - 记录： - 记录： ## 当前可提炼出的重点\n- 记录： - 记录： - 记录： ### 约束条件\n- 记录： - 记录： - 记录： - 暂未明确约束条件\n- 记录： - 记录： ## 当前可提炼出的重点\n- 记录： - 记录： ### 约束条件\n- 记录： - 记录： - ### 约束条件\n- 记录： - 记录： - - 暂未明确约束条件\n- 记录： - 记录： ## 待补充问题\n- 记录： ## 当前可提炼出的重点\n- 记录： ### 约束条件\n- 记录： - - 记录： ### 约束条件\n- 记录： - - 记录： - 暂未明确约束条件\n- 记录： ## 待补充问题\n\n## 当前可提炼出的重点\n\n### 用户目标\n- ### 目标与价值\n- - 记录： ### 目标与价值\n- - 记录： - 记录： ### 用户目标\n- - 记录： - 记录： - 最优先要解决的业务目标是什么\n\n### 核心场景\n- 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档\n- - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品\n- - 记录： - - 目标用户会在什么具体场景下使用这个产品\n- - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文\n\n### 核心功能\n- 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档\n- - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文\n- ### 功能与交互\n- - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档\n- - 记录： ### 功能与交互\n\n### 约束条件\n- - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么\n- - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间\n- - 记录： - - 第一版必须包含的 3 个核心功能分别是什么\n- - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间\n\n## 待补充问题\n- 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文。",
+  "requirementsDocumentHtml": "<h1>智能日历 需求点文档</h1><h2>文档说明</h2><p>已接收 68 条散落需求点，暂未上传文档，已整理为需求点文档。</p><h2>需求内容</h2><h3>目标与价值</h3><p>- 记录： ### 目标与价值</p><p>- 记录： - 记录： ### 目标与价值</p><p>- 记录： - 记录： - 记录： ### 用户目标</p><p>- 记录： - 记录： - 记录： - 最优先要解决的业务目标是什么</p><p>- 记录： - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品</p><p>- 记录： - 记录： - 记录： 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程</p><p>- 记录： - 记录： ### 用户目标</p><p>- 记录： - 记录： - ### 用户目标</p><p>- 记录： - 记录： - - 最优先要解决的业务目标是什么</p><p>- 记录： - 记录： - - 目标用户会在什么具体场景下使用这个产品</p><p>- 记录： - 记录： - 目标就是做一个cli，你输入需求，帮你进行记录，你可以问他日程</p><p>- 记录： - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文</p><p>- 记录： ### 用户目标</p><p>- 记录： - ### 目标与价值</p><p>- 记录： - - 记录： ### 用户目标</p><p>- 记录： - - 记录： - 最优先要解决的业务目标是什么</p><p>- 记录： - - 记录： - 目标用户会在什么具体场景下使用这个产品</p><p>- 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文</p><h3>场景与流程</h3><p>- 记录： ### 场景与流程</p><p>- 记录： - 记录： ### 场景与流程</p><p>- 记录： - 记录： - 记录： ### 核心场景</p><p>- 记录： - 记录： ### 核心场景</p><p>- 记录： - 记录： - ### 核心场景</p><p>- 记录： ### 核心场景</p><p>- 记录： - ### 场景与流程</p><p>- 记录： - - 记录： ### 核心场景</p><h3>功能与交互</h3><p>- 记录： 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档</p><p>- 记录： ### 功能与交互</p><p>- 记录： - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档</p><p>- 记录： - 记录： ### 功能与交互</p><p>- 记录： - 记录： - 记录： ### 核心功能</p><p>- 记录： - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么</p><p>- 记录： - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间</p><p>- 记录： - 记录： ### 核心功能</p><p>- 记录： - 记录： - ### 核心功能</p><p>- 记录： - 记录： - - 第一版必须包含的 3 个核心功能分别是什么</p><p>- 记录： - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间</p><p>- 记录： - 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档</p><p>- 记录： ### 核心功能</p><p>- 记录： - ### 功能与交互</p><p>- 记录： - - 记录： ### 核心功能</p><p>- 记录： - - 记录： - 第一版必须包含的 3 个核心功能分别是什么</p><p>- 记录： - - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间</p><h3>数据与内容</h3><p>- 记录： # 智能日历 需求点文档</p><p>- 记录： ## 文档说明</p><p>- 记录： ## 需求内容</p><p>- 记录： ### 数据与内容</p><p>- 记录： - 记录： # 智能日历 需求点文档</p><p>- 记录： - 记录： ## 文档说明</p><p>- 记录： - 记录： ## 需求内容</p><p>- 记录： - 记录： ### 数据与内容</p><p>- 记录： - 记录： - 记录： ## 当前可提炼出的重点</p><p>- 记录： - 记录： - 记录： ### 约束条件</p><p>- 记录： - 记录： - 记录： - 暂未明确约束条件</p><p>- 记录： - 记录： ## 当前可提炼出的重点</p><p>- 记录： - 记录： ### 约束条件</p><p>- 记录： - 记录： - ### 约束条件</p><p>- 记录： - 记录： - - 暂未明确约束条件</p><p>- 记录： - 记录： ## 待补充问题</p><p>- 记录： ## 当前可提炼出的重点</p><p>- 记录： ### 约束条件</p><p>- 记录： - - 记录： ### 约束条件</p><p>- 记录： - - 记录： - 暂未明确约束条件</p><p>- 记录： ## 待补充问题</p><h2>当前可提炼出的重点</h2><h3>用户目标</h3><p>- ### 目标与价值</p><p>- - 记录： ### 目标与价值</p><p>- - 记录： - 记录： ### 用户目标</p><p>- - 记录： - 记录： - 最优先要解决的业务目标是什么</p><h3>核心场景</h3><p>- 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档</p><p>- - 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品</p><p>- - 记录： - - 目标用户会在什么具体场景下使用这个产品</p><p>- - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文</p><h3>核心功能</h3><p>- 已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档</p><p>- - 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文</p><p>- ### 功能与交互</p><p>- - 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档</p><p>- - 记录： ### 功能与交互</p><h3>约束条件</h3><p>- - 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么</p><p>- - 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间</p><p>- - 记录： - - 第一版必须包含的 3 个核心功能分别是什么</p><p>- - 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间</p><h2>待补充问题</h2><p>- 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文。</p>",
+  "structuredSnapshot": {
+    "userGoals": [
+      "### 目标与价值",
+      "- 记录： ### 目标与价值",
+      "- 记录： - 记录： ### 用户目标",
+      "- 记录： - 记录： - 最优先要解决的业务目标是什么"
+    ],
+    "coreScenarios": [
+      "已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "- 记录： - 记录： - 目标用户会在什么具体场景下使用这个产品",
+      "- 记录： - - 目标用户会在什么具体场景下使用这个产品",
+      "- 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文"
+    ],
+    "coreFunctions": [
+      "已接收 43 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "- 记录： - 如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文",
+      "### 功能与交互",
+      "- 记录： 已接收 11 条散落需求点，暂未上传文档，已整理为需求点文档",
+      "- 记录： ### 功能与交互"
+    ],
+    "constraints": [
+      "- 记录： - 记录： - 第一版必须包含的 3 个核心功能分别是什么",
+      "- 记录： - 记录： - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间",
+      "- 记录： - - 第一版必须包含的 3 个核心功能分别是什么",
+      "- 记录： - - 有没有必须遵守的约束，比如本地存储、导出、安全或发布时间"
+    ]
+  },
+  "sourceDirty": true,
+  "lastSourceUpdatedAt": "2026-04-12T13:22:27.158Z",
+  "lastOrganizedSourceUpdatedAt": "2026-04-12T13:22:27.161Z",
+  "followupQuestions": [
+    "如果你手上有会议纪要、需求文档或竞品材料，可以继续上传帮助我补齐上下文。"
+  ],
+  "lastOrganizedAt": "2026-04-12T13:22:27.161Z",
+  "lastEditedAt": "2026-04-13T14:09:00.536Z"
+}

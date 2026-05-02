@@ -1,0 +1,134 @@
+{
+  "id": "1775743131887-orchestrator-1775632280073_c2zvevjnv-requirement-collection-1775743128334",
+  "projectId": "1775632280073_c2zvevjnv",
+  "currentStage": "requirement-collection",
+  "loggedAt": "2026-04-09T13:58:51.887Z",
+  "decision": {
+    "runId": "orchestrator-1775632280073_c2zvevjnv-requirement-collection-1775743128334",
+    "currentStage": "requirement-collection",
+    "orchestrationStatus": "blocked",
+    "stageGoal": "汇总全部来源，形成一版完整可编辑的需求采集文档。",
+    "shouldRunStageAgent": true,
+    "stageAgentType": "capture-agent",
+    "shouldRunReview": true,
+    "canAdvance": false,
+    "suggestedNextStage": "requirement-structure",
+    "userConfirmationRequired": true,
+    "blockers": [
+      "还没有任何来源记录或上传文件。",
+      "还没有识别出明确的用户目标。",
+      "还没有识别出明确的核心功能。"
+    ],
+    "warnings": [],
+    "suggestedActions": [
+      "还没有任何来源记录或上传文件。",
+      "还没有识别出明确的用户目标。"
+    ],
+    "chatResponse": "当前阶段还有 3 个阻塞项，建议先补齐后再继续推进。"
+  },
+  "taskPlan": {
+    "planId": "plan-1775632280073_c2zvevjnv-requirement-collection",
+    "projectId": "1775632280073_c2zvevjnv",
+    "stage": "requirement-collection",
+    "agentType": "capture-agent",
+    "generatedAt": "2026-04-09T13:58:37.242Z",
+    "status": "blocked",
+    "stageGoal": "汇总全部来源，形成一版完整可编辑的需求采集文档。",
+    "inputs": [
+      {
+        "sourceType": "source_record",
+        "sourceId": "source-records",
+        "label": "来源记录",
+        "required": true,
+        "satisfied": false,
+        "note": "当前 0 条"
+      },
+      {
+        "sourceType": "uploaded_file",
+        "sourceId": "uploaded-files",
+        "label": "上传文件",
+        "required": false,
+        "satisfied": false,
+        "note": "当前 0 份"
+      }
+    ],
+    "tasks": [
+      {
+        "taskId": "capture-read-sources",
+        "title": "读取全部来源",
+        "description": "汇总来源记录和上传文件，形成完整输入上下文。",
+        "taskType": "extract",
+        "status": "running",
+        "outputTargets": [
+          "source-records",
+          "source-files"
+        ],
+        "doneWhen": [
+          "所有来源已纳入当前阶段上下文"
+        ]
+      },
+      {
+        "taskId": "capture-summarize",
+        "title": "生成来源摘要",
+        "description": "对多条来源记录和长文档做汇总分析。",
+        "taskType": "summarize",
+        "status": "pending",
+        "outputTargets": [
+          "source-summary.json"
+        ],
+        "doneWhen": [
+          "已能看到完整的来源摘要和关键点"
+        ]
+      },
+      {
+        "taskId": "capture-draft",
+        "title": "形成需求采集文档",
+        "description": "把来源汇总成可继续编辑的需求点文档。",
+        "taskType": "draft",
+        "status": "pending",
+        "outputTargets": [
+          "requirement-collection/requirements.md"
+        ],
+        "doneWhen": [
+          "需求采集文档可读且覆盖主要需求点"
+        ]
+      }
+    ],
+    "reviewChecklist": [
+      {
+        "id": "capture-review-coverage",
+        "label": "来源是否已完整收录",
+        "required": true,
+        "passed": false,
+        "message": "至少需要一条来源记录或一份上传文件"
+      },
+      {
+        "id": "capture-review-goals",
+        "label": "是否已识别用户目标",
+        "required": true,
+        "passed": false
+      },
+      {
+        "id": "capture-review-functions",
+        "label": "是否已识别核心功能",
+        "required": true,
+        "passed": false
+      }
+    ],
+    "advanceGate": {
+      "nextStage": "requirement-structure",
+      "canAdvance": false,
+      "blockingIssues": [
+        "还没有任何来源记录或上传文件。",
+        "还没有识别出明确的用户目标。",
+        "还没有识别出明确的核心功能。"
+      ],
+      "warnings": [],
+      "requiresUserConfirmation": true
+    },
+    "recommendedUserActions": [
+      "还没有任何来源记录或上传文件。",
+      "还没有识别出明确的用户目标。"
+    ]
+  }
+}

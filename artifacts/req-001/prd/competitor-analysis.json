@@ -1,0 +1,52 @@
+{
+  "requirementId": "req-001",
+  "generatedAt": "2026-04-06T12:03:05.046Z",
+  "generator": "template",
+  "summary": "交友app 更适合走“结构化需求到落地产物流水线”路线，竞品分析重点应放在协同深度、交付一致性和迭代效率。",
+  "competitors": [
+    {
+      "name": "Figma",
+      "positioning": "Figma 更偏向通用协作/设计/文档能力，需要通过组合能力支持完整产品落地链路。",
+      "strengths": [
+        "已有成熟工作流心智",
+        "用户熟悉度较高"
+      ],
+      "gaps": [
+        "从需求到 PRD、原型、UI 的闭环一致性通常不足",
+        "版本化需求追溯可能需要额外配置"
+      ],
+      "implications": [
+        "交友app 应强化从单条需求到多产物链路的一致性优势。"
+      ]
+    },
+    {
+      "name": "Notion",
+      "positioning": "Notion 更偏向通用协作/设计/文档能力，需要通过组合能力支持完整产品落地链路。",
+      "strengths": [
+        "已有成熟工作流心智",
+        "用户熟悉度较高"
+      ],
+      "gaps": [
+        "从需求到 PRD、原型、UI 的闭环一致性通常不足",
+        "版本化需求追溯可能需要额外配置"
+      ],
+      "implications": [
+        "交友app 应强化从单条需求到多产物链路的一致性优势。"
+      ]
+    }
+  ],
+  "opportunities": [
+    "把 requirement -> product model -> PRD -> wireframe -> UI 作为主线心智。",
+    "突出版本化、标注和任务回溯能力。",
+    "用本地优先和可审计的产物管理建立差异点。"
+  ],
+  "differentiation": [
+    "以结构化中间模型做多产物派生，减少信息漂移。",
+    "把原型标注、PRD 校验和竞品分析直接串到流水线。"
+  ],
+  "recommendations": [
+    "默认在 PRD 后强制做自动验证。",
+    "在 wireframe 与 UI 页面中保留需求与标注回链。",
+    "把评审问题沉淀成任务而不是散落评论。"
+  ]
+}

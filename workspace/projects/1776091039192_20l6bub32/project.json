@@ -1,0 +1,18 @@
+{
+  "id": "1776091039192_20l6bub32",
+  "name": "房产项目",
+  "description": "",
+  "createdAt": "2026-04-25T13:18:42.210Z",
+  "updatedAt": "2026-04-25T13:18:42.210Z",
+  "currentStage": "requirement-collection",
+  "llmSettings": {
+    "provider": "openai",
+    "modelProfile": "balanced",
+    "apiKeyConfigured": false,
+    "stageModelRouting": {
+      "capture": "gpt-5.4-mini",
+      "structure": "gpt-5.4-mini"
+    },
+    "baseUrl": "https://api.n1n.ai/v1"
+  }
+}

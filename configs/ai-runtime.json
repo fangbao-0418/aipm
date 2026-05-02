@@ -1,0 +1,12 @@
+{
+  "temperature": {
+    "productModel": 0.35,
+    "prd": 0.3,
+    "prdValidate": 0.2,
+    "prdCompare": 0.45,
+    "wireframe": 0.35,
+    "wireframeAnnotate": 0.25,
+    "ui": 0.55,
+    "refine": 0.45
+  }
+}

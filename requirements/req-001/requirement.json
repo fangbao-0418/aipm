@@ -1,0 +1,35 @@
+{
+  "id": "req-001",
+  "title": "交友app",
+  "source": {
+    "type": "product",
+    "name": "aipm",
+    "channel": "chat"
+  },
+  "rawContent": "设计一个交友app",
+  "targetUsers": [],
+  "priorityLevel": null,
+  "valueScore": null,
+  "priorityScore": null,
+  "status": "captured",
+  "linkedProjectIds": [],
+  "linkedArtifactIds": [],
+  "relatedRequirementIds": [],
+  "tags": [],
+  "attachments": [],
+  "stageHistory": [
+    {
+      "from": null,
+      "to": "captured",
+      "reason": "Requirement created",
+      "changedAt": "2026-04-06T10:00:53.422Z"
+    }
+  ],
+  "customFields": {},
+  "version": {
+    "schemaVersion": "1.0.0",
+    "revision": 1
+  },
+  "createdAt": "2026-04-06T10:00:53.422Z",
+  "updatedAt": "2026-04-06T10:00:53.422Z"
+}

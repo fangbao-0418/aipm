@@ -1,0 +1,87 @@
+{
+  "id": "1775828666433-orchestrator-1775632280073_c2zvevjnv-review-1775828665653",
+  "projectId": "1775632280073_c2zvevjnv",
+  "currentStage": "review",
+  "loggedAt": "2026-04-10T13:44:26.433Z",
+  "decision": {
+    "runId": "orchestrator-1775632280073_c2zvevjnv-review-1775828665653",
+    "currentStage": "review",
+    "orchestrationStatus": "executing",
+    "stageGoal": "对当前产物做审视、留痕和导出准备。",
+    "shouldRunStageAgent": true,
+    "stageAgentType": "review-agent",
+    "shouldRunReview": true,
+    "canAdvance": false,
+    "userConfirmationRequired": false,
+    "blockers": [],
+    "warnings": [
+      "当前阶段详细门禁还在持续接入。"
+    ],
+    "suggestedActions": [
+      "当前阶段详细门禁还在持续接入。"
+    ],
+    "responseCard": {
+      "status": "working",
+      "headline": "当前阶段还在收敛中",
+      "summary": "我建议继续补充来源或重新整理文档，等当前阶段更清晰后再推进。",
+      "bullets": [
+        "当前阶段详细门禁还在持续接入。",
+        "当前阶段详细门禁还在持续接入。"
+      ]
+    },
+    "chatResponse": "当前阶段正在推进中，建议先完成任务计划里的剩余项。"
+  },
+  "taskPlan": {
+    "planId": "plan-1775632280073_c2zvevjnv-review",
+    "projectId": "1775632280073_c2zvevjnv",
+    "stage": "review",
+    "agentType": "review-agent",
+    "generatedAt": "2026-04-10T13:44:25.652Z",
+    "status": "running",
+    "stageGoal": "对当前产物做审视、留痕和导出准备。",
+    "inputs": [
+      {
+        "sourceType": "artifact",
+        "sourceId": "review",
+        "label": "Review / 导出输入",
+        "required": true,
+        "satisfied": true
+      }
+    ],
+    "tasks": [
+      {
+        "taskId": "review-plan",
+        "title": "准备Review / 导出阶段",
+        "description": "当前阶段的详细自动执行能力还在继续接入。",
+        "taskType": "analyze",
+        "status": "pending",
+        "outputTargets": [
+          "review"
+        ],
+        "doneWhen": [
+          "阶段能力已接入"
+        ]
+      }
+    ],
+    "reviewChecklist": [
+      {
+        "id": "review-review",
+        "label": "Review / 导出阶段已接入",
+        "required": true,
+        "passed": false,
+        "message": "后续继续补齐该阶段的执行与审视规则"
+      }
+    ],
+    "advanceGate": {
+      "canAdvance": false,
+      "blockingIssues": [],
+      "warnings": [
+        "当前阶段详细门禁还在持续接入。"
+      ],
+      "requiresUserConfirmation": false
+    },
+    "recommendedUserActions": [
+      "当前阶段详细门禁还在持续接入。"
+    ]
+  }
+}

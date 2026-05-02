@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-pm.local/schemas/task.schema.json",
+  "title": "Task",
+  "description": "Execution task created from an approved requirement/version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "type",
+    "status",
+    "priority",
+    "sourceRequirementIds",
+    "version",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^task-[0-9]{3,}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 10000
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "product",
+        "design",
+        "frontend",
+        "backend",
+        "fullstack",
+        "qa",
+        "ops",
+        "data",
+        "research",
+        "release",
+        "other"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "todo",
+        "in_progress",
+        "blocked",
+        "review",
+        "done",
+        "closed"
+      ]
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ]
+    },
+    "owner": {
+      "$ref": "#/$defs/personRef"
+    },
+    "assignees": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/personRef"
+      },
+      "default": []
+    },
+    "sourceRequirementIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^req-[0-9]{3,}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "sourceVersionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "linkedArtifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prdPath": {
+          "type": "string"
+        },
+        "wireframePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "uiPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "default": []
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^task-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "estimate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "storyPoints": {
+          "type": "number",
+          "minimum": 0
+        },
+        "hours": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 50
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "dates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dueDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "default": []
+    },
+    "statusHistory": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/statusEvent"
+      },
+      "default": []
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdBy": {
+      "$ref": "#/$defs/personRef"
+    },
+    "updatedBy": {
+      "$ref": "#/$defs/personRef"
+    }
+  },
+  "$defs": {
+    "personRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      }
+    },
+    "statusEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "changedAt"
+      ],
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "todo",
+                "in_progress",
+                "blocked",
+                "review",
+                "done",
+                "closed"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "type": "string",
+          "enum": [
+            "todo",
+            "in_progress",
+            "blocked",
+            "review",
+            "done",
+            "closed"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "changedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "changedBy": {
+          "$ref": "#/$defs/personRef"
+        }
+      }
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "revision"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "snapshotId": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    }
+  }
+}

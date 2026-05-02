@@ -1,0 +1,85 @@
+{
+  "id": "clarify-pack-001",
+  "requirementId": "req-001",
+  "domain": "generic_product",
+  "version": "1.0.0",
+  "generatedAt": "2026-04-07T14:38:16.057Z",
+  "generator": "template",
+  "status": "draft",
+  "summary": "一句话需求需要先补齐用户、场景和首发范围，再进入建模。",
+  "gating": {
+    "mode": "hard_block",
+    "requiredFieldKeys": [
+      "targetUsers",
+      "coreScenario",
+      "launchScope"
+    ],
+    "missingFieldKeys": [
+      "targetUsers",
+      "coreScenario",
+      "launchScope"
+    ],
+    "completionScore": 0,
+    "isSatisfied": false,
+    "blockingReason": "缺少关键澄清字段：targetUsers、coreScenario、launchScope"
+  },
+  "questions": [
+    {
+      "id": "cq-001",
+      "fieldKey": "targetUsers",
+      "title": "目标用户",
+      "prompt": "请明确 交友app 的目标用户是谁，他们最核心的需求是什么。",
+      "whyNeeded": "后续 PRD 和 UI 都需要围绕目标用户组织。",
+      "required": true,
+      "priority": "critical",
+      "answerFormat": "multi_select",
+      "suggestedOptions": [],
+      "status": "unanswered"
+    },
+    {
+      "id": "cq-002",
+      "fieldKey": "coreScenario",
+      "title": "核心场景",
+      "prompt": "请说明 交友app 第一版最核心的使用场景和主流程。",
+      "whyNeeded": "决定产品主链路。",
+      "required": true,
+      "priority": "critical",
+      "answerFormat": "long_text",
+      "suggestedOptions": [],
+      "status": "unanswered"
+    },
+    {
+      "id": "cq-003",
+      "fieldKey": "launchScope",
+      "title": "首发范围",
+      "prompt": "请明确 交友app 首发版本做什么、不做什么。",
+      "whyNeeded": "防止 PRD 无限制膨胀。",
+      "required": true,
+      "priority": "high",
+      "answerFormat": "long_text",
+      "suggestedOptions": [],
+      "status": "unanswered"
+    },
+    {
+      "id": "cq-004",
+      "fieldKey": "businessGoal",
+      "title": "业务目标",
+      "prompt": "请说明 交友app 想达成的业务目标，例如增长、转化、留存或效率。",
+      "whyNeeded": "帮助 PRD 写 success metrics。",
+      "required": false,
+      "priority": "medium",
+      "answerFormat": "long_text",
+      "suggestedOptions": [],
+      "status": "unanswered"
+    }
+  ],
+  "answeredFieldMap": {},
+  "reviewNotes": [
+    {
+      "id": "review-001",
+      "severity": "blocker",
+      "message": "仍缺少 3 个关键澄清字段，当前必须阻断建模与 PRD。",
+      "createdAt": "2026-04-07T14:38:15.461Z"
+    }
+  ]
+}

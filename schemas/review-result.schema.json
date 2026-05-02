@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-pm.local/schemas/review-result.schema.json",
+  "title": "Review Result",
+  "description": "Normalized review output used by stage reviewers and orchestration gate checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "requirementId",
+    "stage",
+    "reviewer",
+    "status",
+    "score",
+    "canContinue",
+    "generatedAt",
+    "findings"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^review-[0-9]{3,}$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^req-[0-9]{3,}$"
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "clarify",
+        "product_model",
+        "prd",
+        "wireframe",
+        "ui",
+        "safety"
+      ]
+    },
+    "artifactRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ai",
+            "rule_engine",
+            "human"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 40
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warning",
+        "block"
+      ]
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "canContinue": {
+      "type": "boolean"
+    },
+    "blockingReason": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      },
+      "default": []
+    },
+    "requiredPatches": {
+      "type": "array",
+      "items": {
+        "$ref": "patch.schema.json"
+      },
+      "default": []
+    },
+    "recommendedActions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/action"
+      },
+      "default": []
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "severity",
+        "title",
+        "message",
+        "location"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^finding-[0-9]{3,}$"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "critical",
+            "major",
+            "minor",
+            "info"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "coverage",
+            "consistency",
+            "compliance",
+            "safety",
+            "usability",
+            "data",
+            "copy",
+            "other"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000
+        },
+        "suggestion": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifactType"
+          ],
+          "properties": {
+            "artifactType": {
+              "type": "string",
+              "enum": [
+                "clarify",
+                "product_model",
+                "prd",
+                "wireframe",
+                "annotation",
+                "ui"
+              ]
+            },
+            "fieldPath": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "pageId": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "sectionId": {
+              "type": "string",
+              "maxLength": 120
+            }
+          }
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "action"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "request_clarification",
+            "regenerate_model",
+            "regenerate_prd",
+            "apply_patch",
+            "run_safety_review",
+            "go_to_next_stage"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    }
+  }
+}

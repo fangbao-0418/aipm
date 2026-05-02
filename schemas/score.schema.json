@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-pm.local/schemas/score.schema.json",
+  "title": "Requirement Score",
+  "description": "Structured value evaluation and priority scoring result for a requirement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "requirementId",
+    "modelVersion",
+    "scale",
+    "dimensions",
+    "valueScore",
+    "priorityScore",
+    "priorityLevel",
+    "createdAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^score-[0-9]{3,}$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^req-[0-9]{3,}$"
+    },
+    "modelVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "type": "integer",
+          "const": 1
+        },
+        "max": {
+          "type": "integer",
+          "const": 5
+        }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userValue",
+        "businessValue",
+        "strategicFit",
+        "urgency",
+        "reach",
+        "implementationCost",
+        "deliveryRisk"
+      ],
+      "properties": {
+        "userValue": {
+          "$ref": "#/$defs/dimensionPositive"
+        },
+        "businessValue": {
+          "$ref": "#/$defs/dimensionPositive"
+        },
+        "strategicFit": {
+          "$ref": "#/$defs/dimensionPositive"
+        },
+        "urgency": {
+          "$ref": "#/$defs/dimensionPositive"
+        },
+        "reach": {
+          "$ref": "#/$defs/dimensionPositive"
+        },
+        "implementationCost": {
+          "$ref": "#/$defs/dimensionNegative"
+        },
+        "deliveryRisk": {
+          "$ref": "#/$defs/dimensionNegative"
+        }
+      }
+    },
+    "computed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "positiveScore",
+        "negativeScore",
+        "feasibilityScore",
+        "manualAdjustment",
+        "finalPriorityScore"
+      ],
+      "properties": {
+        "positiveScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "negativeScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "feasibilityScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "manualAdjustment": {
+          "type": "number",
+          "minimum": -15,
+          "maximum": 15
+        },
+        "finalPriorityScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "valueScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "priorityScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "priorityLevel": {
+      "type": "string",
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ]
+    },
+    "recommendation": {
+      "type": "string",
+      "enum": [
+        "do_now",
+        "plan_next",
+        "candidate_pool",
+        "observe_or_archive"
+      ]
+    },
+    "scoreReasoning": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "priorityReasoning": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "override": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applied": {
+          "type": "boolean",
+          "default": false
+        },
+        "fromLevel": {
+          "type": "string",
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ]
+        },
+        "toLevel": {
+          "type": "string",
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "by": {
+          "$ref": "#/$defs/personRef"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdBy": {
+      "$ref": "#/$defs/personRef"
+    }
+  },
+  "$defs": {
+    "personRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      }
+    },
+    "dimensionBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawScore",
+        "normalizedScore",
+        "weight",
+        "rationale"
+      ],
+      "properties": {
+        "rawScore": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "normalizedScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "weight": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "dimensionPositive": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/dimensionBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "direction": {
+              "type": "string",
+              "const": "positive"
+            }
+          },
+          "required": [
+            "direction"
+          ]
+        }
+      ]
+    },
+    "dimensionNegative": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/dimensionBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "direction": {
+              "type": "string",
+              "const": "negative"
+            }
+          },
+          "required": [
+            "direction"
+          ]
+        }
+      ]
+    }
+  }
+}

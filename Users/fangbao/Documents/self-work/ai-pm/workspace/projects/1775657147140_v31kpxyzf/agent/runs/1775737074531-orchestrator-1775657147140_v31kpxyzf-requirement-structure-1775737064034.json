@@ -1,0 +1,127 @@
+{
+  "id": "1775737074531-orchestrator-1775657147140_v31kpxyzf-requirement-structure-1775737064034",
+  "projectId": "1775657147140_v31kpxyzf",
+  "currentStage": "requirement-structure",
+  "loggedAt": "2026-04-09T12:17:54.531Z",
+  "decision": {
+    "runId": "orchestrator-1775657147140_v31kpxyzf-requirement-structure-1775737064034",
+    "currentStage": "requirement-structure",
+    "orchestrationStatus": "blocked",
+    "stageGoal": "把需求采集文档整理成结构化需求点、范围、风险和待澄清项。",
+    "shouldRunStageAgent": true,
+    "stageAgentType": "structuring-agent",
+    "shouldRunReview": true,
+    "canAdvance": false,
+    "suggestedNextStage": "requirement-clarification",
+    "userConfirmationRequired": true,
+    "blockers": [
+      "结构化结果缺少用户目标。",
+      "结构化结果缺少核心功能。"
+    ],
+    "warnings": [
+      "还有 1 个待澄清项。"
+    ],
+    "suggestedActions": [
+      "结构化结果缺少用户目标。",
+      "结构化结果缺少核心功能。",
+      "还有 1 个待澄清项。"
+    ],
+    "chatResponse": "当前阶段还有 2 个阻塞项，建议先补齐后再继续推进。"
+  },
+  "taskPlan": {
+    "planId": "plan-1775657147140_v31kpxyzf-requirement-structure",
+    "projectId": "1775657147140_v31kpxyzf",
+    "stage": "requirement-structure",
+    "agentType": "structuring-agent",
+    "generatedAt": "2026-04-09T12:17:33.626Z",
+    "status": "blocked",
+    "stageGoal": "把需求采集文档整理成结构化需求点、范围、风险和待澄清项。",
+    "inputs": [
+      {
+        "sourceType": "artifact",
+        "sourceId": "requirement-input",
+        "label": "需求采集文档",
+        "required": true,
+        "satisfied": false
+      }
+    ],
+    "tasks": [
+      {
+        "taskId": "structure-read-input",
+        "title": "读取需求采集文档",
+        "description": "读取需求采集阶段的文档与来源摘要。",
+        "taskType": "analyze",
+        "status": "pending",
+        "outputTargets": [
+          "requirement-collection/requirements.md"
+        ],
+        "doneWhen": [
+          "需求采集文档已可用于结构化"
+        ]
+      },
+      {
+        "taskId": "structure-build",
+        "title": "整理结构化需求",
+        "description": "抽取用户目标、场景、功能、范围和风险。",
+        "taskType": "model",
+        "status": "completed",
+        "outputTargets": [
+          "requirement-structure/requirement-structure.md"
+        ],
+        "doneWhen": [
+          "结构化需求文档已生成"
+        ]
+      },
+      {
+        "taskId": "structure-review",
+        "title": "检查是否可进入澄清",
+        "description": "检查核心目标、场景、功能是否已覆盖。",
+        "taskType": "review",
+        "status": "running",
+        "outputTargets": [
+          "requirement-structure/review.json"
+        ],
+        "doneWhen": [
+          "结构化结果可进入需求澄清"
+        ]
+      }
+    ],
+    "reviewChecklist": [
+      {
+        "id": "structure-review-goals",
+        "label": "结构化文档包含用户目标",
+        "required": true,
+        "passed": false
+      },
+      {
+        "id": "structure-review-scenarios",
+        "label": "结构化文档包含核心场景",
+        "required": true,
+        "passed": false
+      },
+      {
+        "id": "structure-review-functions",
+        "label": "结构化文档包含核心功能",
+        "required": true,
+        "passed": false
+      }
+    ],
+    "advanceGate": {
+      "nextStage": "requirement-clarification",
+      "canAdvance": false,
+      "blockingIssues": [
+        "结构化结果缺少用户目标。",
+        "结构化结果缺少核心功能。"
+      ],
+      "warnings": [
+        "还有 1 个待澄清项。"
+      ],
+      "requiresUserConfirmation": true
+    },
+    "recommendedUserActions": [
+      "结构化结果缺少用户目标。",
+      "结构化结果缺少核心功能。",
+      "还有 1 个待澄清项。"
+    ]
+  }
+}

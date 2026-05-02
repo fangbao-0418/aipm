@@ -1,0 +1,19 @@
+{
+  "id": "1775918264998_hd9txrvsa",
+  "name": "智能日历",
+  "description": "智能日历",
+  "industry": "other",
+  "createdAt": "2026-04-26T15:08:06.812Z",
+  "updatedAt": "2026-04-26T15:08:06.812Z",
+  "currentStage": "requirement-collection",
+  "llmSettings": {
+    "provider": "openai",
+    "modelProfile": "balanced",
+    "apiKeyConfigured": false,
+    "stageModelRouting": {
+      "capture": "glm-5.1",
+      "structure": "glm-5.1"
+    },
+    "baseUrl": "https://open.bigmodel.cn/api/paas/v4"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "stage": "chat",
+  "step": "path-fix-test",
+  "systemPrompt": "s",
+  "userPrompt": "u",
+  "outputText": "o",
+  "createdAt": "2026-04-13T15:27:30.828Z"
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "stage": "requirement-collection",
+    "status": "in-progress",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  },
+  {
+    "stage": "requirement-structure",
+    "status": "not-started",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  },
+  {
+    "stage": "requirement-clarification",
+    "status": "not-started",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  },
+  {
+    "stage": "product-model",
+    "status": "not-started",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  },
+  {
+    "stage": "prd",
+    "status": "not-started",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  },
+  {
+    "stage": "prototype",
+    "status": "not-started",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  },
+  {
+    "stage": "prototype-annotation",
+    "status": "not-started",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  },
+  {
+    "stage": "ui-draft",
+    "status": "not-started",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  },
+  {
+    "stage": "review",
+    "status": "not-started",
+    "updatedAt": "2026-04-25T13:18:42.212Z"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "provider": "openai",
+  "modelProfile": "balanced",
+  "apiKeyConfigured": false,
+  "stageModelRouting": {
+    "capture": "glm-5.1",
+    "structure": "glm-5.1"
+  },
+  "baseUrl": "https://open.bigmodel.cn/api/paas/v4"
+}

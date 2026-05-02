@@ -1,0 +1,8 @@
+{
+  "stage": "chat",
+  "step": "manual-test",
+  "systemPrompt": "s",
+  "userPrompt": "u",
+  "outputText": "o",
+  "createdAt": "2026-04-13T15:25:55.523Z"
+}

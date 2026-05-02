@@ -1,0 +1,43 @@
+{
+  "id": "wireframe-annotator",
+  "name": "Wireframe Annotator",
+  "version": "0.1.0",
+  "description": "Generate and manage annotation layers for wireframes, including interaction, business, data, review, and delivery notes.",
+  "status": "active",
+  "author": "ai-pm",
+  "tags": [
+    "wireframe",
+    "annotation",
+    "review"
+  ],
+  "triggers": [
+    "annotate wireframe",
+    "review notes",
+    "interaction notes"
+  ],
+  "stages": [
+    "wireframe",
+    "wireframe_annotation",
+    "reviewing"
+  ],
+  "inputs": [
+    "wireframe-spec.json",
+    "wireframes/*.html"
+  ],
+  "outputs": [
+    "wireframe-annotations.json"
+  ],
+  "files": {
+    "manifest": "skill.json",
+    "notes": "README.md"
+  },
+  "config": {
+    "annotationTypes": [
+      "interaction",
+      "business",
+      "data",
+      "review",
+      "delivery"
+    ]
+  }
+}

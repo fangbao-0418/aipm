@@ -1,0 +1,13 @@
+{
+  "requirementId": "req-001",
+  "generatedAt": "2026-04-06T12:03:03.999Z",
+  "generator": "template",
+  "status": "pass",
+  "readinessScore": 92,
+  "summary": "PRD 结构完整，可进入原型和任务拆解阶段。",
+  "findings": [],
+  "recommendedNextActions": [
+    "进入 wireframe 生成",
+    "开始拆分执行任务"
+  ]
+}

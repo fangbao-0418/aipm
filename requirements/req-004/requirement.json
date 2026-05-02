@@ -1,0 +1,38 @@
+{
+  "id": "req-004",
+  "title": "订阅提醒",
+  "source": {
+    "type": "customer",
+    "name": "Acme",
+    "channel": "meeting"
+  },
+  "rawContent": "希望增加自动续费提醒和取消入口",
+  "targetUsers": [],
+  "priorityLevel": null,
+  "valueScore": null,
+  "priorityScore": null,
+  "status": "captured",
+  "linkedProjectIds": [],
+  "linkedArtifactIds": [],
+  "relatedRequirementIds": [],
+  "tags": [
+    "billing",
+    "retention"
+  ],
+  "attachments": [],
+  "stageHistory": [
+    {
+      "from": null,
+      "to": "captured",
+      "reason": "Requirement created",
+      "changedAt": "2026-04-06T09:19:14.674Z"
+    }
+  ],
+  "customFields": {},
+  "version": {
+    "schemaVersion": "1.0.0",
+    "revision": 1
+  },
+  "createdAt": "2026-04-06T09:19:14.674Z",
+  "updatedAt": "2026-04-06T09:19:14.674Z"
+}

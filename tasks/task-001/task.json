@@ -1,0 +1,29 @@
+{
+  "id": "task-001",
+  "title": "999",
+  "type": "product",
+  "status": "todo",
+  "priority": "P1",
+  "assignees": [],
+  "sourceRequirementIds": [
+    "req-001"
+  ],
+  "acceptanceCriteria": [],
+  "dependencies": [],
+  "labels": [],
+  "blockers": [],
+  "statusHistory": [
+    {
+      "from": null,
+      "to": "todo",
+      "reason": "Task created",
+      "changedAt": "2026-04-06T10:04:03.902Z"
+    }
+  ],
+  "version": {
+    "schemaVersion": "1.0.0",
+    "revision": 1
+  },
+  "createdAt": "2026-04-06T10:04:03.902Z",
+  "updatedAt": "2026-04-06T10:04:03.902Z"
+}

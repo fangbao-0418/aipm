@@ -1,0 +1,136 @@
+{
+  "id": "1777108783410-orchestrator-1775632280073_c2zvevjnv-requirement-collection-1777108773505",
+  "projectId": "1775632280073_c2zvevjnv",
+  "currentStage": "requirement-collection",
+  "loggedAt": "2026-04-25T09:19:43.410Z",
+  "decision": {
+    "runId": "orchestrator-1775632280073_c2zvevjnv-requirement-collection-1777108773505",
+    "currentStage": "requirement-collection",
+    "orchestrationStatus": "awaiting_user_confirmation",
+    "stageGoal": "汇总全部来源，形成一版完整可编辑的需求采集文档。",
+    "shouldRunStageAgent": false,
+    "stageAgentType": "capture-agent",
+    "shouldRunReview": true,
+    "canAdvance": true,
+    "suggestedNextStage": "requirement-structure",
+    "userConfirmationRequired": true,
+    "blockers": [],
+    "warnings": [],
+    "suggestedActions": [],
+    "responseCard": {
+      "status": "ready",
+      "headline": "当前阶段已经具备推进条件",
+      "summary": "需求点文档已经达到当前门禁要求，可以进入下一阶段，但建议先由你确认。",
+      "bullets": [
+        "当前阶段目标：汇总全部来源，形成一版完整可编辑的需求采集文档。"
+      ],
+      "ctaLabel": "进入需求结构化"
+    },
+    "chatResponse": "当前阶段已满足进入条件，是否进入下一阶段：requirement-structure？"
+  },
+  "taskPlan": {
+    "planId": "plan-1775632280073_c2zvevjnv-requirement-collection",
+    "projectId": "1775632280073_c2zvevjnv",
+    "stage": "requirement-collection",
+    "agentType": "capture-agent",
+    "generatedAt": "2026-04-25T09:19:21.721Z",
+    "status": "running",
+    "stageGoal": "汇总全部来源，形成一版完整可编辑的需求采集文档。",
+    "inputs": [
+      {
+        "sourceType": "source_record",
+        "sourceId": "source-records",
+        "label": "来源记录",
+        "required": true,
+        "satisfied": true,
+        "note": "当前 513 条"
+      },
+      {
+        "sourceType": "uploaded_file",
+        "sourceId": "uploaded-files",
+        "label": "上传文件",
+        "required": false,
+        "satisfied": true,
+        "note": "当前 1 份"
+      }
+    ],
+    "tasks": [
+      {
+        "taskId": "capture-read-sources",
+        "title": "读取全部来源",
+        "description": "汇总来源记录和上传文件，形成完整输入上下文。",
+        "taskType": "extract",
+        "status": "completed",
+        "outputTargets": [
+          "source-records",
+          "source-files"
+        ],
+        "doneWhen": [
+          "所有来源已纳入当前阶段上下文"
+        ]
+      },
+      {
+        "taskId": "capture-summarize",
+        "title": "生成来源摘要",
+        "description": "对多条来源记录和长文档做汇总分析。",
+        "taskType": "summarize",
+        "status": "completed",
+        "outputTargets": [
+          "source-summary.json"
+        ],
+        "doneWhen": [
+          "已能看到完整的来源摘要和关键点"
+        ]
+      },
+      {
+        "taskId": "capture-draft",
+        "title": "形成需求采集文档",
+        "description": "把来源汇总成可继续编辑的需求点文档。",
+        "taskType": "draft",
+        "status": "completed",
+        "outputTargets": [
+          "requirement-collection/requirements.md"
+        ],
+        "doneWhen": [
+          "需求采集文档可读且覆盖主要需求点"
+        ]
+      }
+    ],
+    "reviewChecklist": [
+      {
+        "id": "capture-review-coverage",
+        "label": "来源是否已完整收录",
+        "required": true,
+        "passed": true,
+        "message": "至少需要一条来源记录或一份上传文件"
+      },
+      {
+        "id": "capture-review-goals",
+        "label": "是否已识别用户目标",
+        "required": true,
+        "passed": true
+      },
+      {
+        "id": "capture-review-functions",
+        "label": "是否已识别核心功能",
+        "required": true,
+        "passed": true
+      },
+      {
+        "id": "capture-review-dirty",
+        "label": "来源变更后是否已重新整理文档",
+        "required": true,
+        "passed": true,
+        "message": "来源记录或上传文件有更新，需先重新 AI 整理"
+      }
+    ],
+    "advanceGate": {
+      "nextStage": "requirement-structure",
+      "canAdvance": true,
+      "blockingIssues": [],
+      "warnings": [],
+      "requiresUserConfirmation": true
+    },
+    "recommendedUserActions": []
+  }
+}

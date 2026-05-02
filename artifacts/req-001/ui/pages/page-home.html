@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>首页 - UI</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4efe6;
+        --surface: #fdf8ef;
+        --surface-strong: #efe3d2;
+        --ink: #171411;
+        --muted: #645d55;
+        --accent: #b85c38;
+        --line: rgba(23,20,17,0.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "\"Instrument Serif\", \"Iowan Old Style\", serif";
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(184,92,56,0.16), transparent 28%),
+          linear-gradient(180deg, rgba(255,255,255,0.75), rgba(244,239,230,0.98)),
+          var(--bg);
+      }
+      header {
+        padding: 28px 24px 16px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: end;
+        justify-content: space-between;
+      }
+      .brand {
+        display: grid;
+        gap: 8px;
+      }
+      .brand span {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--muted);
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(34px, 6vw, 64px);
+        line-height: 0.95;
+        max-width: 8ch;
+      }
+      .theme-note {
+        max-width: 280px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      main {
+        display: grid;
+        gap: 22px;
+        padding: 0 20px 40px;
+      }
+      .ui-section {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 18px;
+        padding: 20px;
+        border-top: 1px solid var(--line);
+      }
+      .ui-section-copy {
+        display: grid;
+        align-content: start;
+        gap: 14px;
+      }
+      .eyebrow {
+        margin: 0;
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      h2 {
+        margin: 0;
+        font-size: clamp(24px, 4vw, 38px);
+        line-height: 1.04;
+      }
+      ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      button {
+        appearance: none;
+        border: none;
+        border-radius: 999px;
+        padding: 12px 18px;
+        background: var(--accent);
+        color: white;
+        font: inherit;
+        width: fit-content;
+      }
+      .ui-section-visual {
+        position: relative;
+        min-height: 220px;
+        display: grid;
+      }
+      .frame {
+        align-self: stretch;
+        border-radius: 24px;
+        background:
+          linear-gradient(135deg, rgba(255,255,255,0.8), rgba(239,227,210,0.92)),
+          var(--surface);
+        border: 1px solid var(--line);
+        padding: 18px;
+        display: grid;
+        align-content: space-between;
+      }
+      .frame span {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 12px;
+      }
+      .frame strong {
+        font-size: clamp(28px, 5vw, 52px);
+        max-width: 8ch;
+        line-height: 0.94;
+      }
+      .annotation {
+        position: absolute;
+        right: 16px;
+        bottom: 16px;
+        display: grid;
+        gap: 4px;
+        max-width: 220px;
+        padding: 12px 14px;
+        background: rgba(23,20,17,0.92);
+        color: white;
+        border-radius: 18px;
+      }
+      .annotation b {
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 11px;
+        color: rgba(255,255,255,0.68);
+      }
+      @media (max-width: 860px) {
+        .ui-section {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span>Editorial Workbench</span>
+        <h1>首页</h1>
+      </div>
+      <p class="theme-note">把产品工作台做成带有编辑室气质的决策界面，温和但不平淡，强调产物流转与上下文集中感。</p>
+    </header>
+    <main>
+      <section class="ui-section section-1" id="page-home-section-1">
+        <div class="ui-section-copy">
+          <p class="eyebrow">页面摘要</p>
+          <h2>承接 页面摘要 相关信息与动作</h2>
+          <ul>
+            <li>突出 页面摘要 的核心信息层级</li><li>保留清晰的状态反馈与下一步动作</li><li>避免一次性展示过多字段</li>
+          </ul>
+          <button>继续</button>
+        </div>
+        <div class="ui-section-visual">
+          <div class="frame">
+            <span>页面摘要</span>
+            <strong>首页</strong>
+          </div>
+          <aside class="annotation"><b>interaction</b><span>主流程动作需要可回退</span></aside>
+        </div>
+      </section>
+    
+      <section class="ui-section section-2" id="page-home-section-2">
+        <div class="ui-section-copy">
+          <p class="eyebrow">主行动入口</p>
+          <h2>承接 主行动入口 相关信息与动作</h2>
+          <ul>
+            <li>突出 主行动入口 的核心信息层级</li><li>保留清晰的状态反馈与下一步动作</li><li>避免一次性展示过多字段</li>
+          </ul>
+          
+        </div>
+        <div class="ui-section-visual">
+          <div class="frame">
+            <span>主行动入口</span>
+            <strong>首页</strong>
+          </div>
+          <aside class="annotation"><b>business</b><span>业务规则需要补充边界</span></aside>
+        </div>
+      </section>
+    
+      <section class="ui-section section-3" id="page-home-section-3">
+        <div class="ui-section-copy">
+          <p class="eyebrow">状态提示</p>
+          <h2>承接 状态提示 相关信息与动作</h2>
+          <ul>
+            <li>突出 状态提示 的核心信息层级</li><li>保留清晰的状态反馈与下一步动作</li><li>避免一次性展示过多字段</li>
+          </ul>
+          
+        </div>
+        <div class="ui-section-visual">
+          <div class="frame">
+            <span>状态提示</span>
+            <strong>首页</strong>
+          </div>
+          
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
