@@ -1,0 +1,2073 @@
+{
+  "id": "doc-1777788935122",
+  "projectId": "1777632612689_ktwqj23jw",
+  "title": "Schema v2（支持React/Vue/Flutter统一映射）",
+  "sortOrder": 1,
+  "deleted": false,
+  "contentBlocks": [
+    {
+      "id": "cd511090-114b-461e-886c-215aac5eed2c",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "好，这一步是你整个系统的",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "地基",
+          "styles": {
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "text": "，我给你一套",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "可生产使用的 Schema v2 设计",
+          "styles": {
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "text": "，目标是：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "8c87d108-e814-41b7-b4ed-13b79569e941",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "✅ 一份 Schema → 可编辑 → 可被 AI 修改 → 可映射 React / Vue / Flutter / iOS / Android",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a186a418-7d52-4f34-8cac-edc060759c0b",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "我不会给你“理想模型”，而是给你",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "能落地 + 能扩展 + 不会后期推翻",
+          "styles": {
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "text": "的版本。",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "d6a44b15-adfb-4262-90d1-76d3573a5bbf",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "9f549ac6-09b4-4c27-a13d-363166a614b2",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "一、设计原则（先统一思想）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "73b9f301-846c-4fe5-a3e8-7e6f334ab164",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "1️⃣ 单一数据源",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a002e3c6-2998-45d7-bd18-784ea80dcccc",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Schema = 唯一真相（SSOT）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "df4c2bbf-7499-4941-b894-7e6ffec64762",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "UI、PRD、代码生成全部依赖它",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6f946f70-733b-4a76-a0da-cbbe85e5e3a8",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "不允许 UI 直接写死逻辑",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6ef187af-4e61-44dd-8eb7-25e703819206",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "fe2aa76d-df30-4f38-83fb-e016ccd53852",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "2️⃣ 强约束 + 弱扩展",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "f1af308d-df0e-421a-8f08-276462605423",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 必须保证：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "5a4e628c-442d-4dde-863c-bb42fc4f3eee",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "结构稳定（AI不会乱生成）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "0f99ec03-078a-4a20-9fbd-184615962419",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "同时允许扩展（跨端差异）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "5640212a-4e3c-4836-8d28-661dcc649898",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "3bfb854d-7f2a-4e7e-954d-0024c7f675fc",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "3️⃣ 分层设计（非常关键）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "7bcbaf47-ed44-4159-8e92-df0369936f6f",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Schema v2 拆成 5 层：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "0083cc81-70b6-4434-adb1-55648b807447",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Meta（元信息）\nTree（结构）\nLayout（布局）\nProps（属性）\nStyle（样式）\nInteraction（交互）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "da261b32-33b8-4628-9e2b-1bcac4974a26",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "48cad1f3-1fb9-43b1-b647-913c655a0985",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "二、Schema v2 总体结构",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b731b8f1-e7be-4d10-9f03-2118d2cf662e",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"version\": \"2.0\",\n  \"meta\": {},\n  \"pages\": []\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b29463aa-ff45-4ff0-8ae3-828b2b6aa500",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "4b2d90ba-92fd-4996-9e99-f07538808a11",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "三、Page 结构",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "fd97fc0d-a284-4881-b26b-c383c92fa414",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"id\": \"page_home\",\n  \"name\": \"首页\",\n  \"route\": \"/home\",\n  \"children\": [],\n  \"layout\": {},\n  \"style\": {}\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "400f4602-ed7f-4d3c-a517-fbdb42be05c9",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "7462bebd-eafd-4006-b7c1-c76e5e2df39d",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "四、Node（组件节点）结构（核心）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "76ac03e5-b5ab-4aaa-8fc0-a2dc20065c96",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"id\": \"node_xxx\",\n  \"type\": \"Button\",\n  \"name\": \"提交按钮\",\n\n  \"props\": {},\n  \"style\": {},\n  \"layout\": {},\n  \"interaction\": {},\n\n  \"children\": []\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "034c1741-95dd-48fd-8ad4-a9da64266a51",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "594941af-dd07-4738-a4bb-09c2c299db1f",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "五、核心字段设计（逐个拆）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "265acf4d-3efe-4d8f-9f81-1f3893429e07",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "b6f2f7d0-9cb1-4139-897c-a27a12ca3f69",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.1 type（组件类型）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "f8036260-2c04-45e2-8793-0f04832cfcbd",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"type\": \"Button\"",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "239e2b94-658e-433e-a0d4-dc85aa726237",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 必须是“抽象组件”，不能是具体实现",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "bc197cfd-d53f-46ad-8649-91e1355a6b47",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "9c3e9b59-f216-411d-989e-002eea900bae",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.2 props（跨端逻辑属性）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ae80e915-bfb7-472d-a9be-71e717306d0a",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 和 UI 框架无关",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6473b3d1-2c1b-4f5f-80a0-909fcc8c31b1",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"props\": {\n  \"text\": \"提交\",\n  \"disabled\": false\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "880d3c82-aa7a-4b5b-aad9-020906e0c002",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "85bc3afb-74b8-45c2-a134-46f594948d72",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.3 style（视觉层）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "cd7a1130-9570-43d7-ab83-86eb4be82543",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "统一设计：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "24334370-7df6-4fc1-be2d-bc832a03d954",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"style\": {\n  \"width\": 120,\n  \"height\": 40,\n  \"padding\": [8, 16],\n  \"margin\": [0, 0, 0, 0],\n\n  \"backgroundColor\": \"#1890ff\",\n  \"borderRadius\": 8,\n\n  \"fontSize\": 14,\n  \"color\": \"#fff\",\n\n  \"shadow\": {\n    \"x\": 0,\n    \"y\": 2,\n    \"blur\": 6,\n    \"color\": \"rgba(0,0,0,0.2)\"\n  }\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a9ef48c6-9ca3-4553-825d-b318c59ec661",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "7ac4320a-bbaf-4c46-8472-f39e7953f13f",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.4 layout（布局层）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c690d213-1739-4418-ab0c-13e3e854ca47",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 支持两种模式（关键）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2e7b666b-b78c-47dd-9f95-17f9c2d65086",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "ff723df5-8cab-4a3c-a5d2-7e783f6cc385",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "🧠 模式1：绝对布局（原型工具）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "770956c7-1155-400e-ac8d-a5c8cd4722db",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"layout\": {\n  \"mode\": \"absolute\",\n  \"x\": 100,\n  \"y\": 200,\n  \"zIndex\": 1\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "16685bfa-8fc1-4f55-a91f-87a0174f9c0a",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "04660ada-0d7b-42a6-acc1-bd7733f860bb",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "🧠 模式2：流式布局（代码生成用）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "77c1142e-96f9-4068-ab95-26409156e625",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"layout\": {\n  \"mode\": \"flex\",\n  \"direction\": \"row\",\n  \"justify\": \"center\",\n  \"align\": \"center\",\n  \"gap\": 8\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "1889baaa-196b-4d35-a1a0-8b528491e25c",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "0098b2b0-4281-4a83-8e54-f062c3d0c75a",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 ⚠️ 核心设计：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "89c3cfc6-6f0c-4ce4-a782-2fc5113485eb",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "编辑器用 absolute，生成代码用 flex",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "eb7cbd34-9dd4-4064-b1eb-76aa1d60c2cc",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "6e30d9b2-c7b1-4f44-8627-67e81a9bf7ee",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.5 interaction（交互层）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "3c6a4d1c-34fc-4c51-836b-34d2f891f247",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"interaction\": {\n  \"onClick\": {\n    \"type\": \"navigate\",\n    \"target\": \"/detail\"\n  }\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "3b0f92b7-c1ed-4dec-b5a3-10ca0739b13d",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "6176037d-a63c-4a09-a57a-32af22499935",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "支持：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "9bbe1da7-f0aa-4ff4-9d06-dfaaf29b21cd",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "navigate（跳转）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c27371f2-d647-4039-bee5-a682af9d35ba",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "setState",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6e5a1e50-0e21-435a-bbd8-62ca07e1c500",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "apiCall（未来）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "12339e6b-cb28-4057-9fed-86926d82c7d3",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "ffd05825-3780-4e21-9b8d-211d459ce730",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.6 children（组件树）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6300918e-0b9c-419d-a7d9-f061b6f644a2",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"children\": []",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "4f09c308-0022-4e1f-8854-5106d23ab8ab",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 支持嵌套",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "9dbe3d4b-b4c7-4154-aa15-11d4d1627c23",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "fdefafea-bea4-45fc-8fec-911569c576b1",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "六、组件抽象层（跨端关键）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "0b439797-712d-4525-82b2-32eed786de03",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "你必须定义一套“统一组件协议”👇",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "dd4d954e-a2a9-41ee-9aa7-cf688226d402",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "3c4ef726-def9-440e-a60b-fdf075059e5d",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "核心组件类型（建议 v1）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6044fd4e-b0a3-43fc-ad13-354758c8772d",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Container\nText\nImage\nButton\nInput\nList\nCard\nNavbar\nTabBar",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "019a895e-b077-4579-93e8-f91b83a8ebf8",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "0f7281f4-c137-4204-a47d-58b592536ae6",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 这些是“跨端最小公约数”",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "d631c245-0c33-4d2a-beca-2df63daf93c9",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "3b5ddf76-4051-4bde-b42d-744776806dfb",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "七、跨端映射设计（重点）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "823d2cee-666c-4fc6-b5fb-d472404eb5f2",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "0297fa3b-895a-4966-8c66-b7075707c6b0",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "7.1 React 映射",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "69f1ecb5-3d48-4f0d-8af6-e4f066202e42",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"type\": \"Button\"\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "60f52b8a-f2fd-45ef-a11b-07fa98de7af9",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "↓",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c37c6ddf-edc2-4a53-911a-eff1c44e13d8",
+      "type": "codeBlock",
+      "props": {
+        "language": "jsx"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "<button>提交</button>",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "458e4916-5715-4c9b-8d4b-529f988277eb",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "de149de8-59e0-4b0b-9d08-9ff448b7b34d",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "7.2 Vue 映射",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "40852355-c96b-44e2-9747-b9de5640cef8",
+      "type": "codeBlock",
+      "props": {
+        "language": "vue"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "<button>提交</button>",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "381b9c1e-d422-46ac-b903-b1546509e6a5",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "b83f3eb4-6837-4d51-8818-d535944bad3d",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "7.3 Flutter 映射",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "d72d9f0e-d9d6-47b0-ad6b-ebfe61f2aa54",
+      "type": "codeBlock",
+      "props": {
+        "language": "dart"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "ElevatedButton(\n  onPressed: () {},\n  child: Text(\"提交\"),\n)",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "fcca5898-a2c3-4f4e-9d33-8a153dfdcebe",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "e15bcc33-9045-47b3-97f6-9c1842712670",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 关键点：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a4b284de-bb03-4042-b675-42b47f0c2f04",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Schema 不关心实现，只关心语义",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a9f7e7c2-1c85-4734-a57d-906e19c3ca34",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "01f8e368-b997-4856-84c3-9ebdb04cdf57",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "八、D2C 引擎设计（核心）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "96606e9b-4b17-407a-93b0-7266e9019e1f",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "82830039-595e-4b44-8ac7-236acbebf1d8",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Pipeline：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "8eebacfa-985a-4b29-94d2-62cd8de6f216",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Schema\n ↓\nAST（中间层）\n ↓\nRenderer（不同端）\n ↓\nCode",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "60cd499a-e451-4018-ba72-275e7e670197",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "4ca47c59-6d09-4262-b825-128c45f380ad",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "AST 示例",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b40568f5-8737-4bc9-a983-c7d5060600cb",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"component\": \"Button\",\n  \"props\": {},\n  \"children\": []\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ede2773a-5c23-4a38-bb3e-09d1645489d7",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "36e32e6d-89ba-4abe-a62d-b62b8652c86b",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 好处：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "45f84a07-896d-437a-b33a-79a4b472c56f",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "解耦 Schema 和代码",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "3f2dc2a3-72f7-4620-a77e-18057888b5ca",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "支持多端",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "d636d16d-e362-4656-b2b1-9b3d1b5ec820",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "839a6fb4-e360-46bc-b36a-2a64efaa5a8e",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "九、AI Patch 设计（必须支持）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "8994c38c-4d7e-4d25-9127-2f474ab55fc3",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "514e3835-5001-4a92-a149-a02449bd2da4",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Patch结构",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ec0d484c-c0b7-477f-969c-ac1a9a428e89",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"action\": \"update\",\n  \"targetId\": \"node_1\",\n  \"payload\": {\n    \"style.backgroundColor\": \"#ff0000\"\n  }\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b027decc-8441-47a2-ac44-b9d3120dfe1b",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "61732e85-8560-4814-997c-67e7aafda57f",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "支持：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "10796e86-6bf5-4781-ab70-896075bcbe0c",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "add",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "1d2a609d-a5d3-4f6e-b643-f30d3b58d021",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "update",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "27317ae6-c27a-4094-a5f8-8691fd5ea23f",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "delete",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6a3c5c5d-c008-4801-a0b2-7fa8e3862faa",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "fdaf8207-a1bf-46f1-8943-c65337326d8b",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 AI只输出 patch，不改全量",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b4942442-092c-4d36-a5e3-190d7434afbb",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "2f913251-fbbe-4396-8025-3400d3d43853",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "十、扩展能力（为未来留口子）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "18bb6c18-6877-4dce-9093-e873776ae8cf",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "e1361094-9aee-4865-ad8b-c5a7b22e7792",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "10.1 平台差异（关键）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c38671fe-f0cc-4bda-b24d-465d5f0df462",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"platform\": {\n  \"react\": {},\n  \"flutter\": {},\n  \"ios\": {},\n  \"android\": {}\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "5f7bfd88-977c-45d8-affb-1b6a37853980",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "f45c25d2-d011-4b38-8f19-ec61e0168daa",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 用来处理：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "fe2bfaec-3a18-4a7c-a7cc-f88e0f8122bc",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Flutter 特殊属性",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "3b9778d5-e82b-4109-bb96-e542da66cc53",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "iOS safe area",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ad6522b4-d383-45df-b4ea-2ae4698bac7f",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "162843d3-bf6c-4f9a-a2e5-e5acaf35b691",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "10.2 状态管理（进阶）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c9ed2419-6a14-4d5a-86d2-587ec601090b",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "\"state\": {\n  \"loading\": false\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "dd79a765-8ce9-4e38-8910-d7b1738293bb",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "0af8696b-0af0-41c9-855f-9c65211e0bb6",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "十一、一个完整示例",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "da109c6c-1ce8-4903-8559-5ac6732534e0",
+      "type": "codeBlock",
+      "props": {
+        "language": "json"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"id\": \"btn_1\",\n  \"type\": \"Button\",\n\n  \"props\": {\n    \"text\": \"购买\"\n  },\n\n  \"style\": {\n    \"width\": 120,\n    \"height\": 40,\n    \"backgroundColor\": \"#ff4d4f\",\n    \"borderRadius\": 6,\n    \"color\": \"#fff\"\n  },\n\n  \"layout\": {\n    \"mode\": \"absolute\",\n    \"x\": 100,\n    \"y\": 300\n  },\n\n  \"interaction\": {\n    \"onClick\": {\n      \"type\": \"navigate\",\n      \"target\": \"/detail\"\n    }\n  }\n}",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "726df93f-e08f-4d6a-b17d-6790ce3c8487",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "9c368cff-c442-421b-bf48-519b9d34ecb3",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "十二、这套 Schema 的优势",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "5099ec2b-f5f2-43dd-9ed0-1eb1a4a98786",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "✅ 可被 AI 稳定生成 ✅ 可编辑（拖拽就是改 layout） ✅ 可跨端 ✅ 支持局部修改 ✅ 可扩展",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ebe9de3d-9559-4c40-a23a-2f845b0fe051",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "adea1b22-07ca-49b5-83e5-7c4580a29238",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "十三、你接下来必须做的两件事",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a09d79a1-050d-4c0b-b1f6-d1ab61af6c82",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "523e100b-f3e2-4e5d-8d9e-740b9ecf2419",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "1️⃣ 定义组件映射表（非常关键）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b41158f7-ba93-4201-a5ea-c944176dab96",
+      "type": "codeBlock",
+      "props": {
+        "language": "ts"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Button → ReactButton\nButton → FlutterButton",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "1567ef12-6550-444f-885d-92aa17cf9049",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "5522948e-17c2-42f2-be7a-7f945c5edf97",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "2️⃣ 写一个 Renderer（先做 React）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "eb6f9a3e-0824-4ba7-9b4d-3914f2aebecb",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 输入 Schema → 渲染页面",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "62b5d988-eb55-4a5a-98d8-fd8a4d5f801c",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "548fcb49-2358-4375-8aaa-fc7467f1c4e4",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "十四、一句话总结",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "eb72c6b0-6537-44e0-840f-8837456ed2e8",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 Schema v2 的本质是：",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "“跨端 UI 的中间语言（DSL）”",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "e2c03171-9270-48fa-a1e5-6fede0195456",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "bd28f646-869c-4d5f-8462-3ac158682aee",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "如果你要继续，我可以帮你下一步👇",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "70cbb945-1892-4c93-86f4-42138c1c6da2",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 出一份「React Renderer 实现（可直接跑）」 👉 或「AI Prompt 模板（保证生成100%符合Schema）」",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "e75b2ef3-96c3-47f5-ad6b-1ef7d23bf2ae",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [],
+      "children": []
+    }
+  ],
+  "contentHtml": "<div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"cd511090-114b-461e-886c-215aac5eed2c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"cd511090-114b-461e-886c-215aac5eed2c\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">好，这一步是你整个系统的<strong>地基</strong>，我给你一套<strong>可生产使用的 Schema v2 设计</strong>，目标是：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"8c87d108-e814-41b7-b4ed-13b79569e941\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"8c87d108-e814-41b7-b4ed-13b79569e941\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\">✅ 一份 Schema → 可编辑 → 可被 AI 修改 → 可映射 React / Vue / Flutter / iOS / Android</blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a186a418-7d52-4f34-8cac-edc060759c0b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a186a418-7d52-4f34-8cac-edc060759c0b\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">我不会给你“理想模型”，而是给你<strong>能落地 + 能扩展 + 不会后期推翻</strong>的版本。</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d6a44b15-adfb-4262-90d1-76d3573a5bbf\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d6a44b15-adfb-4262-90d1-76d3573a5bbf\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9f549ac6-09b4-4c27-a13d-363166a614b2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9f549ac6-09b4-4c27-a13d-363166a614b2\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">一、设计原则（先统一思想）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"73b9f301-846c-4fe5-a3e8-7e6f334ab164\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"73b9f301-846c-4fe5-a3e8-7e6f334ab164\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">1️⃣ 单一数据源</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a002e3c6-2998-45d7-bd18-784ea80dcccc\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a002e3c6-2998-45d7-bd18-784ea80dcccc\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\">Schema = 唯一真相（SSOT）</blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"df4c2bbf-7499-4941-b894-7e6ffec64762\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"df4c2bbf-7499-4941-b894-7e6ffec64762\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">UI、PRD、代码生成全部依赖它</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6f946f70-733b-4a76-a0da-cbbe85e5e3a8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6f946f70-733b-4a76-a0da-cbbe85e5e3a8\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">不允许 UI 直接写死逻辑</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6ef187af-4e61-44dd-8eb7-25e703819206\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6ef187af-4e61-44dd-8eb7-25e703819206\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fe2aa76d-df30-4f38-83fb-e016ccd53852\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fe2aa76d-df30-4f38-83fb-e016ccd53852\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">2️⃣ 强约束 + 弱扩展</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f1af308d-df0e-421a-8f08-276462605423\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f1af308d-df0e-421a-8f08-276462605423\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 必须保证：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5a4e628c-442d-4dde-863c-bb42fc4f3eee\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5a4e628c-442d-4dde-863c-bb42fc4f3eee\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">结构稳定（AI不会乱生成）</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"0f99ec03-078a-4a20-9fbd-184615962419\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"0f99ec03-078a-4a20-9fbd-184615962419\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">同时允许扩展（跨端差异）</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5640212a-4e3c-4836-8d28-661dcc649898\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5640212a-4e3c-4836-8d28-661dcc649898\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3bfb854d-7f2a-4e7e-954d-0024c7f675fc\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3bfb854d-7f2a-4e7e-954d-0024c7f675fc\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">3️⃣ 分层设计（非常关键）</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7bcbaf47-ed44-4159-8e92-df0369936f6f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7bcbaf47-ed44-4159-8e92-df0369936f6f\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">Schema v2 拆成 5 层：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"0083cc81-70b6-4434-adb1-55648b807447\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"0083cc81-70b6-4434-adb1-55648b807447\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">Meta（元信息）\nTree（结构）\nLayout（布局）\nProps（属性）\nStyle（样式）\nInteraction（交互）</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"da261b32-33b8-4628-9e2b-1bcac4974a26\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"da261b32-33b8-4628-9e2b-1bcac4974a26\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"48cad1f3-1fb9-43b1-b647-913c655a0985\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"48cad1f3-1fb9-43b1-b647-913c655a0985\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">二、Schema v2 总体结构</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b731b8f1-e7be-4d10-9f03-2118d2cf662e\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b731b8f1-e7be-4d10-9f03-2118d2cf662e\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">{\n  \"version\": \"2.0\",\n  \"meta\": {},\n  \"pages\": []\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b29463aa-ff45-4ff0-8ae3-828b2b6aa500\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b29463aa-ff45-4ff0-8ae3-828b2b6aa500\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"4b2d90ba-92fd-4996-9e99-f07538808a11\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"4b2d90ba-92fd-4996-9e99-f07538808a11\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">三、Page 结构</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fd97fc0d-a284-4881-b26b-c383c92fa414\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fd97fc0d-a284-4881-b26b-c383c92fa414\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">{\n  \"id\": \"page_home\",\n  \"name\": \"首页\",\n  \"route\": \"/home\",\n  \"children\": [],\n  \"layout\": {},\n  \"style\": {}\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"400f4602-ed7f-4d3c-a517-fbdb42be05c9\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"400f4602-ed7f-4d3c-a517-fbdb42be05c9\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7462bebd-eafd-4006-b7c1-c76e5e2df39d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7462bebd-eafd-4006-b7c1-c76e5e2df39d\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">四、Node（组件节点）结构（核心）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"76ac03e5-b5ab-4aaa-8fc0-a2dc20065c96\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"76ac03e5-b5ab-4aaa-8fc0-a2dc20065c96\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">{\n  \"id\": \"node_xxx\",\n  \"type\": \"Button\",\n  \"name\": \"提交按钮\",\n\n  \"props\": {},\n  \"style\": {},\n  \"layout\": {},\n  \"interaction\": {},\n\n  \"children\": []\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"034c1741-95dd-48fd-8ad4-a9da64266a51\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"034c1741-95dd-48fd-8ad4-a9da64266a51\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"594941af-dd07-4738-a4bb-09c2c299db1f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"594941af-dd07-4738-a4bb-09c2c299db1f\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">五、核心字段设计（逐个拆）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"265acf4d-3efe-4d8f-9f81-1f3893429e07\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"265acf4d-3efe-4d8f-9f81-1f3893429e07\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b6f2f7d0-9cb1-4139-897c-a27a12ca3f69\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b6f2f7d0-9cb1-4139-897c-a27a12ca3f69\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.1 type（组件类型）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f8036260-2c04-45e2-8793-0f04832cfcbd\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f8036260-2c04-45e2-8793-0f04832cfcbd\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"type\": \"Button\"</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"239e2b94-658e-433e-a0d4-dc85aa726237\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"239e2b94-658e-433e-a0d4-dc85aa726237\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 必须是“抽象组件”，不能是具体实现</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"bc197cfd-d53f-46ad-8649-91e1355a6b47\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"bc197cfd-d53f-46ad-8649-91e1355a6b47\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9c3e9b59-f216-411d-989e-002eea900bae\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9c3e9b59-f216-411d-989e-002eea900bae\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.2 props（跨端逻辑属性）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ae80e915-bfb7-472d-a9be-71e717306d0a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ae80e915-bfb7-472d-a9be-71e717306d0a\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 和 UI 框架无关</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6473b3d1-2c1b-4f5f-80a0-909fcc8c31b1\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6473b3d1-2c1b-4f5f-80a0-909fcc8c31b1\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"props\": {\n  \"text\": \"提交\",\n  \"disabled\": false\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"880d3c82-aa7a-4b5b-aad9-020906e0c002\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"880d3c82-aa7a-4b5b-aad9-020906e0c002\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"85bc3afb-74b8-45c2-a134-46f594948d72\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"85bc3afb-74b8-45c2-a134-46f594948d72\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.3 style（视觉层）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"cd7a1130-9570-43d7-ab83-86eb4be82543\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"cd7a1130-9570-43d7-ab83-86eb4be82543\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">统一设计：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"24334370-7df6-4fc1-be2d-bc832a03d954\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"24334370-7df6-4fc1-be2d-bc832a03d954\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"style\": {\n  \"width\": 120,\n  \"height\": 40,\n  \"padding\": [8, 16],\n  \"margin\": [0, 0, 0, 0],\n\n  \"backgroundColor\": \"#1890ff\",\n  \"borderRadius\": 8,\n\n  \"fontSize\": 14,\n  \"color\": \"#fff\",\n\n  \"shadow\": {\n    \"x\": 0,\n    \"y\": 2,\n    \"blur\": 6,\n    \"color\": \"rgba(0,0,0,0.2)\"\n  }\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a9ef48c6-9ca3-4553-825d-b318c59ec661\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a9ef48c6-9ca3-4553-825d-b318c59ec661\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7ac4320a-bbaf-4c46-8472-f39e7953f13f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7ac4320a-bbaf-4c46-8472-f39e7953f13f\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.4 layout（布局层）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c690d213-1739-4418-ab0c-13e3e854ca47\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c690d213-1739-4418-ab0c-13e3e854ca47\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 支持两种模式（关键）</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2e7b666b-b78c-47dd-9f95-17f9c2d65086\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2e7b666b-b78c-47dd-9f95-17f9c2d65086\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ff723df5-8cab-4a3c-a5d2-7e783f6cc385\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ff723df5-8cab-4a3c-a5d2-7e783f6cc385\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">🧠 模式1：绝对布局（原型工具）</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"770956c7-1155-400e-ac8d-a5c8cd4722db\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"770956c7-1155-400e-ac8d-a5c8cd4722db\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"layout\": {\n  \"mode\": \"absolute\",\n  \"x\": 100,\n  \"y\": 200,\n  \"zIndex\": 1\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"16685bfa-8fc1-4f55-a91f-87a0174f9c0a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"16685bfa-8fc1-4f55-a91f-87a0174f9c0a\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"04660ada-0d7b-42a6-acc1-bd7733f860bb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"04660ada-0d7b-42a6-acc1-bd7733f860bb\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">🧠 模式2：流式布局（代码生成用）</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"77c1142e-96f9-4068-ab95-26409156e625\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"77c1142e-96f9-4068-ab95-26409156e625\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"layout\": {\n  \"mode\": \"flex\",\n  \"direction\": \"row\",\n  \"justify\": \"center\",\n  \"align\": \"center\",\n  \"gap\": 8\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1889baaa-196b-4d35-a1a0-8b528491e25c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1889baaa-196b-4d35-a1a0-8b528491e25c\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"0098b2b0-4281-4a83-8e54-f062c3d0c75a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"0098b2b0-4281-4a83-8e54-f062c3d0c75a\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 ⚠️ 核心设计：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"89c3cfc6-6f0c-4ce4-a782-2fc5113485eb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"89c3cfc6-6f0c-4ce4-a782-2fc5113485eb\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\"><strong>编辑器用 absolute，生成代码用 flex</strong></blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"eb7cbd34-9dd4-4064-b1eb-76aa1d60c2cc\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"eb7cbd34-9dd4-4064-b1eb-76aa1d60c2cc\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6e30d9b2-c7b1-4f44-8627-67e81a9bf7ee\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6e30d9b2-c7b1-4f44-8627-67e81a9bf7ee\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.5 interaction（交互层）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3c6a4d1c-34fc-4c51-836b-34d2f891f247\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3c6a4d1c-34fc-4c51-836b-34d2f891f247\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"interaction\": {\n  \"onClick\": {\n    \"type\": \"navigate\",\n    \"target\": \"/detail\"\n  }\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3b0f92b7-c1ed-4dec-b5a3-10ca0739b13d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3b0f92b7-c1ed-4dec-b5a3-10ca0739b13d\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6176037d-a63c-4a09-a57a-32af22499935\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6176037d-a63c-4a09-a57a-32af22499935\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">支持：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9bbe1da7-f0aa-4ff4-9d06-dfaaf29b21cd\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9bbe1da7-f0aa-4ff4-9d06-dfaaf29b21cd\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">navigate（跳转）</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c27371f2-d647-4039-bee5-a682af9d35ba\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c27371f2-d647-4039-bee5-a682af9d35ba\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">setState</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6e5a1e50-0e21-435a-bbd8-62ca07e1c500\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6e5a1e50-0e21-435a-bbd8-62ca07e1c500\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">apiCall（未来）</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"12339e6b-cb28-4057-9fed-86926d82c7d3\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"12339e6b-cb28-4057-9fed-86926d82c7d3\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ffd05825-3780-4e21-9b8d-211d459ce730\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ffd05825-3780-4e21-9b8d-211d459ce730\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.6 children（组件树）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6300918e-0b9c-419d-a7d9-f061b6f644a2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6300918e-0b9c-419d-a7d9-f061b6f644a2\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"children\": []</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"4f09c308-0022-4e1f-8854-5106d23ab8ab\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"4f09c308-0022-4e1f-8854-5106d23ab8ab\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 支持嵌套</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9dbe3d4b-b4c7-4154-aa15-11d4d1627c23\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9dbe3d4b-b4c7-4154-aa15-11d4d1627c23\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fdefafea-bea4-45fc-8fec-911569c576b1\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fdefafea-bea4-45fc-8fec-911569c576b1\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">六、组件抽象层（跨端关键）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"0b439797-712d-4525-82b2-32eed786de03\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"0b439797-712d-4525-82b2-32eed786de03\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">你必须定义一套“统一组件协议”👇</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"dd4d954e-a2a9-41ee-9aa7-cf688226d402\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"dd4d954e-a2a9-41ee-9aa7-cf688226d402\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3c4ef726-def9-440e-a60b-fdf075059e5d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3c4ef726-def9-440e-a60b-fdf075059e5d\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">核心组件类型（建议 v1）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6044fd4e-b0a3-43fc-ad13-354758c8772d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6044fd4e-b0a3-43fc-ad13-354758c8772d\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">Container\nText\nImage\nButton\nInput\nList\nCard\nNavbar\nTabBar</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"019a895e-b077-4579-93e8-f91b83a8ebf8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"019a895e-b077-4579-93e8-f91b83a8ebf8\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"0f7281f4-c137-4204-a47d-58b592536ae6\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"0f7281f4-c137-4204-a47d-58b592536ae6\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 这些是“跨端最小公约数”</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d631c245-0c33-4d2a-beca-2df63daf93c9\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d631c245-0c33-4d2a-beca-2df63daf93c9\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3b5ddf76-4051-4bde-b42d-744776806dfb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3b5ddf76-4051-4bde-b42d-744776806dfb\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">七、跨端映射设计（重点）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"823d2cee-666c-4fc6-b5fb-d472404eb5f2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"823d2cee-666c-4fc6-b5fb-d472404eb5f2\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"0297fa3b-895a-4966-8c66-b7075707c6b0\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"0297fa3b-895a-4966-8c66-b7075707c6b0\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">7.1 React 映射</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"69f1ecb5-3d48-4f0d-8af6-e4f066202e42\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"69f1ecb5-3d48-4f0d-8af6-e4f066202e42\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">{\n  \"type\": \"Button\"\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"60f52b8a-f2fd-45ef-a11b-07fa98de7af9\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"60f52b8a-f2fd-45ef-a11b-07fa98de7af9\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">↓</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c37c6ddf-edc2-4a53-911a-eff1c44e13d8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c37c6ddf-edc2-4a53-911a-eff1c44e13d8\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"jsx\"><pre><code class=\"bn-inline-content\">&lt;button&gt;提交&lt;/button&gt;</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"458e4916-5715-4c9b-8d4b-529f988277eb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"458e4916-5715-4c9b-8d4b-529f988277eb\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"de149de8-59e0-4b0b-9d08-9ff448b7b34d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"de149de8-59e0-4b0b-9d08-9ff448b7b34d\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">7.2 Vue 映射</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"40852355-c96b-44e2-9747-b9de5640cef8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"40852355-c96b-44e2-9747-b9de5640cef8\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"vue\"><pre><code class=\"bn-inline-content\">&lt;button&gt;提交&lt;/button&gt;</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"381b9c1e-d422-46ac-b903-b1546509e6a5\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"381b9c1e-d422-46ac-b903-b1546509e6a5\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b83f3eb4-6837-4d51-8818-d535944bad3d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b83f3eb4-6837-4d51-8818-d535944bad3d\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">7.3 Flutter 映射</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d72d9f0e-d9d6-47b0-ad6b-ebfe61f2aa54\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d72d9f0e-d9d6-47b0-ad6b-ebfe61f2aa54\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"dart\"><pre><code class=\"bn-inline-content\">ElevatedButton(\n  onPressed: () {},\n  child: Text(\"提交\"),\n)</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fcca5898-a2c3-4f4e-9d33-8a153dfdcebe\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fcca5898-a2c3-4f4e-9d33-8a153dfdcebe\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"e15bcc33-9045-47b3-97f6-9c1842712670\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"e15bcc33-9045-47b3-97f6-9c1842712670\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 关键点：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a4b284de-bb03-4042-b675-42b47f0c2f04\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a4b284de-bb03-4042-b675-42b47f0c2f04\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\">Schema 不关心实现，只关心语义</blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a9f7e7c2-1c85-4734-a57d-906e19c3ca34\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a9f7e7c2-1c85-4734-a57d-906e19c3ca34\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"01f8e368-b997-4856-84c3-9ebdb04cdf57\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"01f8e368-b997-4856-84c3-9ebdb04cdf57\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">八、D2C 引擎设计（核心）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"96606e9b-4b17-407a-93b0-7266e9019e1f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"96606e9b-4b17-407a-93b0-7266e9019e1f\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"82830039-595e-4b44-8ac7-236acbebf1d8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"82830039-595e-4b44-8ac7-236acbebf1d8\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">Pipeline：</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"8eebacfa-985a-4b29-94d2-62cd8de6f216\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"8eebacfa-985a-4b29-94d2-62cd8de6f216\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">Schema\n ↓\nAST（中间层）\n ↓\nRenderer（不同端）\n ↓\nCode</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"60cd499a-e451-4018-ba72-275e7e670197\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"60cd499a-e451-4018-ba72-275e7e670197\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"4ca47c59-6d09-4262-b825-128c45f380ad\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"4ca47c59-6d09-4262-b825-128c45f380ad\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">AST 示例</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b40568f5-8737-4bc9-a983-c7d5060600cb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b40568f5-8737-4bc9-a983-c7d5060600cb\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">{\n  \"component\": \"Button\",\n  \"props\": {},\n  \"children\": []\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ede2773a-5c23-4a38-bb3e-09d1645489d7\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ede2773a-5c23-4a38-bb3e-09d1645489d7\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"36e32e6d-89ba-4abe-a62d-b62b8652c86b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"36e32e6d-89ba-4abe-a62d-b62b8652c86b\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 好处：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"45f84a07-896d-437a-b33a-79a4b472c56f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"45f84a07-896d-437a-b33a-79a4b472c56f\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">解耦 Schema 和代码</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3f2dc2a3-72f7-4620-a77e-18057888b5ca\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3f2dc2a3-72f7-4620-a77e-18057888b5ca\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">支持多端</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d636d16d-e362-4656-b2b1-9b3d1b5ec820\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d636d16d-e362-4656-b2b1-9b3d1b5ec820\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"839a6fb4-e360-46bc-b36a-2a64efaa5a8e\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"839a6fb4-e360-46bc-b36a-2a64efaa5a8e\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">九、AI Patch 设计（必须支持）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"8994c38c-4d7e-4d25-9127-2f474ab55fc3\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"8994c38c-4d7e-4d25-9127-2f474ab55fc3\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"514e3835-5001-4a92-a149-a02449bd2da4\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"514e3835-5001-4a92-a149-a02449bd2da4\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">Patch结构</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ec0d484c-c0b7-477f-969c-ac1a9a428e89\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ec0d484c-c0b7-477f-969c-ac1a9a428e89\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">{\n  \"action\": \"update\",\n  \"targetId\": \"node_1\",\n  \"payload\": {\n    \"style.backgroundColor\": \"#ff0000\"\n  }\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b027decc-8441-47a2-ac44-b9d3120dfe1b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b027decc-8441-47a2-ac44-b9d3120dfe1b\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"61732e85-8560-4814-997c-67e7aafda57f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"61732e85-8560-4814-997c-67e7aafda57f\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">支持：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"10796e86-6bf5-4781-ab70-896075bcbe0c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"10796e86-6bf5-4781-ab70-896075bcbe0c\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">add</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1d2a609d-a5d3-4f6e-b643-f30d3b58d021\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1d2a609d-a5d3-4f6e-b643-f30d3b58d021\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">update</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"27317ae6-c27a-4094-a5f8-8691fd5ea23f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"27317ae6-c27a-4094-a5f8-8691fd5ea23f\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">delete</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6a3c5c5d-c008-4801-a0b2-7fa8e3862faa\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6a3c5c5d-c008-4801-a0b2-7fa8e3862faa\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fdaf8207-a1bf-46f1-8943-c65337326d8b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fdaf8207-a1bf-46f1-8943-c65337326d8b\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 AI只输出 patch，不改全量</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b4942442-092c-4d36-a5e3-190d7434afbb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b4942442-092c-4d36-a5e3-190d7434afbb\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2f913251-fbbe-4396-8025-3400d3d43853\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2f913251-fbbe-4396-8025-3400d3d43853\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">十、扩展能力（为未来留口子）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"18bb6c18-6877-4dce-9093-e873776ae8cf\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"18bb6c18-6877-4dce-9093-e873776ae8cf\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"e1361094-9aee-4865-ad8b-c5a7b22e7792\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"e1361094-9aee-4865-ad8b-c5a7b22e7792\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">10.1 平台差异（关键）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c38671fe-f0cc-4bda-b24d-465d5f0df462\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c38671fe-f0cc-4bda-b24d-465d5f0df462\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"platform\": {\n  \"react\": {},\n  \"flutter\": {},\n  \"ios\": {},\n  \"android\": {}\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5f7bfd88-977c-45d8-affb-1b6a37853980\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5f7bfd88-977c-45d8-affb-1b6a37853980\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f45c25d2-d011-4b38-8f19-ec61e0168daa\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f45c25d2-d011-4b38-8f19-ec61e0168daa\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 用来处理：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fe2bfaec-3a18-4a7c-a7cc-f88e0f8122bc\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fe2bfaec-3a18-4a7c-a7cc-f88e0f8122bc\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">Flutter 特殊属性</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3b9778d5-e82b-4109-bb96-e542da66cc53\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3b9778d5-e82b-4109-bb96-e542da66cc53\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">iOS safe area</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ad6522b4-d383-45df-b4ea-2ae4698bac7f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ad6522b4-d383-45df-b4ea-2ae4698bac7f\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"162843d3-bf6c-4f9a-a2e5-e5acaf35b691\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"162843d3-bf6c-4f9a-a2e5-e5acaf35b691\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">10.2 状态管理（进阶）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c9ed2419-6a14-4d5a-86d2-587ec601090b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c9ed2419-6a14-4d5a-86d2-587ec601090b\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">\"state\": {\n  \"loading\": false\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"dd79a765-8ce9-4e38-8910-d7b1738293bb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"dd79a765-8ce9-4e38-8910-d7b1738293bb\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"0af8696b-0af0-41c9-855f-9c65211e0bb6\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"0af8696b-0af0-41c9-855f-9c65211e0bb6\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">十一、一个完整示例</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"da109c6c-1ce8-4903-8559-5ac6732534e0\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"da109c6c-1ce8-4903-8559-5ac6732534e0\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"json\"><pre><code class=\"bn-inline-content\">{\n  \"id\": \"btn_1\",\n  \"type\": \"Button\",\n\n  \"props\": {\n    \"text\": \"购买\"\n  },\n\n  \"style\": {\n    \"width\": 120,\n    \"height\": 40,\n    \"backgroundColor\": \"#ff4d4f\",\n    \"borderRadius\": 6,\n    \"color\": \"#fff\"\n  },\n\n  \"layout\": {\n    \"mode\": \"absolute\",\n    \"x\": 100,\n    \"y\": 300\n  },\n\n  \"interaction\": {\n    \"onClick\": {\n      \"type\": \"navigate\",\n      \"target\": \"/detail\"\n    }\n  }\n}</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"726df93f-e08f-4d6a-b17d-6790ce3c8487\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"726df93f-e08f-4d6a-b17d-6790ce3c8487\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9c368cff-c442-421b-bf48-519b9d34ecb3\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9c368cff-c442-421b-bf48-519b9d34ecb3\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">十二、这套 Schema 的优势</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5099ec2b-f5f2-43dd-9ed0-1eb1a4a98786\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5099ec2b-f5f2-43dd-9ed0-1eb1a4a98786\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">✅ 可被 AI 稳定生成 ✅ 可编辑（拖拽就是改 layout） ✅ 可跨端 ✅ 支持局部修改 ✅ 可扩展</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ebe9de3d-9559-4c40-a23a-2f845b0fe051\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ebe9de3d-9559-4c40-a23a-2f845b0fe051\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"adea1b22-07ca-49b5-83e5-7c4580a29238\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"adea1b22-07ca-49b5-83e5-7c4580a29238\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">十三、你接下来必须做的两件事</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a09d79a1-050d-4c0b-b1f6-d1ab61af6c82\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a09d79a1-050d-4c0b-b1f6-d1ab61af6c82\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"523e100b-f3e2-4e5d-8d9e-740b9ecf2419\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"523e100b-f3e2-4e5d-8d9e-740b9ecf2419\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">1️⃣ 定义组件映射表（非常关键）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b41158f7-ba93-4201-a5ea-c944176dab96\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b41158f7-ba93-4201-a5ea-c944176dab96\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\" data-language=\"ts\"><pre><code class=\"bn-inline-content\">Button → ReactButton\nButton → FlutterButton</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1567ef12-6550-444f-885d-92aa17cf9049\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1567ef12-6550-444f-885d-92aa17cf9049\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5522948e-17c2-42f2-be7a-7f945c5edf97\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5522948e-17c2-42f2-be7a-7f945c5edf97\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">2️⃣ 写一个 Renderer（先做 React）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"eb6f9a3e-0824-4ba7-9b4d-3914f2aebecb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"eb6f9a3e-0824-4ba7-9b4d-3914f2aebecb\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 输入 Schema → 渲染页面</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"62b5d988-eb55-4a5a-98d8-fd8a4d5f801c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"62b5d988-eb55-4a5a-98d8-fd8a4d5f801c\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"548fcb49-2358-4375-8aaa-fc7467f1c4e4\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"548fcb49-2358-4375-8aaa-fc7467f1c4e4\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">十四、一句话总结</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"eb72c6b0-6537-44e0-840f-8837456ed2e8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"eb72c6b0-6537-44e0-840f-8837456ed2e8\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\">👉 Schema v2 的本质是：<strong>“跨端 UI 的中间语言（DSL）”</strong></blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"e2c03171-9270-48fa-a1e5-6fede0195456\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"e2c03171-9270-48fa-a1e5-6fede0195456\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"bd28f646-869c-4d5f-8462-3ac158682aee\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"bd28f646-869c-4d5f-8462-3ac158682aee\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">如果你要继续，我可以帮你下一步👇</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"70cbb945-1892-4c93-86f4-42138c1c6da2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"70cbb945-1892-4c93-86f4-42138c1c6da2\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 出一份「React Renderer 实现（可直接跑）」 👉 或「AI Prompt 模板（保证生成100%符合Schema）」</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"e75b2ef3-96c3-47f5-ad6b-1ef7d23bf2ae\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"e75b2ef3-96c3-47f5-ad6b-1ef7d23bf2ae\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\"><span class=\"ProseMirror-trailingBreak\" style=\"display: inline-block;\"></span></p></div></div></div></div>",
+  "contentText": "好，这一步是你整个系统的**地基**，我给你一套**可生产使用的 Schema v2 设计**，目标是：\n\n> ✅ 一份 Schema → 可编辑 → 可被 AI 修改 → 可映射 React / Vue / Flutter / iOS / Android\n\n我不会给你“理想模型”，而是给你**能落地 + 能扩展 + 不会后期推翻**的版本。\n\n***\n\n# 一、设计原则（先统一思想）\n\n### 1️⃣ 单一数据源\n\n> Schema = 唯一真相（SSOT）\n\n* UI、PRD、代码生成全部依赖它\n\n* 不允许 UI 直接写死逻辑\n\n***\n\n### 2️⃣ 强约束 + 弱扩展\n\n👉 必须保证：\n\n* 结构稳定（AI不会乱生成）\n\n* 同时允许扩展（跨端差异）\n\n***\n\n### 3️⃣ 分层设计（非常关键）\n\nSchema v2 拆成 5 层：\n\n```text\nMeta（元信息）\nTree（结构）\nLayout（布局）\nProps（属性）\nStyle（样式）\nInteraction（交互）\n```\n\n***\n\n# 二、Schema v2 总体结构\n\n```json\n{\n  \"version\": \"2.0\",\n  \"meta\": {},\n  \"pages\": []\n}\n```\n\n***\n\n# 三、Page 结构\n\n```json\n{\n  \"id\": \"page_home\",\n  \"name\": \"首页\",\n  \"route\": \"/home\",\n  \"children\": [],\n  \"layout\": {},\n  \"style\": {}\n}\n```\n\n***\n\n# 四、Node（组件节点）结构（核心）\n\n```json\n{\n  \"id\": \"node_xxx\",\n  \"type\": \"Button\",\n  \"name\": \"提交按钮\",\n\n  \"props\": {},\n  \"style\": {},\n  \"layout\": {},\n  \"interaction\": {},\n\n  \"children\": []\n}\n```\n\n***\n\n# 五、核心字段设计（逐个拆）\n\n***\n\n## 5.1 type（组件类型）\n\n```json\n\"type\": \"Button\"\n```\n\n👉 必须是“抽象组件”，不能是具体实现\n\n***\n\n## 5.2 props（跨端逻辑属性）\n\n👉 和 UI 框架无关\n\n```json\n\"props\": {\n  \"text\": \"提交\",\n  \"disabled\": false\n}\n```\n\n***\n\n## 5.3 style（视觉层）\n\n统一设计：\n\n```json\n\"style\": {\n  \"width\": 120,\n  \"height\": 40,\n  \"padding\": [8, 16],\n  \"margin\": [0, 0, 0, 0],\n\n  \"backgroundColor\": \"#1890ff\",\n  \"borderRadius\": 8,\n\n  \"fontSize\": 14,\n  \"color\": \"#fff\",\n\n  \"shadow\": {\n    \"x\": 0,\n    \"y\": 2,\n    \"blur\": 6,\n    \"color\": \"rgba(0,0,0,0.2)\"\n  }\n}\n```\n\n***\n\n## 5.4 layout（布局层）\n\n👉 支持两种模式（关键）\n\n***\n\n### 🧠 模式1：绝对布局（原型工具）\n\n```json\n\"layout\": {\n  \"mode\": \"absolute\",\n  \"x\": 100,\n  \"y\": 200,\n  \"zIndex\": 1\n}\n```\n\n***\n\n### 🧠 模式2：流式布局（代码生成用）\n\n```json\n\"layout\": {\n  \"mode\": \"flex\",\n  \"direction\": \"row\",\n  \"justify\": \"center\",\n  \"align\": \"center\",\n  \"gap\": 8\n}\n```\n\n***\n\n👉 ⚠️ 核心设计：\n\n> **编辑器用 absolute，生成代码用 flex**\n\n***\n\n## 5.5 interaction（交互层）\n\n```json\n\"interaction\": {\n  \"onClick\": {\n    \"type\": \"navigate\",\n    \"target\": \"/detail\"\n  }\n}\n```\n\n***\n\n支持：\n\n* navigate（跳转）\n\n* setState\n\n* apiCall（未来）\n\n***\n\n## 5.6 children（组件树）\n\n```json\n\"children\": []\n```\n\n👉 支持嵌套\n\n***\n\n# 六、组件抽象层（跨端关键）\n\n你必须定义一套“统一组件协议”👇\n\n***\n\n## 核心组件类型（建议 v1）\n\n```text\nContainer\nText\nImage\nButton\nInput\nList\nCard\nNavbar\nTabBar\n```\n\n***\n\n👉 这些是“跨端最小公约数”\n\n***\n\n# 七、跨端映射设计（重点）\n\n***\n\n## 7.1 React 映射\n\n```json\n{\n  \"type\": \"Button\"\n}\n```\n\n↓\n\n```jsx\n<button>提交</button>\n```\n\n***\n\n## 7.2 Vue 映射\n\n```vue\n<button>提交</button>\n```\n\n***\n\n## 7.3 Flutter 映射\n\n```dart\nElevatedButton(\n  onPressed: () {},\n  child: Text(\"提交\"),\n)\n```\n\n***\n\n👉 关键点：\n\n> Schema 不关心实现，只关心语义\n\n***\n\n# 八、D2C 引擎设计（核心）\n\n***\n\n## Pipeline：\n\n```text\nSchema\n ↓\nAST（中间层）\n ↓\nRenderer（不同端）\n ↓\nCode\n```\n\n***\n\n## AST 示例\n\n```json\n{\n  \"component\": \"Button\",\n  \"props\": {},\n  \"children\": []\n}\n```\n\n***\n\n👉 好处：\n\n* 解耦 Schema 和代码\n\n* 支持多端\n\n***\n\n# 九、AI Patch 设计（必须支持）\n\n***\n\n## Patch结构\n\n```json\n{\n  \"action\": \"update\",\n  \"targetId\": \"node_1\",\n  \"payload\": {\n    \"style.backgroundColor\": \"#ff0000\"\n  }\n}\n```\n\n***\n\n支持：\n\n* add\n\n* update\n\n* delete\n\n***\n\n👉 AI只输出 patch，不改全量\n\n***\n\n# 十、扩展能力（为未来留口子）\n\n***\n\n## 10.1 平台差异（关键）\n\n```json\n\"platform\": {\n  \"react\": {},\n  \"flutter\": {},\n  \"ios\": {},\n  \"android\": {}\n}\n```\n\n***\n\n👉 用来处理：\n\n* Flutter 特殊属性\n\n* iOS safe area\n\n***\n\n## 10.2 状态管理（进阶）\n\n```json\n\"state\": {\n  \"loading\": false\n}\n```\n\n***\n\n# 十一、一个完整示例\n\n```json\n{\n  \"id\": \"btn_1\",\n  \"type\": \"Button\",\n\n  \"props\": {\n    \"text\": \"购买\"\n  },\n\n  \"style\": {\n    \"width\": 120,\n    \"height\": 40,\n    \"backgroundColor\": \"#ff4d4f\",\n    \"borderRadius\": 6,\n    \"color\": \"#fff\"\n  },\n\n  \"layout\": {\n    \"mode\": \"absolute\",\n    \"x\": 100,\n    \"y\": 300\n  },\n\n  \"interaction\": {\n    \"onClick\": {\n      \"type\": \"navigate\",\n      \"target\": \"/detail\"\n    }\n  }\n}\n```\n\n***\n\n# 十二、这套 Schema 的优势\n\n✅ 可被 AI 稳定生成 ✅ 可编辑（拖拽就是改 layout） ✅ 可跨端 ✅ 支持局部修改 ✅ 可扩展\n\n***\n\n# 十三、你接下来必须做的两件事\n\n***\n\n## 1️⃣ 定义组件映射表（非常关键）\n\n```ts\nButton → ReactButton\nButton → FlutterButton\n```\n\n***\n\n## 2️⃣ 写一个 Renderer（先做 React）\n\n👉 输入 Schema → 渲染页面\n\n***\n\n# 十四、一句话总结\n\n> 👉 Schema v2 的本质是：**“跨端 UI 的中间语言（DSL）”**\n\n***\n\n如果你要继续，我可以帮你下一步👇\n\n👉 出一份「React Renderer 实现（可直接跑）」 👉 或「AI Prompt 模板（保证生成100%符合Schema）」\n",
+  "createdAt": "2026-05-03T06:15:35.122Z",
+  "updatedAt": "2026-05-03T06:18:37.258Z",
+  "source": "manual",
+  "versionNumber": 9
+}

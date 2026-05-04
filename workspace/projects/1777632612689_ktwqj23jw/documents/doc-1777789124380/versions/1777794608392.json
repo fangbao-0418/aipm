@@ -1,0 +1,1951 @@
+{
+  "id": "doc-1777789124380",
+  "projectId": "1777632612689_ktwqj23jw",
+  "title": "出「UI高保真结构图（Figma级别布局）」",
+  "sortOrder": 1,
+  "deleted": false,
+  "contentBlocks": [
+    {
+      "id": "cc355f51-24dd-4885-9dba-5d71da78770f",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "好，这一版我给你的是",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "接近 Figma / 墨刀级别的高保真 UI 结构稿（可直接给设计师落图）",
+          "styles": {
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "text": "，并且已经结合你产品的 AI 特性做了专门设计。",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "322410ec-bbbe-42bd-9cdf-f6caf42fc531",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "⚠️ 重点：这不是“好看示意图”，而是",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "可实现的布局规范 + 模块划分 + 交互位定义",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "7269e1b4-d435-4c18-a136-fbc23425dcce",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "b9d12af1-703d-48d6-97f9-d426e04adc6f",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "一、整体布局（编辑器主界面）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "22ad1679-5180-4f4c-b04d-7cda450a2335",
+      "type": "image",
+      "props": {
+        "textAlignment": "left",
+        "backgroundColor": "default",
+        "name": "Image",
+        "url": "https://images.openai.com/static-rsc-4/AvUv-1YAvvqLG-5Lb6a7gnatjpATk7F8ePnsDhHtpNrxtycbsvRjpEYLACZAyaN6yAgzctJJX9vLdDDTgWYIbIECqzfOtIMjanel6yawvmL6FU6ItPTkn2fJG1E9FwmFVL2uBDoLNeuWN-j3gxdmH8ErRYSQsh2sVt23GurY0FIIAttfShFxKTg83x821ERs?purpose=fullsize",
+        "caption": "",
+        "showPreview": true,
+        "previewWidth": 283
+      },
+      "children": []
+    },
+    {
+      "id": "8997e5c8-f7b7-4082-bf68-6b2d5da2e359",
+      "type": "image",
+      "props": {
+        "textAlignment": "left",
+        "backgroundColor": "default",
+        "name": "Image",
+        "url": "https://images.openai.com/static-rsc-4/wLlvxQ7-SfWWyjOs44PlRWlERtZa-dLn64GiJq3wVFjeX46aM2r9q-StqAnt_XFAoMxi83E3wEXng-ZWCggjFJZ9OdQ2onWh8wZPn_3QzjPyIi338ODVMi1wWIWAdzCWQNG-PucJakEd4umwIQfcrAZpkR39CurizBPyV7eufqlkdHhgLhR4pJ0-hUK5j2p6?purpose=fullsize",
+        "caption": "",
+        "showPreview": true,
+        "previewWidth": 261
+      },
+      "children": []
+    },
+    {
+      "id": "adc89c15-f290-4461-aeb6-338bb1ccd804",
+      "type": "image",
+      "props": {
+        "textAlignment": "left",
+        "backgroundColor": "default",
+        "name": "Image",
+        "url": "https://images.openai.com/static-rsc-4/BfEFbC0oO77EdL15CKWhB-zQ8-7kRu9OaxjOuiK4muPNFZy4Q5cP_yZvZCHPXUPRUy44HxHmMHtf13cBbqmWC8gsb23emR8kc4F_ggEXKjUKc_CVt750lyTqLF40fJEsm5dO_wW2pdZ3kwuZR8SM_zSnq_CjQtHjuy-oN50YruebtvmVU5WU3Q8KY_ibpC-8?purpose=fullsize",
+        "caption": "",
+        "showPreview": true,
+        "previewWidth": 190
+      },
+      "children": []
+    },
+    {
+      "id": "1b0a91a3-5e82-4e92-99ca-aa8095b5b2b4",
+      "type": "image",
+      "props": {
+        "textAlignment": "left",
+        "backgroundColor": "default",
+        "name": "Image",
+        "url": "https://images.openai.com/static-rsc-4/OSNeu94OQCPIChC2CxSKoHWQz5TuzKO2DKVyumY8K0OIBniourV5_gwiRwRyWNwCQX9lrKl0B73Nkn48DnwEJ9a2oTHHm__mwRHQbYlfmz73xizOB4JoInHNGZ6AXXcLB7IgAx1cWK92--oG9WcQxJe04__ra9SbM5ktYxJTALjctBkXrykq81WLm1afagT7?purpose=fullsize",
+        "caption": "",
+        "showPreview": true
+      },
+      "children": []
+    },
+    {
+      "id": "771f7b2e-9fc5-4d37-adf2-bfbd1d64d0a5",
+      "type": "image",
+      "props": {
+        "textAlignment": "left",
+        "backgroundColor": "default",
+        "name": "Image",
+        "url": "https://images.openai.com/static-rsc-4/JSySCLDVlTUHKOvmc4qTT_TGNc-PhzKTWPV48G9nBZjL2d1gMf9p8ppewItP9UqV9qbRg8R-pG3pDhonnfhRZTqdrxFHlhkvNgvFu3LI73kKPlA3w4md3ZKvbpYFeHJ8MEtP8gDatgw4WzB9SLrOMEDT6QtUyKVxPfwoerV5FyumXF0Dh-RU3C0hohsHetsr?purpose=fullsize",
+        "caption": "",
+        "showPreview": true
+      },
+      "children": []
+    },
+    {
+      "id": "919f6e35-598a-4823-864e-3cde38e57bce",
+      "type": "image",
+      "props": {
+        "textAlignment": "left",
+        "backgroundColor": "default",
+        "name": "Image",
+        "url": "https://images.openai.com/static-rsc-4/QKWybgBYbIPdQ24Znon1gu9zMwimlo5whPSYRAMnixkfZhnhs7WAV3px3TCZ9z_fNqc31EyBhSYP6IcgMBxyyOy2AExf0jCRUNZKuU7ATG2XgEia1lrzznzlc_j7we8qKYvGt117VIIY7jacEqT8JeQEcaYZxKV1BwKsrQ8w-mG-Bz9R1Ua_D4q3X01oqMSL?purpose=fullsize",
+        "caption": "",
+        "showPreview": true
+      },
+      "children": []
+    },
+    {
+      "id": "eb72a277-7db0-4fa4-b913-508db03dbf65",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "布局结构（核心）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "7ef442ce-0adf-4f4d-adce-7b02c04246a7",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "┌──────────────────────────────────────────────┐\n│ 顶部工具栏 TopBar                           │\n├──────────────┬───────────────────┬──────────┤\n│ 左侧面板     │     画布区域       │ 右侧面板 │\n│ Sidebar      │     Canvas        │ Inspector│\n├──────────────┴───────────────────┴──────────┤\n│ 底部状态栏 StatusBar                         │\n└──────────────────────────────────────────────┘",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b16e293e-917e-4b0e-b915-b0254aa0e8e9",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "ae2205a6-4a7c-4c05-a674-ab6917bd3360",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "二、顶部工具栏（TopBar）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6f4e1e7f-82c7-4f72-a1c2-96d6c10d751d",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "UI结构",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "1f5cffc0-8090-4565-82e9-718e2d5ec387",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "[Logo] 项目名称\n\n[+ 新建] [AI生成] [保存] [撤销] [重做]\n\n| 工具区 |\n[选择] [手型] [文本] [矩形] [组件]\n\n| 视图区 |\n[缩放 100%] [适配屏幕]\n\n| 操作区 |\n[预览] [导出代码] [分享]",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "8f160bb7-8550-4148-bd11-f5e71d8b3ad8",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "f016aec2-0502-44de-9dc8-d004eb351a64",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "交互说明（关键）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2afd797b-627b-4582-b280-8021b6b020dd",
+      "type": "table",
+      "props": {
+        "textColor": "default"
+      },
+      "content": {
+        "type": "tableContent",
+        "columnWidths": [
+          null,
+          null
+        ],
+        "headerRows": 1,
+        "rows": [
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "操作",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "行为",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "AI生成",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "打开AI输入弹窗",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "撤销/重做",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "操作历史",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "预览",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "全屏原型",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "导出",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "打开导出弹窗",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "id": "67606d24-8e01-4f71-9d6d-2c9d6e5fdb61",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "d5eecbf8-853b-41d5-ba0f-aa6d24efdf0a",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "三、左侧面板（Sidebar）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "7249f3a1-dafa-45b5-afcb-477766c7ccbe",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "三个 Tab（必须有）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "54b2d72e-9fe6-4364-99b5-d18661f44335",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "[图层] [组件] [资源]",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "768ea9ca-7a55-4ab3-a752-19577410a183",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "054dd786-b8a8-47f8-a29b-3f13b21e70f0",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "3.1 图层（Layers）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "86d8e1ea-f789-46b5-9484-d5b76340975b",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "页面1\n ├─ Header\n ├─ Table\n │   ├─ Row1\n │   ├─ Row2\n ├─ Button",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b6d3cfe6-7d98-4a43-aafa-3c01e4c898cd",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 支持：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "323ab8cc-370c-4587-8d57-c09ef5ea1328",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "拖拽排序",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "1ec9d7aa-b5fb-487f-b81f-cb493610df1d",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "隐藏/显示 👁",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "531d704c-3767-4a69-ba30-d62670bb0300",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "锁定 🔒",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "1a42f7b7-dbdd-4e46-a669-5d7ee34d19b7",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "重命名",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "720c6e51-8ed4-4285-bd47-cfea47c9af1b",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "7fbb6708-77e2-495f-a3d7-7b6b0331c8a0",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "3.2 组件库（Components）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2223b9d0-6c52-4ea9-be04-4473adfaff6a",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "基础组件\n  - Text\n  - Image\n  - Button\n  - Input\n\n业务组件\n  - 商品卡片\n  - 用户卡片\n  - 数据卡片\n\nAntd组件\n  - Table\n  - Form\n  - Modal",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "aacac6bb-04f4-404a-8cfb-c585fee31e1e",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 交互：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "1276bd6a-6dc8-41e0-a8cb-2d523701cbc8",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "拖拽 → 画布\n点击 → 插入默认位置",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "002bbf1d-fabf-4105-a529-701013b70bbc",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "f77cf3ac-a539-4287-a934-2f8b4b3fde87",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "3.3 资源（Assets）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "798b78c3-5d13-455b-bb28-b703cdae2009",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "素材组件\n模板\n图标\n图片",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c8f467c7-6f66-4a9e-953a-a7fce783ca33",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 来源：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "8806e48d-98a3-4a65-af6c-465efce840d2",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "用户保存的组件",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2ea5159f-910d-44e8-b7b6-9038abbf4969",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "系统模板",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "54f946a3-efdb-4a32-a6ed-a4577fa91e46",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "AI生成组件",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "f8652ee1-7acf-4a98-aeec-246688080b14",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "ffab32f6-1b2f-40c4-be03-b5f9243316e7",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "四、画布区域（Canvas）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c0141db8-939e-4165-b3f2-1eaab745bcdd",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "结构",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "d7ae7f47-3c8f-4d40-9485-ab0bec344e67",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "[页面容器 Frame]\n\n  Header\n  Sidebar\n  Content区域\n\n      Table\n      Form\n      Button",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a7e30944-612c-4d82-8594-251fef6d9aa8",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "2efe0793-884b-4b0d-9819-1673e04d3832",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "功能",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "f1916464-afab-414e-af55-0f01b3b1fa7d",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "1️⃣ 选中",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "727720c6-89ed-4982-9766-9b77cbaf618a",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "点击组件 → 显示蓝色边框",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a0569b59-fe4b-4d65-a963-6d0422053d3c",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "57a5e107-b201-46e2-a4e3-b315734f166a",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "2️⃣ 拖拽",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "cb94afec-914a-4bbd-865a-5c5fee920dd1",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "拖动 → 更新位置",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "26c35c93-f198-4060-92a0-f56a7d173d53",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "703df77f-6a69-4d0e-ae2a-afd7871afc4b",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "3️⃣ 缩放",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ff8852b9-4631-42e9-bc55-1e935e309034",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Ctrl + 滚轮",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "544cca46-f873-48bf-9e75-04f83371db7d",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "fc30b862-06da-4db5-884e-a2f41b487547",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "4️⃣ 多选",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "fe9c08f5-19be-4186-ada2-522777e5070f",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Shift + 点击\n框选拖拽",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "23ed8a23-f00f-4a67-8b40-130beff1a99b",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "9e6becaa-20e2-4098-bfee-a7d5a26b505f",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5️⃣ 对齐辅助线",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "91b57b71-6762-41dd-9b26-4cdba041674f",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "自动吸附（类似Figma）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "e71d68b1-cb16-4302-ac48-cdb2af58201a",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "96f7f5d9-ee33-481b-8c9b-957c1cbc53ac",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "五、右侧面板（Inspector）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "849d4a3c-808e-4291-8c23-4bf6707e9118",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 这是 UI 最重要的区域之一",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c6fd92f1-5a1d-4f36-9d3c-4043334326ec",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "db2e1bf8-07c9-4da7-b64f-0eff24ef85d5",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Tab结构",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ca03700f-86fe-43ef-adb3-b04cd1335d2a",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "[属性] [样式] [交互] [AI]",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "d349125f-87e9-4124-bf87-0dfcf8f96011",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "5e85992f-8448-41e5-a744-317056776d9a",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.1 属性（Props）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "8521794c-80fc-4845-8925-b9850c79fb50",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "组件：Button\n\n文本：提交\n类型：Primary\n大小：Large\n禁用：false",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "897e487f-3b2c-400a-8ffd-b645d72fe40a",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "ecad29f6-5f5d-4717-b12d-35d5ad50007d",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.2 样式（Style）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a7210d5d-60d7-4577-af62-c7adc30964db",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "宽度：120\n高度：40\n\n颜色：#1890ff\n圆角：8\n\n字体：14px\n颜色：#fff\n\n阴影：开关",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "1086f4c9-148f-4c31-a65d-bd0d80cb2bfc",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "7d8547c7-ed1a-4d2c-85bc-c574e0ffde76",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.3 交互（Interaction）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "f72df9a1-90bb-40cf-a4b2-550577fad139",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "点击行为：\n\n[跳转]\n目标页面：/detail\n\n[请求API]（后期）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "e380a43a-ae15-4f62-9b27-00238e8e5bd3",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "803b705f-0334-4d81-9463-14d1e4fa380c",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.4 AI面板（核心差异）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "27e1fcf7-34f1-4e52-8e14-51c85d2b5e4d",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "输入框：\n👉 把这个按钮改成渐变色\n\n[应用] [重试]",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "89dd7007-85ac-4254-8351-bbee29dc5d20",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "3126a19a-3d3a-4131-80c8-40c1c7b90ab2",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "AI交互流程",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "30a9ebb4-c3c3-44ec-af1e-f497ab259f71",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "输入指令\n↓\n发送 node + context\n↓\n返回 patch\n↓\n应用\n↓\n刷新UI",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b39f62a4-253e-428d-bc74-29f898b6996c",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "2a10b636-9c57-4060-ae30-4c384a1870d6",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "六、AI生成入口（弹窗）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "28e921a5-d0ae-454a-ac8d-1107bda47fa2",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "UI结构",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "803b6a83-40a1-494e-8764-ac786fc77c1a",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "标题：AI生成页面\n\n输入框（大文本）\n\n示例：\n- 电商后台\n- 医疗系统\n- CRM系统\n\n选项：\n☑ Web后台\n☑ 使用Ant Design\n\n[生成按钮]",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ed7e1727-106d-4e49-8c49-04ca5041926b",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "d5e084df-42ea-4742-894c-147b26571a21",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Loading设计（重要）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "28154d6e-b0de-4fea-944a-c012e204e3ea",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "生成中：\n\n✔ PRD生成完成\n✔ 页面结构生成\n⏳ UI生成中...",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "90c7e7f4-b1a2-431d-a5fd-5ed904f5d40f",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 提升体验（关键）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "00785663-c895-4530-8e94-219c21cca067",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "9993f66a-41f8-4c2b-a7d5-b218e961daad",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "七、预览模式（Preview）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "a7f1b3fe-d517-4f0b-9ef7-3faa63487858",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "全屏\n隐藏侧边栏\n真实点击交互",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c6d24d3b-3ce6-4ae8-bc7c-b04616003889",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "e577780e-b4d2-4766-ba81-40296dbb2555",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "八、代码导出弹窗",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "bc2c20d2-c9fd-4fa7-a7f3-32da4647cc1c",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "选择框：\n\n☑ React + Ant Design\n☐ Vue（灰）\n\n[导出按钮]",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2f9355b9-6975-4f59-8523-67cdd566ccf9",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "209b105f-4e7b-471a-97b4-0f5e277f497f",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "九、页面尺寸（设计规范）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "4caabeff-8981-48a6-aef6-0da8e7fc2edb",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Web后台",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "984d2336-f665-466e-8f93-7fc204991c7d",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "画布宽度：1440px\n内容区：1200px\n栅格：24列",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "86390b77-d31c-4cae-9cb4-321947f26ea1",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "34456be5-b869-4542-ad77-c40289cc2ffd",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "间距规范",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "8b393727-c43c-4899-aa1e-915748e6d8fa",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "间距：8 / 12 / 16 / 24 / 32",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6f53e3c7-c6d4-4098-b53a-33f8a84c1ca7",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "a80896ed-a9e0-48e7-ab18-48458445a506",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "十、颜色系统（建议）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "26c75646-e659-4494-ae93-00d429cacba0",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "主色：#1677ff\n成功：#52c41a\n警告：#faad14\n错误：#ff4d4f",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "43d62c25-7a5a-4d32-b89c-e2cf4f64991d",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "a38db5e4-b19c-46fd-87e0-ad742245f037",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "十一、设计师交付重点",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "028af843-1bf6-4e71-bf1e-3f519c850bc2",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "UI 需要画这些：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "9324d58b-eda8-41c6-a37f-498a4d79bf27",
+      "type": "codeBlock",
+      "props": {
+        "language": "text"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "1. 编辑器整体布局\n2. 左侧面板（三Tab）\n3. 组件库样式\n4. 画布选中态\n5. 右侧属性面板\n6. AI面板\n7. AI生成弹窗\n8. 预览模式\n9. 导出弹窗",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2691113f-a0c6-496d-84ac-17ed42b438b3",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "f40ea781-a36b-4fd6-b0b8-76a2f89a59b1",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "十二、一句话总结",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2dbf10e7-f10c-41d9-9ae2-039fedc10bde",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "这个 UI 的本质是：",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "Figma结构 + 墨刀交互 + AI操作层",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ccac002f-f574-42ac-bd66-59565cc05e93",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "c8138796-2b38-43ca-866f-dfe53612841c",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "如果你要继续往下（强烈建议）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "dd04d604-b051-435a-9f02-fe38e12c0c71",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "我可以帮你直接做👇",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c612ef8d-63a8-4478-ae8c-cf7eb2bdb1d7",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 1️⃣ 「Figma可导入的设计稿结构（frame + auto layout）」 👉 2️⃣ 「React + Tailwind 实现这个UI（可运行）」 👉 3️⃣ 「组件库UI规范（设计系统级别）」",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "5668a9e6-520a-4920-93a2-49c4a96e2e9a",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "你现在这一步，其实已经可以让 UI 开始出稿了 👍",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b84ea4a4-5974-45c5-a878-4d9fee49b201",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [],
+      "children": []
+    }
+  ],
+  "contentHtml": "<div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"cc355f51-24dd-4885-9dba-5d71da78770f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"cc355f51-24dd-4885-9dba-5d71da78770f\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">好，这一版我给你的是<strong>接近 Figma / 墨刀级别的高保真 UI 结构稿（可直接给设计师落图）</strong>，并且已经结合你产品的 AI 特性做了专门设计。</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"322410ec-bbbe-42bd-9cdf-f6caf42fc531\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"322410ec-bbbe-42bd-9cdf-f6caf42fc531\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">⚠️ 重点：这不是“好看示意图”，而是<strong>可实现的布局规范 + 模块划分 + 交互位定义</strong></p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7269e1b4-d435-4c18-a136-fbc23425dcce\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7269e1b4-d435-4c18-a136-fbc23425dcce\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b9d12af1-703d-48d6-97f9-d426e04adc6f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b9d12af1-703d-48d6-97f9-d426e04adc6f\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">一、整体布局（编辑器主界面）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"22ad1679-5180-4f4c-b04d-7cda450a2335\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"22ad1679-5180-4f4c-b04d-7cda450a2335\"><div class=\"bn-block-content\" data-content-type=\"image\" data-name=\"Image\" data-url=\"https://images.openai.com/static-rsc-4/AvUv-1YAvvqLG-5Lb6a7gnatjpATk7F8ePnsDhHtpNrxtycbsvRjpEYLACZAyaN6yAgzctJJX9vLdDDTgWYIbIECqzfOtIMjanel6yawvmL6FU6ItPTkn2fJG1E9FwmFVL2uBDoLNeuWN-j3gxdmH8ErRYSQsh2sVt23GurY0FIIAttfShFxKTg83x821ERs?purpose=fullsize\" data-preview-width=\"283\" data-file-block=\"\"><div class=\"bn-file-block-content-wrapper\" style=\"position: relative; width: 283px;\"><div class=\"bn-visual-media-wrapper\"><img class=\"bn-visual-media\" src=\"https://images.openai.com/static-rsc-4/AvUv-1YAvvqLG-5Lb6a7gnatjpATk7F8ePnsDhHtpNrxtycbsvRjpEYLACZAyaN6yAgzctJJX9vLdDDTgWYIbIECqzfOtIMjanel6yawvmL6FU6ItPTkn2fJG1E9FwmFVL2uBDoLNeuWN-j3gxdmH8ErRYSQsh2sVt23GurY0FIIAttfShFxKTg83x821ERs?purpose=fullsize\" alt=\"Image\" contenteditable=\"false\" draggable=\"false\"><div class=\"bn-resize-handle\" style=\"left: 4px; display: none;\"></div><div class=\"bn-resize-handle\" style=\"right: 4px; display: none;\"></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"8997e5c8-f7b7-4082-bf68-6b2d5da2e359\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"8997e5c8-f7b7-4082-bf68-6b2d5da2e359\"><div class=\"bn-block-content\" data-content-type=\"image\" data-name=\"Image\" data-url=\"https://images.openai.com/static-rsc-4/wLlvxQ7-SfWWyjOs44PlRWlERtZa-dLn64GiJq3wVFjeX46aM2r9q-StqAnt_XFAoMxi83E3wEXng-ZWCggjFJZ9OdQ2onWh8wZPn_3QzjPyIi338ODVMi1wWIWAdzCWQNG-PucJakEd4umwIQfcrAZpkR39CurizBPyV7eufqlkdHhgLhR4pJ0-hUK5j2p6?purpose=fullsize\" data-preview-width=\"261\" data-file-block=\"\"><div class=\"bn-file-block-content-wrapper\" style=\"position: relative; width: 261px;\"><div class=\"bn-visual-media-wrapper\"><img class=\"bn-visual-media\" src=\"https://images.openai.com/static-rsc-4/wLlvxQ7-SfWWyjOs44PlRWlERtZa-dLn64GiJq3wVFjeX46aM2r9q-StqAnt_XFAoMxi83E3wEXng-ZWCggjFJZ9OdQ2onWh8wZPn_3QzjPyIi338ODVMi1wWIWAdzCWQNG-PucJakEd4umwIQfcrAZpkR39CurizBPyV7eufqlkdHhgLhR4pJ0-hUK5j2p6?purpose=fullsize\" alt=\"Image\" contenteditable=\"false\" draggable=\"false\"><div class=\"bn-resize-handle\" style=\"left: 4px; display: none;\"></div><div class=\"bn-resize-handle\" style=\"right: 4px; display: none;\"></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"adc89c15-f290-4461-aeb6-338bb1ccd804\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"adc89c15-f290-4461-aeb6-338bb1ccd804\"><div class=\"bn-block-content\" data-content-type=\"image\" data-name=\"Image\" data-url=\"https://images.openai.com/static-rsc-4/BfEFbC0oO77EdL15CKWhB-zQ8-7kRu9OaxjOuiK4muPNFZy4Q5cP_yZvZCHPXUPRUy44HxHmMHtf13cBbqmWC8gsb23emR8kc4F_ggEXKjUKc_CVt750lyTqLF40fJEsm5dO_wW2pdZ3kwuZR8SM_zSnq_CjQtHjuy-oN50YruebtvmVU5WU3Q8KY_ibpC-8?purpose=fullsize\" data-preview-width=\"190\" data-file-block=\"\"><div class=\"bn-file-block-content-wrapper\" style=\"position: relative; width: 190px;\"><div class=\"bn-visual-media-wrapper\"><img class=\"bn-visual-media\" src=\"https://images.openai.com/static-rsc-4/BfEFbC0oO77EdL15CKWhB-zQ8-7kRu9OaxjOuiK4muPNFZy4Q5cP_yZvZCHPXUPRUy44HxHmMHtf13cBbqmWC8gsb23emR8kc4F_ggEXKjUKc_CVt750lyTqLF40fJEsm5dO_wW2pdZ3kwuZR8SM_zSnq_CjQtHjuy-oN50YruebtvmVU5WU3Q8KY_ibpC-8?purpose=fullsize\" alt=\"Image\" contenteditable=\"false\" draggable=\"false\"><div class=\"bn-resize-handle\" style=\"left: 4px; display: none;\"></div><div class=\"bn-resize-handle\" style=\"right: 4px; display: none;\"></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1b0a91a3-5e82-4e92-99ca-aa8095b5b2b4\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1b0a91a3-5e82-4e92-99ca-aa8095b5b2b4\"><div class=\"bn-block-content\" data-content-type=\"image\" data-name=\"Image\" data-url=\"https://images.openai.com/static-rsc-4/OSNeu94OQCPIChC2CxSKoHWQz5TuzKO2DKVyumY8K0OIBniourV5_gwiRwRyWNwCQX9lrKl0B73Nkn48DnwEJ9a2oTHHm__mwRHQbYlfmz73xizOB4JoInHNGZ6AXXcLB7IgAx1cWK92--oG9WcQxJe04__ra9SbM5ktYxJTALjctBkXrykq81WLm1afagT7?purpose=fullsize\" data-file-block=\"\"><div class=\"bn-file-block-content-wrapper\" style=\"position: relative; width: fit-content;\"><div class=\"bn-visual-media-wrapper\"><img class=\"bn-visual-media\" src=\"https://images.openai.com/static-rsc-4/OSNeu94OQCPIChC2CxSKoHWQz5TuzKO2DKVyumY8K0OIBniourV5_gwiRwRyWNwCQX9lrKl0B73Nkn48DnwEJ9a2oTHHm__mwRHQbYlfmz73xizOB4JoInHNGZ6AXXcLB7IgAx1cWK92--oG9WcQxJe04__ra9SbM5ktYxJTALjctBkXrykq81WLm1afagT7?purpose=fullsize\" alt=\"Image\" contenteditable=\"false\" draggable=\"false\"><div class=\"bn-resize-handle\" style=\"left: 4px; display: none;\"></div><div class=\"bn-resize-handle\" style=\"right: 4px; display: none;\"></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"771f7b2e-9fc5-4d37-adf2-bfbd1d64d0a5\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"771f7b2e-9fc5-4d37-adf2-bfbd1d64d0a5\"><div class=\"bn-block-content\" data-content-type=\"image\" data-name=\"Image\" data-url=\"https://images.openai.com/static-rsc-4/JSySCLDVlTUHKOvmc4qTT_TGNc-PhzKTWPV48G9nBZjL2d1gMf9p8ppewItP9UqV9qbRg8R-pG3pDhonnfhRZTqdrxFHlhkvNgvFu3LI73kKPlA3w4md3ZKvbpYFeHJ8MEtP8gDatgw4WzB9SLrOMEDT6QtUyKVxPfwoerV5FyumXF0Dh-RU3C0hohsHetsr?purpose=fullsize\" data-file-block=\"\"><div class=\"bn-file-block-content-wrapper\" style=\"position: relative; width: fit-content;\"><div class=\"bn-visual-media-wrapper\"><img class=\"bn-visual-media\" src=\"https://images.openai.com/static-rsc-4/JSySCLDVlTUHKOvmc4qTT_TGNc-PhzKTWPV48G9nBZjL2d1gMf9p8ppewItP9UqV9qbRg8R-pG3pDhonnfhRZTqdrxFHlhkvNgvFu3LI73kKPlA3w4md3ZKvbpYFeHJ8MEtP8gDatgw4WzB9SLrOMEDT6QtUyKVxPfwoerV5FyumXF0Dh-RU3C0hohsHetsr?purpose=fullsize\" alt=\"Image\" contenteditable=\"false\" draggable=\"false\"><div class=\"bn-resize-handle\" style=\"left: 4px; display: none;\"></div><div class=\"bn-resize-handle\" style=\"right: 4px; display: none;\"></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"919f6e35-598a-4823-864e-3cde38e57bce\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"919f6e35-598a-4823-864e-3cde38e57bce\"><div class=\"bn-block-content\" data-content-type=\"image\" data-name=\"Image\" data-url=\"https://images.openai.com/static-rsc-4/QKWybgBYbIPdQ24Znon1gu9zMwimlo5whPSYRAMnixkfZhnhs7WAV3px3TCZ9z_fNqc31EyBhSYP6IcgMBxyyOy2AExf0jCRUNZKuU7ATG2XgEia1lrzznzlc_j7we8qKYvGt117VIIY7jacEqT8JeQEcaYZxKV1BwKsrQ8w-mG-Bz9R1Ua_D4q3X01oqMSL?purpose=fullsize\" data-file-block=\"\"><div class=\"bn-file-block-content-wrapper\" style=\"position: relative; width: fit-content;\"><div class=\"bn-visual-media-wrapper\"><img class=\"bn-visual-media\" src=\"https://images.openai.com/static-rsc-4/QKWybgBYbIPdQ24Znon1gu9zMwimlo5whPSYRAMnixkfZhnhs7WAV3px3TCZ9z_fNqc31EyBhSYP6IcgMBxyyOy2AExf0jCRUNZKuU7ATG2XgEia1lrzznzlc_j7we8qKYvGt117VIIY7jacEqT8JeQEcaYZxKV1BwKsrQ8w-mG-Bz9R1Ua_D4q3X01oqMSL?purpose=fullsize\" alt=\"Image\" contenteditable=\"false\" draggable=\"false\"><div class=\"bn-resize-handle\" style=\"left: 4px; display: none;\"></div><div class=\"bn-resize-handle\" style=\"right: 4px; display: none;\"></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"eb72a277-7db0-4fa4-b913-508db03dbf65\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"eb72a277-7db0-4fa4-b913-508db03dbf65\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">布局结构（核心）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7ef442ce-0adf-4f4d-adce-7b02c04246a7\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7ef442ce-0adf-4f4d-adce-7b02c04246a7\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">┌──────────────────────────────────────────────┐\n│ 顶部工具栏 TopBar                           │\n├──────────────┬───────────────────┬──────────┤\n│ 左侧面板     │     画布区域       │ 右侧面板 │\n│ Sidebar      │     Canvas        │ Inspector│\n├──────────────┴───────────────────┴──────────┤\n│ 底部状态栏 StatusBar                         │\n└──────────────────────────────────────────────┘</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b16e293e-917e-4b0e-b915-b0254aa0e8e9\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b16e293e-917e-4b0e-b915-b0254aa0e8e9\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ae2205a6-4a7c-4c05-a674-ab6917bd3360\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ae2205a6-4a7c-4c05-a674-ab6917bd3360\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">二、顶部工具栏（TopBar）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6f4e1e7f-82c7-4f72-a1c2-96d6c10d751d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6f4e1e7f-82c7-4f72-a1c2-96d6c10d751d\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">UI结构</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1f5cffc0-8090-4565-82e9-718e2d5ec387\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1f5cffc0-8090-4565-82e9-718e2d5ec387\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">[Logo] 项目名称\n\n[+ 新建] [AI生成] [保存] [撤销] [重做]\n\n| 工具区 |\n[选择] [手型] [文本] [矩形] [组件]\n\n| 视图区 |\n[缩放 100%] [适配屏幕]\n\n| 操作区 |\n[预览] [导出代码] [分享]</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"8f160bb7-8550-4148-bd11-f5e71d8b3ad8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"8f160bb7-8550-4148-bd11-f5e71d8b3ad8\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f016aec2-0502-44de-9dc8-d004eb351a64\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f016aec2-0502-44de-9dc8-d004eb351a64\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">交互说明（关键）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2afd797b-627b-4582-b280-8021b6b020dd\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2afd797b-627b-4582-b280-8021b6b020dd\"><div class=\"bn-block-content\" data-content-type=\"table\"><div class=\"tableWrapper\"><div class=\"tableWrapper-inner\"></div><table class=\"bn-inline-content\" style=\"--default-cell-min-width: 120px;\" data-show-children=\"true\"><colgroup><col><col></colgroup><tr><th colspan=\"1\" rowspan=\"1\"><p>操作</p></th><th colspan=\"1\" rowspan=\"1\"><p>行为</p></th></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>AI生成</p></td><td colspan=\"1\" rowspan=\"1\"><p>打开AI输入弹窗</p></td></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>撤销/重做</p></td><td colspan=\"1\" rowspan=\"1\"><p>操作历史</p></td></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>预览</p></td><td colspan=\"1\" rowspan=\"1\"><p>全屏原型</p></td></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>导出</p></td><td colspan=\"1\" rowspan=\"1\"><p>打开导出弹窗</p></td></tr></table></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"67606d24-8e01-4f71-9d6d-2c9d6e5fdb61\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"67606d24-8e01-4f71-9d6d-2c9d6e5fdb61\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d5eecbf8-853b-41d5-ba0f-aa6d24efdf0a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d5eecbf8-853b-41d5-ba0f-aa6d24efdf0a\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">三、左侧面板（Sidebar）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7249f3a1-dafa-45b5-afcb-477766c7ccbe\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7249f3a1-dafa-45b5-afcb-477766c7ccbe\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">三个 Tab（必须有）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"54b2d72e-9fe6-4364-99b5-d18661f44335\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"54b2d72e-9fe6-4364-99b5-d18661f44335\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">[图层] [组件] [资源]</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"768ea9ca-7a55-4ab3-a752-19577410a183\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"768ea9ca-7a55-4ab3-a752-19577410a183\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"054dd786-b8a8-47f8-a29b-3f13b21e70f0\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"054dd786-b8a8-47f8-a29b-3f13b21e70f0\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">3.1 图层（Layers）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"86d8e1ea-f789-46b5-9484-d5b76340975b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"86d8e1ea-f789-46b5-9484-d5b76340975b\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">页面1\n ├─ Header\n ├─ Table\n │   ├─ Row1\n │   ├─ Row2\n ├─ Button</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b6d3cfe6-7d98-4a43-aafa-3c01e4c898cd\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b6d3cfe6-7d98-4a43-aafa-3c01e4c898cd\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 支持：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"323ab8cc-370c-4587-8d57-c09ef5ea1328\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"323ab8cc-370c-4587-8d57-c09ef5ea1328\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">拖拽排序</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1ec9d7aa-b5fb-487f-b81f-cb493610df1d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1ec9d7aa-b5fb-487f-b81f-cb493610df1d\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">隐藏/显示 👁</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"531d704c-3767-4a69-ba30-d62670bb0300\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"531d704c-3767-4a69-ba30-d62670bb0300\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">锁定 🔒</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1a42f7b7-dbdd-4e46-a669-5d7ee34d19b7\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1a42f7b7-dbdd-4e46-a669-5d7ee34d19b7\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">重命名</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"720c6e51-8ed4-4285-bd47-cfea47c9af1b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"720c6e51-8ed4-4285-bd47-cfea47c9af1b\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7fbb6708-77e2-495f-a3d7-7b6b0331c8a0\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7fbb6708-77e2-495f-a3d7-7b6b0331c8a0\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">3.2 组件库（Components）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2223b9d0-6c52-4ea9-be04-4473adfaff6a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2223b9d0-6c52-4ea9-be04-4473adfaff6a\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">基础组件\n  - Text\n  - Image\n  - Button\n  - Input\n\n业务组件\n  - 商品卡片\n  - 用户卡片\n  - 数据卡片\n\nAntd组件\n  - Table\n  - Form\n  - Modal</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"aacac6bb-04f4-404a-8cfb-c585fee31e1e\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"aacac6bb-04f4-404a-8cfb-c585fee31e1e\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 交互：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1276bd6a-6dc8-41e0-a8cb-2d523701cbc8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1276bd6a-6dc8-41e0-a8cb-2d523701cbc8\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">拖拽 → 画布\n点击 → 插入默认位置</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"002bbf1d-fabf-4105-a529-701013b70bbc\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"002bbf1d-fabf-4105-a529-701013b70bbc\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f77cf3ac-a539-4287-a934-2f8b4b3fde87\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f77cf3ac-a539-4287-a934-2f8b4b3fde87\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">3.3 资源（Assets）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"798b78c3-5d13-455b-bb28-b703cdae2009\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"798b78c3-5d13-455b-bb28-b703cdae2009\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">素材组件\n模板\n图标\n图片</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c8f467c7-6f66-4a9e-953a-a7fce783ca33\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c8f467c7-6f66-4a9e-953a-a7fce783ca33\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 来源：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"8806e48d-98a3-4a65-af6c-465efce840d2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"8806e48d-98a3-4a65-af6c-465efce840d2\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">用户保存的组件</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2ea5159f-910d-44e8-b7b6-9038abbf4969\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2ea5159f-910d-44e8-b7b6-9038abbf4969\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">系统模板</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"54f946a3-efdb-4a32-a6ed-a4577fa91e46\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"54f946a3-efdb-4a32-a6ed-a4577fa91e46\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">AI生成组件</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f8652ee1-7acf-4a98-aeec-246688080b14\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f8652ee1-7acf-4a98-aeec-246688080b14\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ffab32f6-1b2f-40c4-be03-b5f9243316e7\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ffab32f6-1b2f-40c4-be03-b5f9243316e7\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">四、画布区域（Canvas）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c0141db8-939e-4165-b3f2-1eaab745bcdd\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c0141db8-939e-4165-b3f2-1eaab745bcdd\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">结构</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d7ae7f47-3c8f-4d40-9485-ab0bec344e67\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d7ae7f47-3c8f-4d40-9485-ab0bec344e67\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">[页面容器 Frame]\n\n  Header\n  Sidebar\n  Content区域\n\n      Table\n      Form\n      Button</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a7e30944-612c-4d82-8594-251fef6d9aa8\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a7e30944-612c-4d82-8594-251fef6d9aa8\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2efe0793-884b-4b0d-9819-1673e04d3832\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2efe0793-884b-4b0d-9819-1673e04d3832\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">功能</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f1916464-afab-414e-af55-0f01b3b1fa7d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f1916464-afab-414e-af55-0f01b3b1fa7d\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">1️⃣ 选中</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"727720c6-89ed-4982-9766-9b77cbaf618a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"727720c6-89ed-4982-9766-9b77cbaf618a\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">点击组件 → 显示蓝色边框</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a0569b59-fe4b-4d65-a963-6d0422053d3c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a0569b59-fe4b-4d65-a963-6d0422053d3c\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"57a5e107-b201-46e2-a4e3-b315734f166a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"57a5e107-b201-46e2-a4e3-b315734f166a\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">2️⃣ 拖拽</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"cb94afec-914a-4bbd-865a-5c5fee920dd1\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"cb94afec-914a-4bbd-865a-5c5fee920dd1\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">拖动 → 更新位置</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"26c35c93-f198-4060-92a0-f56a7d173d53\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"26c35c93-f198-4060-92a0-f56a7d173d53\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"703df77f-6a69-4d0e-ae2a-afd7871afc4b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"703df77f-6a69-4d0e-ae2a-afd7871afc4b\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">3️⃣ 缩放</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ff8852b9-4631-42e9-bc55-1e935e309034\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ff8852b9-4631-42e9-bc55-1e935e309034\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">Ctrl + 滚轮</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"544cca46-f873-48bf-9e75-04f83371db7d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"544cca46-f873-48bf-9e75-04f83371db7d\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fc30b862-06da-4db5-884e-a2f41b487547\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fc30b862-06da-4db5-884e-a2f41b487547\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">4️⃣ 多选</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fe9c08f5-19be-4186-ada2-522777e5070f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fe9c08f5-19be-4186-ada2-522777e5070f\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">Shift + 点击\n框选拖拽</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"23ed8a23-f00f-4a67-8b40-130beff1a99b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"23ed8a23-f00f-4a67-8b40-130beff1a99b\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9e6becaa-20e2-4098-bfee-a7d5a26b505f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9e6becaa-20e2-4098-bfee-a7d5a26b505f\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">5️⃣ 对齐辅助线</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"91b57b71-6762-41dd-9b26-4cdba041674f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"91b57b71-6762-41dd-9b26-4cdba041674f\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">自动吸附（类似Figma）</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"e71d68b1-cb16-4302-ac48-cdb2af58201a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"e71d68b1-cb16-4302-ac48-cdb2af58201a\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"96f7f5d9-ee33-481b-8c9b-957c1cbc53ac\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"96f7f5d9-ee33-481b-8c9b-957c1cbc53ac\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">五、右侧面板（Inspector）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"849d4a3c-808e-4291-8c23-4bf6707e9118\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"849d4a3c-808e-4291-8c23-4bf6707e9118\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 这是 UI 最重要的区域之一</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c6fd92f1-5a1d-4f36-9d3c-4043334326ec\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c6fd92f1-5a1d-4f36-9d3c-4043334326ec\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"db2e1bf8-07c9-4da7-b64f-0eff24ef85d5\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"db2e1bf8-07c9-4da7-b64f-0eff24ef85d5\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">Tab结构</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ca03700f-86fe-43ef-adb3-b04cd1335d2a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ca03700f-86fe-43ef-adb3-b04cd1335d2a\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">[属性] [样式] [交互] [AI]</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d349125f-87e9-4124-bf87-0dfcf8f96011\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d349125f-87e9-4124-bf87-0dfcf8f96011\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5e85992f-8448-41e5-a744-317056776d9a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5e85992f-8448-41e5-a744-317056776d9a\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.1 属性（Props）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"8521794c-80fc-4845-8925-b9850c79fb50\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"8521794c-80fc-4845-8925-b9850c79fb50\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">组件：Button\n\n文本：提交\n类型：Primary\n大小：Large\n禁用：false</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"897e487f-3b2c-400a-8ffd-b645d72fe40a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"897e487f-3b2c-400a-8ffd-b645d72fe40a\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ecad29f6-5f5d-4717-b12d-35d5ad50007d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ecad29f6-5f5d-4717-b12d-35d5ad50007d\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.2 样式（Style）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a7210d5d-60d7-4577-af62-c7adc30964db\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a7210d5d-60d7-4577-af62-c7adc30964db\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">宽度：120\n高度：40\n\n颜色：#1890ff\n圆角：8\n\n字体：14px\n颜色：#fff\n\n阴影：开关</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1086f4c9-148f-4c31-a65d-bd0d80cb2bfc\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1086f4c9-148f-4c31-a65d-bd0d80cb2bfc\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7d8547c7-ed1a-4d2c-85bc-c574e0ffde76\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7d8547c7-ed1a-4d2c-85bc-c574e0ffde76\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.3 交互（Interaction）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f72df9a1-90bb-40cf-a4b2-550577fad139\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f72df9a1-90bb-40cf-a4b2-550577fad139\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">点击行为：\n\n[跳转]\n目标页面：/detail\n\n[请求API]（后期）</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"e380a43a-ae15-4f62-9b27-00238e8e5bd3\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"e380a43a-ae15-4f62-9b27-00238e8e5bd3\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"803b705f-0334-4d81-9463-14d1e4fa380c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"803b705f-0334-4d81-9463-14d1e4fa380c\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">5.4 AI面板（核心差异）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"27e1fcf7-34f1-4e52-8e14-51c85d2b5e4d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"27e1fcf7-34f1-4e52-8e14-51c85d2b5e4d\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">输入框：\n👉 把这个按钮改成渐变色\n\n[应用] [重试]</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"89dd7007-85ac-4254-8351-bbee29dc5d20\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"89dd7007-85ac-4254-8351-bbee29dc5d20\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3126a19a-3d3a-4131-80c8-40c1c7b90ab2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3126a19a-3d3a-4131-80c8-40c1c7b90ab2\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">AI交互流程</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"30a9ebb4-c3c3-44ec-af1e-f497ab259f71\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"30a9ebb4-c3c3-44ec-af1e-f497ab259f71\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">输入指令\n↓\n发送 node + context\n↓\n返回 patch\n↓\n应用\n↓\n刷新UI</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b39f62a4-253e-428d-bc74-29f898b6996c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b39f62a4-253e-428d-bc74-29f898b6996c\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2a10b636-9c57-4060-ae30-4c384a1870d6\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2a10b636-9c57-4060-ae30-4c384a1870d6\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">六、AI生成入口（弹窗）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"28e921a5-d0ae-454a-ac8d-1107bda47fa2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"28e921a5-d0ae-454a-ac8d-1107bda47fa2\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">UI结构</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"803b6a83-40a1-494e-8764-ac786fc77c1a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"803b6a83-40a1-494e-8764-ac786fc77c1a\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">标题：AI生成页面\n\n输入框（大文本）\n\n示例：\n- 电商后台\n- 医疗系统\n- CRM系统\n\n选项：\n☑ Web后台\n☑ 使用Ant Design\n\n[生成按钮]</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ed7e1727-106d-4e49-8c49-04ca5041926b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ed7e1727-106d-4e49-8c49-04ca5041926b\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d5e084df-42ea-4742-894c-147b26571a21\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d5e084df-42ea-4742-894c-147b26571a21\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">Loading设计（重要）</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"28154d6e-b0de-4fea-944a-c012e204e3ea\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"28154d6e-b0de-4fea-944a-c012e204e3ea\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">生成中：\n\n✔ PRD生成完成\n✔ 页面结构生成\n⏳ UI生成中...</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"90c7e7f4-b1a2-431d-a5fd-5ed904f5d40f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"90c7e7f4-b1a2-431d-a5fd-5ed904f5d40f\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 提升体验（关键）</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"00785663-c895-4530-8e94-219c21cca067\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"00785663-c895-4530-8e94-219c21cca067\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9993f66a-41f8-4c2b-a7d5-b218e961daad\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9993f66a-41f8-4c2b-a7d5-b218e961daad\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">七、预览模式（Preview）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a7f1b3fe-d517-4f0b-9ef7-3faa63487858\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a7f1b3fe-d517-4f0b-9ef7-3faa63487858\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">全屏\n隐藏侧边栏\n真实点击交互</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c6d24d3b-3ce6-4ae8-bc7c-b04616003889\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c6d24d3b-3ce6-4ae8-bc7c-b04616003889\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"e577780e-b4d2-4766-ba81-40296dbb2555\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"e577780e-b4d2-4766-ba81-40296dbb2555\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">八、代码导出弹窗</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"bc2c20d2-c9fd-4fa7-a7f3-32da4647cc1c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"bc2c20d2-c9fd-4fa7-a7f3-32da4647cc1c\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">选择框：\n\n☑ React + Ant Design\n☐ Vue（灰）\n\n[导出按钮]</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2f9355b9-6975-4f59-8523-67cdd566ccf9\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2f9355b9-6975-4f59-8523-67cdd566ccf9\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"209b105f-4e7b-471a-97b4-0f5e277f497f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"209b105f-4e7b-471a-97b4-0f5e277f497f\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">九、页面尺寸（设计规范）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"4caabeff-8981-48a6-aef6-0da8e7fc2edb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"4caabeff-8981-48a6-aef6-0da8e7fc2edb\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">Web后台</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"984d2336-f665-466e-8f93-7fc204991c7d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"984d2336-f665-466e-8f93-7fc204991c7d\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">画布宽度：1440px\n内容区：1200px\n栅格：24列</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"86390b77-d31c-4cae-9cb4-321947f26ea1\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"86390b77-d31c-4cae-9cb4-321947f26ea1\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"34456be5-b869-4542-ad77-c40289cc2ffd\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"34456be5-b869-4542-ad77-c40289cc2ffd\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"2\"><h2 class=\"bn-inline-content\">间距规范</h2></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"8b393727-c43c-4899-aa1e-915748e6d8fa\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"8b393727-c43c-4899-aa1e-915748e6d8fa\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">间距：8 / 12 / 16 / 24 / 32</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6f53e3c7-c6d4-4098-b53a-33f8a84c1ca7\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6f53e3c7-c6d4-4098-b53a-33f8a84c1ca7\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a80896ed-a9e0-48e7-ab18-48458445a506\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a80896ed-a9e0-48e7-ab18-48458445a506\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">十、颜色系统（建议）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"26c75646-e659-4494-ae93-00d429cacba0\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"26c75646-e659-4494-ae93-00d429cacba0\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">主色：#1677ff\n成功：#52c41a\n警告：#faad14\n错误：#ff4d4f</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"43d62c25-7a5a-4d32-b89c-e2cf4f64991d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"43d62c25-7a5a-4d32-b89c-e2cf4f64991d\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"a38db5e4-b19c-46fd-87e0-ad742245f037\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"a38db5e4-b19c-46fd-87e0-ad742245f037\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">十一、设计师交付重点</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"028af843-1bf6-4e71-bf1e-3f519c850bc2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"028af843-1bf6-4e71-bf1e-3f519c850bc2\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">UI 需要画这些：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9324d58b-eda8-41c6-a37f-498a4d79bf27\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9324d58b-eda8-41c6-a37f-498a4d79bf27\"><div class=\"bn-block-content\" data-content-type=\"codeBlock\"><pre><code class=\"bn-inline-content\">1. 编辑器整体布局\n2. 左侧面板（三Tab）\n3. 组件库样式\n4. 画布选中态\n5. 右侧属性面板\n6. AI面板\n7. AI生成弹窗\n8. 预览模式\n9. 导出弹窗</code></pre></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2691113f-a0c6-496d-84ac-17ed42b438b3\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2691113f-a0c6-496d-84ac-17ed42b438b3\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f40ea781-a36b-4fd6-b0b8-76a2f89a59b1\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f40ea781-a36b-4fd6-b0b8-76a2f89a59b1\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">十二、一句话总结</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2dbf10e7-f10c-41d9-9ae2-039fedc10bde\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2dbf10e7-f10c-41d9-9ae2-039fedc10bde\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\">这个 UI 的本质是：<strong>Figma结构 + 墨刀交互 + AI操作层</strong></blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ccac002f-f574-42ac-bd66-59565cc05e93\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ccac002f-f574-42ac-bd66-59565cc05e93\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c8138796-2b38-43ca-866f-dfe53612841c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c8138796-2b38-43ca-866f-dfe53612841c\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">如果你要继续往下（强烈建议）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"dd04d604-b051-435a-9f02-fe38e12c0c71\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"dd04d604-b051-435a-9f02-fe38e12c0c71\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">我可以帮你直接做👇</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c612ef8d-63a8-4478-ae8c-cf7eb2bdb1d7\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c612ef8d-63a8-4478-ae8c-cf7eb2bdb1d7\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 1️⃣ 「Figma可导入的设计稿结构（frame + auto layout）」 👉 2️⃣ 「React + Tailwind 实现这个UI（可运行）」 👉 3️⃣ 「组件库UI规范（设计系统级别）」</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5668a9e6-520a-4920-93a2-49c4a96e2e9a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5668a9e6-520a-4920-93a2-49c4a96e2e9a\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">你现在这一步，其实已经可以让 UI 开始出稿了 👍</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b84ea4a4-5974-45c5-a878-4d9fee49b201\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b84ea4a4-5974-45c5-a878-4d9fee49b201\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\"><span class=\"ProseMirror-trailingBreak\" style=\"display: inline-block;\"></span></p></div></div></div></div>",
+  "contentText": "好，这一版我给你的是**接近 Figma / 墨刀级别的高保真 UI 结构稿（可直接给设计师落图）**，并且已经结合你产品的 AI 特性做了专门设计。\n\n⚠️ 重点：这不是“好看示意图”，而是**可实现的布局规范 + 模块划分 + 交互位定义**\n\n***\n\n# 一、整体布局（编辑器主界面）\n\n![Image](https://images.openai.com/static-rsc-4/AvUv-1YAvvqLG-5Lb6a7gnatjpATk7F8ePnsDhHtpNrxtycbsvRjpEYLACZAyaN6yAgzctJJX9vLdDDTgWYIbIECqzfOtIMjanel6yawvmL6FU6ItPTkn2fJG1E9FwmFVL2uBDoLNeuWN-j3gxdmH8ErRYSQsh2sVt23GurY0FIIAttfShFxKTg83x821ERs?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/wLlvxQ7-SfWWyjOs44PlRWlERtZa-dLn64GiJq3wVFjeX46aM2r9q-StqAnt_XFAoMxi83E3wEXng-ZWCggjFJZ9OdQ2onWh8wZPn_3QzjPyIi338ODVMi1wWIWAdzCWQNG-PucJakEd4umwIQfcrAZpkR39CurizBPyV7eufqlkdHhgLhR4pJ0-hUK5j2p6?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/BfEFbC0oO77EdL15CKWhB-zQ8-7kRu9OaxjOuiK4muPNFZy4Q5cP_yZvZCHPXUPRUy44HxHmMHtf13cBbqmWC8gsb23emR8kc4F_ggEXKjUKc_CVt750lyTqLF40fJEsm5dO_wW2pdZ3kwuZR8SM_zSnq_CjQtHjuy-oN50YruebtvmVU5WU3Q8KY_ibpC-8?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/OSNeu94OQCPIChC2CxSKoHWQz5TuzKO2DKVyumY8K0OIBniourV5_gwiRwRyWNwCQX9lrKl0B73Nkn48DnwEJ9a2oTHHm__mwRHQbYlfmz73xizOB4JoInHNGZ6AXXcLB7IgAx1cWK92--oG9WcQxJe04__ra9SbM5ktYxJTALjctBkXrykq81WLm1afagT7?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/JSySCLDVlTUHKOvmc4qTT_TGNc-PhzKTWPV48G9nBZjL2d1gMf9p8ppewItP9UqV9qbRg8R-pG3pDhonnfhRZTqdrxFHlhkvNgvFu3LI73kKPlA3w4md3ZKvbpYFeHJ8MEtP8gDatgw4WzB9SLrOMEDT6QtUyKVxPfwoerV5FyumXF0Dh-RU3C0hohsHetsr?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/QKWybgBYbIPdQ24Znon1gu9zMwimlo5whPSYRAMnixkfZhnhs7WAV3px3TCZ9z_fNqc31EyBhSYP6IcgMBxyyOy2AExf0jCRUNZKuU7ATG2XgEia1lrzznzlc_j7we8qKYvGt117VIIY7jacEqT8JeQEcaYZxKV1BwKsrQ8w-mG-Bz9R1Ua_D4q3X01oqMSL?purpose=fullsize)\n\n## 布局结构（核心）\n\n```text\n┌──────────────────────────────────────────────┐\n│ 顶部工具栏 TopBar                           │\n├──────────────┬───────────────────┬──────────┤\n│ 左侧面板     │     画布区域       │ 右侧面板 │\n│ Sidebar      │     Canvas        │ Inspector│\n├──────────────┴───────────────────┴──────────┤\n│ 底部状态栏 StatusBar                         │\n└──────────────────────────────────────────────┘\n```\n\n***\n\n# 二、顶部工具栏（TopBar）\n\n## UI结构\n\n```text\n[Logo] 项目名称\n\n[+ 新建] [AI生成] [保存] [撤销] [重做]\n\n| 工具区 |\n[选择] [手型] [文本] [矩形] [组件]\n\n| 视图区 |\n[缩放 100%] [适配屏幕]\n\n| 操作区 |\n[预览] [导出代码] [分享]\n```\n\n***\n\n## 交互说明（关键）\n\n| 操作    | 行为       |\n| ----- | -------- |\n| AI生成  | 打开AI输入弹窗 |\n| 撤销/重做 | 操作历史     |\n| 预览    | 全屏原型     |\n| 导出    | 打开导出弹窗   |\n\n***\n\n# 三、左侧面板（Sidebar）\n\n## 三个 Tab（必须有）\n\n```text\n[图层] [组件] [资源]\n```\n\n***\n\n## 3.1 图层（Layers）\n\n```text\n页面1\n ├─ Header\n ├─ Table\n │   ├─ Row1\n │   ├─ Row2\n ├─ Button\n```\n\n👉 支持：\n\n* 拖拽排序\n\n* 隐藏/显示 👁\n\n* 锁定 🔒\n\n* 重命名\n\n***\n\n## 3.2 组件库（Components）\n\n```text\n基础组件\n  - Text\n  - Image\n  - Button\n  - Input\n\n业务组件\n  - 商品卡片\n  - 用户卡片\n  - 数据卡片\n\nAntd组件\n  - Table\n  - Form\n  - Modal\n```\n\n👉 交互：\n\n```text\n拖拽 → 画布\n点击 → 插入默认位置\n```\n\n***\n\n## 3.3 资源（Assets）\n\n```text\n素材组件\n模板\n图标\n图片\n```\n\n👉 来源：\n\n* 用户保存的组件\n\n* 系统模板\n\n* AI生成组件\n\n***\n\n# 四、画布区域（Canvas）\n\n## 结构\n\n```text\n[页面容器 Frame]\n\n  Header\n  Sidebar\n  Content区域\n\n      Table\n      Form\n      Button\n```\n\n***\n\n## 功能\n\n### 1️⃣ 选中\n\n```text\n点击组件 → 显示蓝色边框\n```\n\n***\n\n### 2️⃣ 拖拽\n\n```text\n拖动 → 更新位置\n```\n\n***\n\n### 3️⃣ 缩放\n\n```text\nCtrl + 滚轮\n```\n\n***\n\n### 4️⃣ 多选\n\n```text\nShift + 点击\n框选拖拽\n```\n\n***\n\n### 5️⃣ 对齐辅助线\n\n```text\n自动吸附（类似Figma）\n```\n\n***\n\n# 五、右侧面板（Inspector）\n\n👉 这是 UI 最重要的区域之一\n\n***\n\n## Tab结构\n\n```text\n[属性] [样式] [交互] [AI]\n```\n\n***\n\n## 5.1 属性（Props）\n\n```text\n组件：Button\n\n文本：提交\n类型：Primary\n大小：Large\n禁用：false\n```\n\n***\n\n## 5.2 样式（Style）\n\n```text\n宽度：120\n高度：40\n\n颜色：#1890ff\n圆角：8\n\n字体：14px\n颜色：#fff\n\n阴影：开关\n```\n\n***\n\n## 5.3 交互（Interaction）\n\n```text\n点击行为：\n\n[跳转]\n目标页面：/detail\n\n[请求API]（后期）\n```\n\n***\n\n## 5.4 AI面板（核心差异）\n\n```text\n输入框：\n👉 把这个按钮改成渐变色\n\n[应用] [重试]\n```\n\n***\n\n## AI交互流程\n\n```text\n输入指令\n↓\n发送 node + context\n↓\n返回 patch\n↓\n应用\n↓\n刷新UI\n```\n\n***\n\n# 六、AI生成入口（弹窗）\n\n## UI结构\n\n```text\n标题：AI生成页面\n\n输入框（大文本）\n\n示例：\n- 电商后台\n- 医疗系统\n- CRM系统\n\n选项：\n☑ Web后台\n☑ 使用Ant Design\n\n[生成按钮]\n```\n\n***\n\n## Loading设计（重要）\n\n```text\n生成中：\n\n✔ PRD生成完成\n✔ 页面结构生成\n⏳ UI生成中...\n```\n\n👉 提升体验（关键）\n\n***\n\n# 七、预览模式（Preview）\n\n```text\n全屏\n隐藏侧边栏\n真实点击交互\n```\n\n***\n\n# 八、代码导出弹窗\n\n```text\n选择框：\n\n☑ React + Ant Design\n☐ Vue（灰）\n\n[导出按钮]\n```\n\n***\n\n# 九、页面尺寸（设计规范）\n\n## Web后台\n\n```text\n画布宽度：1440px\n内容区：1200px\n栅格：24列\n```\n\n***\n\n## 间距规范\n\n```text\n间距：8 / 12 / 16 / 24 / 32\n```\n\n***\n\n# 十、颜色系统（建议）\n\n```text\n主色：#1677ff\n成功：#52c41a\n警告：#faad14\n错误：#ff4d4f\n```\n\n***\n\n# 十一、设计师交付重点\n\nUI 需要画这些：\n\n```text\n1. 编辑器整体布局\n2. 左侧面板（三Tab）\n3. 组件库样式\n4. 画布选中态\n5. 右侧属性面板\n6. AI面板\n7. AI生成弹窗\n8. 预览模式\n9. 导出弹窗\n```\n\n***\n\n# 十二、一句话总结\n\n> 这个 UI 的本质是：**Figma结构 + 墨刀交互 + AI操作层**\n\n***\n\n# 如果你要继续往下（强烈建议）\n\n我可以帮你直接做👇\n\n👉 1️⃣ 「Figma可导入的设计稿结构（frame + auto layout）」 👉 2️⃣ 「React + Tailwind 实现这个UI（可运行）」 👉 3️⃣ 「组件库UI规范（设计系统级别）」\n\n你现在这一步，其实已经可以让 UI 开始出稿了 👍\n",
+  "createdAt": "2026-05-03T06:18:44.380Z",
+  "updatedAt": "2026-05-03T07:50:08.389Z",
+  "source": "manual",
+  "versionNumber": 9
+}

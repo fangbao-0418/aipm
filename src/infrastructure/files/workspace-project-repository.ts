@@ -1,9 +1,13 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { ProjectContext } from "./project-context.js";
+import { IndexDatabase } from "../db/index-database.js";
 import { readJsonFile, writeJsonFile } from "../../shared/utils/json.js";
 import type {
   WorkspaceBundle,
+  WorkspaceProjectDocument,
+  WorkspaceProjectDocumentMeta,
+  WorkspaceProjectDocumentVersion,
   WorkspaceLlmSettings,
   WorkspaceMainAgentDecision,
   WorkspaceMainAgentRunLog,
@@ -45,7 +49,11 @@ const stageTemplates: Array<Pick<WorkspaceStage, "type" | "name" | "description"
 ];
 
 export class WorkspaceProjectRepository {
-  constructor(private readonly context: ProjectContext) {}
+  private readonly index: IndexDatabase;
+
+  constructor(private readonly context: ProjectContext) {
+    this.index = new IndexDatabase(context);
+  }
 
   async ensureReady() {
     await this.context.ensureBaseStructure();
@@ -124,8 +132,16 @@ export class WorkspaceProjectRepository {
     return this.context.path("workspace", "projects", projectId, "requirement-collection", "source-files");
   }
 
+  designAssetsDir(projectId: string) {
+    return this.context.path("workspace", "projects", projectId, "design", "assets");
+  }
+
   projectSourceFilePath(projectId: string, storedFilename: string) {
     return this.context.path("workspace", "projects", projectId, "requirement-collection", "source-files", storedFilename);
+  }
+
+  projectDesignAssetPath(projectId: string, storedFilename: string) {
+    return this.context.path("workspace", "projects", projectId, "design", "assets", storedFilename);
   }
 
   llmSettingsPath(projectId: string) {
@@ -152,6 +168,38 @@ export class WorkspaceProjectRepository {
     return this.context.path("workspace", "projects", projectId, "logs", "llm");
   }
 
+  documentsDir(projectId: string) {
+    return this.context.path("workspace", "projects", projectId, "documents");
+  }
+
+  documentDir(projectId: string, documentId: string) {
+    return this.context.path("workspace", "projects", projectId, "documents", documentId);
+  }
+
+  documentMetaPath(projectId: string, documentId: string) {
+    return this.context.path("workspace", "projects", projectId, "documents", documentId, "meta.json");
+  }
+
+  documentContentBlocksPath(projectId: string, documentId: string) {
+    return this.context.path("workspace", "projects", projectId, "documents", documentId, "content.blocknote.json");
+  }
+
+  documentHtmlPath(projectId: string, documentId: string) {
+    return this.context.path("workspace", "projects", projectId, "documents", documentId, "content.html");
+  }
+
+  documentTextPath(projectId: string, documentId: string) {
+    return this.context.path("workspace", "projects", projectId, "documents", documentId, "content.txt");
+  }
+
+  documentVersionsDir(projectId: string, documentId: string) {
+    return this.context.path("workspace", "projects", projectId, "documents", documentId, "versions");
+  }
+
+  documentVersionPath(projectId: string, documentId: string, versionId: string) {
+    return this.context.path("workspace", "projects", projectId, "documents", documentId, "versions", `${versionId}.json`);
+  }
+
   async ensureProjectStructure(projectId: string) {
     await this.ensureReady();
     await Promise.all([
@@ -170,7 +218,9 @@ export class WorkspaceProjectRepository {
       mkdir(this.stageDocumentVersionsDir(projectId, "prototype"), { recursive: true }),
       mkdir(this.context.path("workspace", "projects", projectId, "settings"), { recursive: true }),
       mkdir(this.agentRunsDir(projectId), { recursive: true }),
-      mkdir(this.llmLogsDir(projectId), { recursive: true })
+      mkdir(this.llmLogsDir(projectId), { recursive: true }),
+      mkdir(this.documentsDir(projectId), { recursive: true }),
+      mkdir(this.designAssetsDir(projectId), { recursive: true })
     ]);
   }
 
@@ -255,6 +305,150 @@ export class WorkspaceProjectRepository {
       ...payload,
       createdAt
     });
+  }
+
+  async listProjectDocuments(projectId: string) {
+    await this.ensureProjectStructure(projectId);
+    const metas = await this.index.listWorkspaceDocumentMetas(projectId);
+    const documents = await Promise.all(
+      metas.map((meta) => this.getProjectDocument(projectId, meta.id))
+    );
+
+    return documents.filter((document): document is WorkspaceProjectDocument => Boolean(document));
+  }
+
+  async getProjectDocument(projectId: string, documentId: string) {
+    await this.ensureProjectStructure(projectId);
+    const meta = await this.index.getWorkspaceDocumentMeta(projectId, documentId);
+    if (!meta) {
+      return null;
+    }
+
+    const contentBlocks = await readJsonFile<unknown[]>(this.documentContentBlocksPath(projectId, documentId)).catch(() => []);
+    const contentHtml = await readFile(this.documentHtmlPath(projectId, documentId), "utf-8").catch(() => "<p></p>");
+    const contentText = await readFile(this.documentTextPath(projectId, documentId), "utf-8").catch(() => "");
+
+    return {
+      id: meta.id,
+      projectId: meta.projectId,
+      title: meta.title,
+      sortOrder: meta.sortOrder,
+      deleted: meta.deleted,
+      contentBlocks,
+      contentHtml,
+      contentText,
+      createdAt: meta.createdAt,
+      updatedAt: meta.updatedAt
+    } satisfies WorkspaceProjectDocument;
+  }
+
+  async saveProjectDocument(
+    document: WorkspaceProjectDocument,
+    source: WorkspaceProjectDocumentVersion["source"] = "manual"
+  ) {
+    await this.ensureProjectStructure(document.projectId);
+    await mkdir(this.documentDir(document.projectId, document.id), { recursive: true });
+    await mkdir(this.documentVersionsDir(document.projectId, document.id), { recursive: true });
+
+    const previousMeta = await this.index.getWorkspaceDocumentMeta(document.projectId, document.id);
+    const previousDocument = previousMeta
+      ? await this.getProjectDocument(document.projectId, document.id).catch(() => null)
+      : null;
+
+    await writeJsonFile(this.documentMetaPath(document.projectId, document.id), {
+      id: document.id,
+      projectId: document.projectId,
+      title: document.title,
+      sortOrder: document.sortOrder,
+      deleted: document.deleted,
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt
+    });
+    await writeJsonFile(this.documentContentBlocksPath(document.projectId, document.id), document.contentBlocks);
+    await writeFile(this.documentHtmlPath(document.projectId, document.id), document.contentHtml, "utf-8");
+    await writeFile(this.documentTextPath(document.projectId, document.id), document.contentText, "utf-8");
+
+    const versionNumber = previousMeta
+      ? (await this.index.listWorkspaceDocumentVersions(document.projectId, document.id)).length + 1
+      : 1;
+
+    const shouldCreateVersion = !previousDocument
+      || previousDocument.title !== document.title
+      || previousDocument.contentHtml !== document.contentHtml
+      || previousDocument.contentText !== document.contentText
+      || JSON.stringify(previousDocument.contentBlocks) !== JSON.stringify(document.contentBlocks);
+
+    let latestVersionId = previousMeta?.latestVersionId;
+    if (shouldCreateVersion) {
+      const versionId = `${Date.now()}`;
+      latestVersionId = versionId;
+      const version: WorkspaceProjectDocumentVersion = {
+        id: versionId,
+        documentId: document.id,
+        projectId: document.projectId,
+        versionNumber,
+        source,
+        summary: buildWorkspaceDocumentSummary(document),
+        snapshotFilePath: this.documentVersionPath(document.projectId, document.id, versionId),
+        createdAt: document.updatedAt
+      };
+      await writeJsonFile(version.snapshotFilePath, {
+        ...document,
+        source,
+        versionNumber
+      });
+      await this.index.upsertWorkspaceDocumentVersion(version);
+    }
+
+    const meta: WorkspaceProjectDocumentMeta = {
+      id: document.id,
+      projectId: document.projectId,
+      title: document.title,
+      sortOrder: document.sortOrder,
+      deleted: document.deleted,
+      contentFilePath: this.documentContentBlocksPath(document.projectId, document.id),
+      htmlFilePath: this.documentHtmlPath(document.projectId, document.id),
+      textFilePath: this.documentTextPath(document.projectId, document.id),
+      latestVersionId,
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt
+    };
+    await this.index.upsertWorkspaceDocumentMeta(meta);
+    return document;
+  }
+
+  async deleteProjectDocument(projectId: string, documentId: string) {
+    await this.index.deleteWorkspaceDocumentMeta(projectId, documentId);
+    await rm(this.documentDir(projectId, documentId), { recursive: true, force: true });
+  }
+
+  async saveProjectDocumentOrder(projectId: string, orderedIds: string[]) {
+    const metas = await this.index.listWorkspaceDocumentMetas(projectId);
+    const metaMap = new Map(metas.map((meta) => [meta.id, meta]));
+    await Promise.all(
+      orderedIds.map(async (documentId, index) => {
+        const meta = metaMap.get(documentId);
+        if (!meta) {
+          return;
+        }
+        await this.index.upsertWorkspaceDocumentMeta({
+          ...meta,
+          sortOrder: index + 1,
+          updatedAt: nowIso()
+        });
+      })
+    );
+  }
+
+  async listProjectDocumentVersions(projectId: string, documentId: string) {
+    await this.ensureProjectStructure(projectId);
+    return this.index.listWorkspaceDocumentVersions(projectId, documentId);
+  }
+
+  async getProjectDocumentVersion(projectId: string, documentId: string, versionId: string) {
+    return readJsonFile<WorkspaceProjectDocument & { source: WorkspaceProjectDocumentVersion["source"]; versionNumber: number }>(
+      this.documentVersionPath(projectId, documentId, versionId)
+    );
   }
 
   async getRequirementCollection(projectId: string) {
@@ -406,6 +600,23 @@ export class WorkspaceProjectRepository {
 
   async readSourceFile(projectId: string, storedFilename: string) {
     return readFile(this.projectSourceFilePath(projectId, storedFilename));
+  }
+
+  async saveDesignAsset(projectId: string, fileName: string, bytes: Buffer) {
+    await this.ensureProjectStructure(projectId);
+    const safeName = `${Date.now()}-${basename(fileName).replace(/[^\w.-]+/g, "-")}`;
+    const fullPath = this.projectDesignAssetPath(projectId, safeName);
+    await writeFile(fullPath, bytes);
+    return {
+      fullPath,
+      storedFilename: safeName,
+      relativePath: `design/assets/${safeName}`,
+      extension: extname(fileName).toLowerCase()
+    };
+  }
+
+  async readDesignAsset(projectId: string, storedFilename: string) {
+    return readFile(this.projectDesignAssetPath(projectId, storedFilename));
   }
 
   async saveLlmSettings(projectId: string, settings: WorkspaceLlmSettings, apiKey?: string) {
@@ -653,4 +864,12 @@ export class WorkspaceProjectRepository {
 
     return { project, stages };
   }
+}
+
+function buildWorkspaceDocumentSummary(document: WorkspaceProjectDocument) {
+  const text = document.contentText.trim().replace(/\s+/g, " ");
+  if (!text) {
+    return document.title;
+  }
+  return text.slice(0, 120);
 }

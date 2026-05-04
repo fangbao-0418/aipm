@@ -1,0 +1,2264 @@
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useNavigate, useParams } from "react-router";
+import {
+  ArrowLeft,
+  Box,
+  ChevronDown,
+  Code2,
+  Component,
+  Copy,
+  Eye,
+  EyeOff,
+  FileText,
+  Frame,
+  Hand,
+  Image,
+  Import,
+  Layers,
+  Lock,
+  MousePointer2,
+  PanelLeft,
+  Play,
+  Plus,
+  RectangleHorizontal,
+  Search,
+  Share2,
+  Table2,
+  TextCursorInput,
+  Trash2,
+  Type,
+  Unlock,
+  Wand2
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Textarea } from "../ui/textarea";
+import { getProject } from "../../utils/storage";
+import { toast } from "sonner";
+import { importAiDesignFile } from "../../utils/workspace-api";
+
+type DesignLeftTab = "layers" | "components" | "assets" | "prd";
+type DesignRightTab = "design" | "prototype" | "d2c";
+type DesignTool = "select" | "hand" | "frame" | "rect" | "text";
+type DesignNodeType = "frame" | "container" | "text" | "button" | "input" | "table" | "card" | "image";
+type ResizeHandle = "nw" | "ne" | "sw" | "se";
+
+interface DesignNode {
+  id: string;
+  type: DesignNodeType;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fill: string;
+  stroke: string;
+  strokeWidth?: number;
+  radius: number;
+  text?: string;
+  textColor: string;
+  fontSize: number;
+  lineHeight?: number;
+  textAlign?: "left" | "center" | "right" | "justify";
+  visible: boolean;
+  locked: boolean;
+  imageUrl?: string;
+  fillImageUrl?: string;
+  svgPath?: string;
+  svgFillRule?: "nonzero" | "evenodd";
+  clipBounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  clipPath?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    svgPath: string;
+    fillRule?: "nonzero" | "evenodd";
+  };
+  sourceRef?: string;
+  sourceLayerClass?: string;
+  opacity?: number;
+  rotation?: number;
+  blendMode?: string;
+  blurRadius?: number;
+  fontFamily?: string;
+  fontWeight?: number;
+  letterSpacing?: number;
+  flippedHorizontal?: boolean;
+  flippedVertical?: boolean;
+  shadow?: string;
+  zIndex?: number;
+}
+
+interface DesignPage {
+  id: string;
+  name: string;
+  nodes: DesignNode[];
+}
+
+interface ImportedDesignComponent {
+  id: string;
+  name: string;
+  sourceFileName: string;
+  nodeCount: number;
+  nodes: DesignNode[];
+}
+
+interface ImportedDesignAsset {
+  id: string;
+  name: string;
+  sourceFileName: string;
+  type: "image";
+  mimeType: string;
+  url: string;
+  sourceRef?: string;
+  width?: number;
+  height?: number;
+}
+
+interface AiDesignFile {
+  id: string;
+  name: string;
+  prdText: string;
+  pages: DesignPage[];
+  importedComponents: ImportedDesignComponent[];
+  importedAssets: ImportedDesignAsset[];
+  updatedAt: string;
+}
+
+interface RectBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface ResizeSession {
+  handle: ResizeHandle;
+  startX: number;
+  startY: number;
+  bounds: RectBounds;
+  originals: Array<{ id: string; x: number; y: number; width: number; height: number }>;
+}
+
+interface MinimapViewport {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const componentPresets: Array<{
+  type: DesignNodeType;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}> = [
+  { type: "container", label: "Container", description: "页面容器和布局块", icon: Box },
+  { type: "text", label: "Text", description: "标题、正文、说明文字", icon: Type },
+  { type: "button", label: "Button", description: "主按钮、次按钮", icon: RectangleHorizontal },
+  { type: "input", label: "Input", description: "表单输入框", icon: TextCursorInput },
+  { type: "table", label: "Table", description: "后台列表和数据表", icon: Table2 },
+  { type: "card", label: "Card", description: "信息卡片和模块块", icon: Component },
+  { type: "image", label: "Image", description: "图片占位和素材", icon: Image }
+];
+
+export function AiDesignView() {
+  const { projectId = "" } = useParams();
+  const navigate = useNavigate();
+  const project = useMemo(() => projectId ? getProject(projectId) : null, [projectId]);
+  const storageKey = `aipm_ai_design_${projectId}`;
+  const [file, setFile] = useState<AiDesignFile>(() => loadDesignFile(storageKey, project?.name ?? "未命名设计"));
+  const [leftTab, setLeftTab] = useState<DesignLeftTab>("layers");
+  const [rightTab, setRightTab] = useState<DesignRightTab>("design");
+  const [tool, setTool] = useState<DesignTool>("select");
+  const [selectedPageId, setSelectedPageId] = useState(file.pages[0]?.id ?? "");
+  const [selectedNodeId, setSelectedNodeId] = useState(file.pages[0]?.nodes[0]?.id ?? "");
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(file.pages[0]?.nodes[0]?.id ? [file.pages[0].nodes[0].id] : []);
+  const [zoom, setZoom] = useState(0.64);
+  const [pan, setPan] = useState({ x: 240, y: 64 });
+  const [layerQuery, setLayerQuery] = useState("");
+  const [importingDesignFile, setImportingDesignFile] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [viewportSize, setViewportSize] = useState({ width: 1200, height: 800 });
+  const [selectionRect, setSelectionRect] = useState<{
+    start: { x: number; y: number };
+    current: { x: number; y: number };
+  } | null>(null);
+  const canvasViewportRef = useRef<HTMLDivElement | null>(null);
+  const designImportInputRef = useRef<HTMLInputElement | null>(null);
+  const nodeDragRef = useRef<{
+    nodeIds: string[];
+    startX: number;
+    startY: number;
+    originals: Array<{ id: string; x: number; y: number }>;
+  } | null>(null);
+  const panDragRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+  const selectionDragRef = useRef<{
+    append: boolean;
+  } | null>(null);
+  const resizeDragRef = useRef<ResizeSession | null>(null);
+
+  const selectedPage = file.pages.find((page) => page.id === selectedPageId) ?? file.pages[0]!;
+  const selectedNode = selectedPage.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedNodes = selectedPage.nodes.filter((node) => selectedNodeIds.includes(node.id));
+  const selectionBounds = getNodesBoundsForSelection(selectedNodes);
+  const visibleNodes = selectedPage.nodes.filter((node) => node.visible);
+  const sceneContentBounds = useMemo(() => expandBounds(getNodesBounds(visibleNodes), 360), [visibleNodes]);
+  const visibleSceneBounds = useMemo(() => ({
+    x: -pan.x / zoom,
+    y: -pan.y / zoom,
+    width: viewportSize.width / zoom,
+    height: viewportSize.height / zoom
+  }), [pan.x, pan.y, viewportSize.height, viewportSize.width, zoom]);
+  const minimapBounds = useMemo(() => unionBounds(sceneContentBounds, visibleSceneBounds), [sceneContentBounds, visibleSceneBounds]);
+  const renderedNodes = useMemo(() => {
+    if (visibleNodes.length < 500) {
+      return visibleNodes;
+    }
+
+    const padding = 960 / zoom;
+    const sceneViewport = {
+      x: visibleSceneBounds.x - padding,
+      y: visibleSceneBounds.y - padding,
+      width: visibleSceneBounds.width + padding * 2,
+      height: visibleSceneBounds.height + padding * 2
+    };
+
+    return visibleNodes.filter((node) => selectedNodeIds.includes(node.id) || rectsIntersect(sceneViewport, nodeToBounds(node)));
+  }, [selectedNodeIds, visibleNodes, visibleSceneBounds, zoom]);
+  const filteredLayers = selectedPage.nodes.filter((node) => node.name.toLowerCase().includes(layerQuery.trim().toLowerCase()));
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      ...file,
+      updatedAt: new Date().toISOString()
+    }));
+  }, [file, storageKey]);
+
+  useEffect(() => {
+    const viewport = canvasViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const updateViewportSize = () => {
+      const rect = viewport.getBoundingClientRect();
+      setViewportSize({
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height))
+      });
+    };
+    updateViewportSize();
+    const observer = new ResizeObserver(updateViewportSize);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+
+      if (event.code === "Space") {
+        event.preventDefault();
+        setIsSpacePressed(true);
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        duplicateSelectedNode();
+        return;
+      }
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        deleteSelectedNode();
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === "Space") {
+        setIsSpacePressed(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  });
+
+  const updateFile = (updater: (current: AiDesignFile) => AiDesignFile) => {
+    setFile((current) => updater(current));
+  };
+
+  const updateSelectedPage = (updater: (page: DesignPage) => DesignPage) => {
+    updateFile((current) => ({
+      ...current,
+      pages: current.pages.map((page) => page.id === selectedPageId ? updater(page) : page)
+    }));
+  };
+
+  const updateNode = (nodeId: string, patch: Partial<DesignNode>) => {
+    updateSelectedPage((page) => ({
+      ...page,
+      nodes: page.nodes.map((node) => node.id === nodeId ? { ...node, ...patch } : node)
+    }));
+  };
+
+  const selectNodes = (ids: string[], primaryId = ids[0] ?? "") => {
+    const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+    setSelectedNodeIds(uniqueIds);
+    setSelectedNodeId(primaryId || uniqueIds[0] || "");
+  };
+
+  const createPage = () => {
+    const nextPage: DesignPage = {
+      id: createId("page"),
+      name: `页面 ${file.pages.length + 1}`,
+      nodes: []
+    };
+    updateFile((current) => ({
+      ...current,
+      pages: [...current.pages, nextPage]
+    }));
+    setSelectedPageId(nextPage.id);
+    selectNodes([]);
+  };
+
+  const deletePage = (pageId: string) => {
+    if (file.pages.length <= 1) {
+      toast.error("至少保留一个页面");
+      return;
+    }
+    const pageIndex = file.pages.findIndex((page) => page.id === pageId);
+    const nextPages = file.pages.filter((page) => page.id !== pageId);
+    updateFile((current) => ({
+      ...current,
+      pages: current.pages.filter((page) => page.id !== pageId)
+    }));
+    if (selectedPageId === pageId) {
+      const nextPage = nextPages[Math.max(0, pageIndex - 1)] ?? nextPages[0];
+      setSelectedPageId(nextPage.id);
+      selectNodes(nextPage.nodes[0]?.id ? [nextPage.nodes[0].id] : []);
+    }
+    toast.success("页面已删除");
+  };
+
+  const addNode = (type: DesignNodeType) => {
+    const nextNode = createNode(type, {
+      x: 360 + selectedPage.nodes.length * 24,
+      y: 260 + selectedPage.nodes.length * 24
+    });
+    updateSelectedPage((page) => ({
+      ...page,
+      nodes: [...page.nodes, nextNode]
+    }));
+    selectNodes([nextNode.id]);
+    setTool("select");
+  };
+
+  const deleteSelectedNode = () => {
+    if (selectedNodeIds.length === 0) {
+      return;
+    }
+    updateSelectedPage((page) => ({
+      ...page,
+      nodes: page.nodes.filter((node) => !selectedNodeIds.includes(node.id))
+    }));
+    selectNodes([]);
+  };
+
+  const duplicateSelectedNode = () => {
+    if (selectedNodes.length === 0) {
+      return;
+    }
+    const nextNodes = selectedNodes.map((node) => ({
+      ...node,
+      id: createId("node"),
+      name: `${node.name} Copy`,
+      x: node.x + 28,
+      y: node.y + 28,
+      locked: false
+    }));
+    updateSelectedPage((page) => ({
+      ...page,
+      nodes: [...page.nodes, ...nextNodes]
+    }));
+    selectNodes(nextNodes.map((node) => node.id));
+  };
+
+  const insertImportedComponent = (component: ImportedDesignComponent) => {
+    const minX = Math.min(...component.nodes.map((node) => node.x), 0);
+    const minY = Math.min(...component.nodes.map((node) => node.y), 0);
+    const nextNodes = component.nodes.map((node, index) => ({
+      ...node,
+      id: createId("node"),
+      name: index === 0 ? component.name : node.name,
+      x: node.x - minX + 360 + index * 4,
+      y: node.y - minY + 260 + index * 4,
+      locked: false,
+      visible: true
+    }));
+
+    updateSelectedPage((page) => ({
+      ...page,
+      nodes: [...page.nodes, ...nextNodes]
+    }));
+    selectNodes(nextNodes.map((node) => node.id));
+    toast.success(`已插入组件：${component.name}`);
+  };
+
+  const insertImportedPage = (page: DesignPage) => {
+    const nextPage: DesignPage = {
+      ...page,
+      id: createId("page"),
+      name: `${page.name} Copy`,
+      nodes: page.nodes.map((node) => ({
+        ...node,
+        id: createId("node"),
+        locked: false,
+        visible: true
+      }))
+    };
+    updateFile((current) => ({
+      ...current,
+      pages: [...current.pages, nextPage]
+    }));
+    setSelectedPageId(nextPage.id);
+    selectNodes(nextPage.nodes[0]?.id ? [nextPage.nodes[0].id] : []);
+    setLeftTab("layers");
+    toast.success(`已插入页面：${page.name}`);
+  };
+
+  const insertImportedAsset = (asset: ImportedDesignAsset, position?: { x: number; y: number }) => {
+    const nextNode = createNode("image", {
+      name: asset.name,
+      x: Math.round(position?.x ?? 360 + selectedPage.nodes.length * 20),
+      y: Math.round(position?.y ?? 260 + selectedPage.nodes.length * 20),
+      width: Math.max(160, asset.width ?? 260),
+      height: Math.max(120, asset.height ?? 180),
+      imageUrl: asset.url,
+      sourceRef: asset.sourceRef,
+      text: "",
+      fill: "#ffffff"
+    });
+    updateSelectedPage((page) => ({
+      ...page,
+      nodes: [...page.nodes, nextNode]
+    }));
+    selectNodes([nextNode.id]);
+    toast.success(`已插入图片：${asset.name}`);
+  };
+
+  const startDragPayload = (event: ReactDragEvent<HTMLElement>, payload: unknown) => {
+    event.dataTransfer.setData("application/aipm-design", JSON.stringify(payload));
+    event.dataTransfer.effectAllowed = "copy";
+  };
+
+  const handleCanvasDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    const payloadText = event.dataTransfer.getData("application/aipm-design");
+    if (!payloadText) {
+      return;
+    }
+    event.preventDefault();
+    const scenePoint = getScenePoint(event.clientX, event.clientY);
+    try {
+      const payload = JSON.parse(payloadText) as
+        | { kind: "asset"; asset: ImportedDesignAsset }
+        | { kind: "component"; component: ImportedDesignComponent };
+      if (payload.kind === "asset") {
+        insertImportedAsset(payload.asset, scenePoint);
+      }
+      if (payload.kind === "component") {
+        insertImportedComponent(payload.component);
+      }
+    } catch {
+      toast.error("拖拽内容无法识别");
+    }
+  };
+
+  const handleImportDesignFile = async (fileList: FileList | null) => {
+    const sourceFile = fileList?.[0];
+    if (!sourceFile) {
+      return;
+    }
+
+    setImportingDesignFile(true);
+    try {
+      const imported = await importAiDesignFile(projectId, sourceFile);
+      updateFile((current) => ({
+        ...current,
+        pages: [...current.pages, ...imported.pages],
+        importedComponents: [...(current.importedComponents ?? []), ...imported.components],
+        importedAssets: [...(current.importedAssets ?? []), ...(imported.assets ?? [])]
+      }));
+      setLeftTab(imported.assets?.length ? "assets" : "components");
+      if (imported.pages[0]) {
+        setSelectedPageId(imported.pages[0].id);
+        selectNodes(imported.pages[0].nodes[0]?.id ? [imported.pages[0].nodes[0].id] : []);
+      }
+      toast.success(`已导入 ${sourceFile.name}：${imported.pages.length} 个页面，${imported.components.length} 个组件，${imported.assets?.length ?? 0} 张图片`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "导入失败，请确认文件格式是否为 Sketch/Figma");
+    } finally {
+      setImportingDesignFile(false);
+    }
+  };
+
+  const getScenePoint = (clientX: number, clientY: number) => {
+    const rect = canvasViewportRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return { x: 0, y: 0 };
+    }
+    return {
+      x: (clientX - rect.left - pan.x) / zoom,
+      y: (clientY - rect.top - pan.y) / zoom
+    };
+  };
+
+  const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    if (tool === "hand" || isSpacePressed) {
+      panDragRef.current = {
+        startX: event.clientX,
+        startY: event.clientY,
+        originX: pan.x,
+        originY: pan.y
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    if (tool === "frame" || tool === "rect" || tool === "text") {
+      const scenePoint = getScenePoint(event.clientX, event.clientY);
+      const nextNode = createNode(tool === "frame" ? "frame" : tool === "text" ? "text" : "container", {
+        x: Math.round(scenePoint.x),
+        y: Math.round(scenePoint.y)
+      });
+      updateSelectedPage((page) => ({
+        ...page,
+        nodes: [...page.nodes, nextNode]
+      }));
+      selectNodes([nextNode.id]);
+      setTool("select");
+      return;
+    }
+
+    const scenePoint = getScenePoint(event.clientX, event.clientY);
+    const hitNode = findTopDesignNodeAtPoint(visibleNodes, scenePoint);
+    if (hitNode && !hitNode.locked) {
+      const append = event.shiftKey || event.metaKey || event.ctrlKey;
+      const nextSelection = append
+        ? selectedNodeIds.includes(hitNode.id)
+          ? selectedNodeIds.filter((id) => id !== hitNode.id)
+          : [...selectedNodeIds, hitNode.id]
+        : selectedNodeIds.includes(hitNode.id)
+          ? selectedNodeIds
+          : [hitNode.id];
+      selectNodes(nextSelection, hitNode.id);
+      const dragIds = (selectedNodeIds.includes(hitNode.id) && !append ? selectedNodeIds : nextSelection)
+        .map((id) => selectedPage.nodes.find((item) => item.id === id))
+        .filter((item): item is DesignNode => Boolean(item) && !item.locked);
+      nodeDragRef.current = {
+        nodeIds: dragIds.map((item) => item.id),
+        startX: scenePoint.x,
+        startY: scenePoint.y,
+        originals: dragIds.map((item) => ({ id: item.id, x: item.x, y: item.y }))
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    selectionDragRef.current = {
+      append: event.shiftKey || event.metaKey || event.ctrlKey
+    };
+    setSelectionRect({ start: scenePoint, current: scenePoint });
+    if (!selectionDragRef.current.append) {
+      selectNodes([]);
+    }
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (panDragRef.current) {
+      setPan({
+        x: panDragRef.current.originX + event.clientX - panDragRef.current.startX,
+        y: panDragRef.current.originY + event.clientY - panDragRef.current.startY
+      });
+      return;
+    }
+
+    if (nodeDragRef.current) {
+      const scenePoint = getScenePoint(event.clientX, event.clientY);
+      const deltaX = scenePoint.x - nodeDragRef.current.startX;
+      const deltaY = scenePoint.y - nodeDragRef.current.startY;
+      const originals = nodeDragRef.current.originals;
+      updateSelectedPage((page) => ({
+        ...page,
+        nodes: page.nodes.map((node) => {
+          const original = originals.find((item) => item.id === node.id);
+          return original ? {
+            ...node,
+            x: Math.round(original.x + deltaX),
+            y: Math.round(original.y + deltaY)
+          } : node;
+        })
+      }));
+      return;
+    }
+
+    if (resizeDragRef.current) {
+      const scenePoint = getScenePoint(event.clientX, event.clientY);
+      const patchByNodeId = resizeSelectionNodes(resizeDragRef.current, scenePoint);
+      updateSelectedPage((page) => ({
+        ...page,
+        nodes: page.nodes.map((node) => patchByNodeId.get(node.id) ? { ...node, ...patchByNodeId.get(node.id) } : node)
+      }));
+      return;
+    }
+
+    if (selectionDragRef.current && selectionRect) {
+      setSelectionRect({
+        ...selectionRect,
+        current: getScenePoint(event.clientX, event.clientY)
+      });
+    }
+  };
+
+  const handleCanvasPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (selectionDragRef.current && selectionRect) {
+      const rect = normalizeRect(selectionRect.start, selectionRect.current);
+      if (rect.width > 3 || rect.height > 3) {
+        const matchedIds = visibleNodes
+          .filter((node) => rectsIntersect(rect, nodeToBounds(node)) && !node.locked)
+          .map((node) => node.id);
+        selectNodes(selectionDragRef.current.append ? [...selectedNodeIds, ...matchedIds] : matchedIds);
+      }
+    }
+    panDragRef.current = null;
+    nodeDragRef.current = null;
+    resizeDragRef.current = null;
+    selectionDragRef.current = null;
+    setSelectionRect(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleNodePointerDown = (event: ReactPointerEvent<HTMLDivElement>, node: DesignNode) => {
+    event.stopPropagation();
+    if (node.locked) {
+      selectNodes([node.id]);
+      return;
+    }
+    const append = event.shiftKey || event.metaKey || event.ctrlKey;
+    const nextSelection = append
+      ? selectedNodeIds.includes(node.id)
+        ? selectedNodeIds.filter((id) => id !== node.id)
+        : [...selectedNodeIds, node.id]
+      : selectedNodeIds.includes(node.id)
+        ? selectedNodeIds
+        : [node.id];
+    selectNodes(nextSelection, node.id);
+    const dragIds = (selectedNodeIds.includes(node.id) && !append ? selectedNodeIds : nextSelection)
+      .map((id) => selectedPage.nodes.find((item) => item.id === id))
+      .filter((item): item is DesignNode => Boolean(item) && !item.locked);
+    const scenePoint = getScenePoint(event.clientX, event.clientY);
+    nodeDragRef.current = {
+      nodeIds: dragIds.map((item) => item.id),
+      startX: scenePoint.x,
+      startY: scenePoint.y,
+      originals: dragIds.map((item) => ({ id: item.id, x: item.x, y: item.y }))
+    };
+    canvasViewportRef.current?.setPointerCapture(event.pointerId);
+  };
+
+  const handleResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>, handle: ResizeHandle) => {
+    event.stopPropagation();
+    if (!selectionBounds || selectedNodes.length === 0) {
+      return;
+    }
+    const scenePoint = getScenePoint(event.clientX, event.clientY);
+    resizeDragRef.current = {
+      handle,
+      startX: scenePoint.x,
+      startY: scenePoint.y,
+      bounds: selectionBounds,
+      originals: selectedNodes
+        .filter((node) => !node.locked)
+        .map((node) => ({
+          id: node.id,
+          x: node.x,
+          y: node.y,
+          width: node.width,
+          height: node.height
+        }))
+    };
+    canvasViewportRef.current?.setPointerCapture(event.pointerId);
+  };
+
+  const clampZoom = (value: number) => Math.min(2.2, Math.max(0.000025, Number(value.toFixed(4))));
+
+  const handleZoom = (nextZoom: number, anchor?: { x: number; y: number }) => {
+    const nextClampedZoom = clampZoom(nextZoom);
+    const anchorPoint = anchor ?? {
+      x: viewportSize.width / 2,
+      y: viewportSize.height / 2
+    };
+    const sceneAnchor = {
+      x: (anchorPoint.x - pan.x) / zoom,
+      y: (anchorPoint.y - pan.y) / zoom
+    };
+
+    setZoom(nextClampedZoom);
+    setPan({
+      x: anchorPoint.x - sceneAnchor.x * nextClampedZoom,
+      y: anchorPoint.y - sceneAnchor.y * nextClampedZoom
+    });
+  };
+  const activeSelectionRect = selectionRect ? normalizeRect(selectionRect.start, selectionRect.current) : null;
+  const showSelectionBounds = selectionBounds && selectedNodeIds.length > 0;
+
+  return (
+    <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden bg-[#f5f5f6] text-[#171717]">
+      <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#e6e6e8] bg-white px-4">
+        <div className="flex items-center gap-3">
+          <Button type="button" variant="ghost" size="icon" onClick={() => navigate(`/project/${projectId}`)}>
+            <ArrowLeft className="size-5" />
+          </Button>
+          <Button type="button" variant="ghost" size="icon">
+            <PanelLeft className="size-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <div className="font-semibold">{file.name}</div>
+            <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">自动保存</Badge>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 rounded-2xl border border-[#ececef] bg-[#fafafa] p-1">
+          <ToolbarButton active={tool === "select"} label="选择" onClick={() => setTool("select")} icon={MousePointer2} />
+          <ToolbarButton active={tool === "hand"} label="平移" onClick={() => setTool("hand")} icon={Hand} />
+          <ToolbarButton active={tool === "frame"} label="画板" onClick={() => setTool("frame")} icon={Frame} />
+          <ToolbarButton active={tool === "rect"} label="容器" onClick={() => setTool("rect")} icon={RectangleHorizontal} />
+          <ToolbarButton active={tool === "text"} label="文字" onClick={() => setTool("text")} icon={Type} />
+          <div className="mx-1 h-6 w-px bg-[#dedee2]" />
+          <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={() => addNode("table")}>
+            <Table2 className="size-4" />
+            Table
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" className="rounded-full gap-2" disabled>
+            <Wand2 className="size-4" />
+            AI 生成
+          </Button>
+          <Button type="button" variant="outline" className="rounded-full gap-2" disabled>
+            <Code2 className="size-4" />
+            D2C
+          </Button>
+          <Button type="button" className="rounded-full bg-[#246bfe] px-5 hover:bg-[#1558dc]">
+            <Share2 className="mr-2 size-4" />
+            分享
+          </Button>
+          <Button type="button" variant="ghost" size="icon">
+            <Play className="size-5" />
+          </Button>
+          <Select value={String(Math.round(zoom * 100))} onValueChange={(value) => handleZoom(Number(value) / 100)}>
+            <SelectTrigger className="h-9 w-[94px] rounded-full border-0 bg-[#f1f1f3]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 25, 50, 64, 75, 100, 125, 150, 200].map((item) => (
+                <SelectItem key={item} value={String(item)}>{item}%</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        <aside className="flex w-[300px] shrink-0 flex-col border-r border-[#e6e6e8] bg-white">
+          <div className="flex h-[54px] shrink-0 items-center border-b border-[#eeeeef] px-4">
+            {[
+              { id: "layers", label: "图层" },
+              { id: "components", label: "组件" },
+              { id: "assets", label: "资源" },
+              { id: "prd", label: "PRD" }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setLeftTab(tab.id as DesignLeftTab)}
+                className={`mr-5 text-sm font-medium ${leftTab === tab.id ? "text-[#171717]" : "text-[#777]"}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {leftTab === "layers" ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="border-b border-[#eeeeef] p-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#89898f]" />
+                  <Input value={layerQuery} onChange={(event) => setLayerQuery(event.target.value)} placeholder="搜索图层名称" className="h-9 border-0 bg-[#f5f5f7] pl-9" />
+                </div>
+              </div>
+              <div className="border-b border-[#eeeeef] p-3">
+                <div className="mb-2 flex items-center justify-between text-sm font-semibold">
+                  <span>页面</span>
+                  <Button type="button" variant="ghost" size="icon" className="size-7" onClick={createPage}>
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
+                <div className="space-y-1">
+                  {file.pages.map((page) => (
+                    <div
+                      key={page.id}
+                      className={`group flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm ${page.id === selectedPageId ? "bg-[#f0f0f2] font-semibold" : "hover:bg-[#f7f7f8]"}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPageId(page.id);
+                          selectNodes(page.nodes[0]?.id ? [page.nodes[0].id] : []);
+                        }}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
+                        <FileText className="size-4 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{page.name}</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`删除 ${page.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deletePage(page.id);
+                        }}
+                        className="hidden rounded-lg p-1 text-[#999] hover:bg-white hover:text-red-600 group-hover:block"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <div className="mb-2 flex items-center justify-between text-sm font-semibold">
+                  <span>图层</span>
+                  <Layers className="size-4 text-[#888]" />
+                </div>
+                <div className="space-y-1">
+                  {filteredLayers.map((node) => (
+                    <button
+                      key={node.id}
+                      type="button"
+                      onClick={(event) => {
+                        const append = event.shiftKey || event.metaKey || event.ctrlKey;
+                        selectNodes(append
+                          ? selectedNodeIds.includes(node.id)
+                            ? selectedNodeIds.filter((id) => id !== node.id)
+                            : [...selectedNodeIds, node.id]
+                          : [node.id], node.id);
+                      }}
+                      className={`group flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm ${selectedNodeIds.includes(node.id) ? "bg-[#ede7ff] text-[#6d35d8]" : "hover:bg-[#f7f7f8]"}`}
+                    >
+                      {nodeIcon(node.type)}
+                      <span className="min-w-0 flex-1 truncate">{node.name}</span>
+                      {node.locked ? <Lock className="size-3.5 text-[#999]" /> : null}
+                      {!node.visible ? <EyeOff className="size-3.5 text-[#999]" /> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {leftTab === "components" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="mb-4 text-sm text-[#67676c]">点击插入基础组件，或导入 Sketch / Figma 文件转成可复用组件。</div>
+              <input
+                ref={designImportInputRef}
+                type="file"
+                className="hidden"
+                accept=".sketch,.fig,.figma,application/octet-stream"
+                onChange={(event) => {
+                  void handleImportDesignFile(event.target.files);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="mb-4 w-full justify-start rounded-2xl"
+                disabled={importingDesignFile}
+                onClick={() => designImportInputRef.current?.click()}
+              >
+                <Import className="mr-2 size-4" />
+                {importingDesignFile ? "正在导入 Sketch / Figma..." : "导入 Sketch / Figma 文件"}
+              </Button>
+              <div className="grid grid-cols-2 gap-3">
+                {componentPresets.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.type}
+                      type="button"
+                      onClick={() => addNode(item.type)}
+                      className="rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
+                    >
+                      <Icon className="mb-3 size-5 text-[#246bfe]" />
+                      <div className="text-sm font-semibold">{item.label}</div>
+                      <div className="mt-1 text-xs leading-5 text-[#777]">{item.description}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              {file.importedComponents?.length ? (
+                <div className="mt-6">
+                  <div className="mb-3 text-sm font-semibold">导入组件</div>
+                  <div className="space-y-2">
+                    {file.importedComponents.map((component) => (
+                      <button
+                        key={component.id}
+                        type="button"
+                        draggable
+                        onDragStart={(event) => startDragPayload(event, { kind: "component", component })}
+                        onClick={() => insertImportedComponent(component)}
+                        className="w-full rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
+                      >
+                        <DesignMiniPreview nodes={component.nodes} className="mb-3 h-[112px]" />
+                        <div className="flex items-center gap-2">
+                          <Component className="size-4 text-[#6d35d8]" />
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{component.name}</span>
+                        </div>
+                        <div className="mt-1 truncate text-xs text-[#777]">
+                          {component.sourceFileName} · {component.nodeCount} 个节点
+                        </div>
+                        <div className="mt-2 max-h-24 overflow-y-auto rounded-xl bg-[#f8f8fa] px-2 py-1">
+                          {component.nodes.map((node) => (
+                            <div key={node.id} className="flex items-center gap-2 py-1 text-xs text-[#666]">
+                              {nodeIcon(node.type)}
+                              <span className="min-w-0 flex-1 truncate">{node.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="mt-6">
+                <div className="mb-3 text-sm font-semibold">页面预览</div>
+                <div className="space-y-3">
+                  {file.pages.map((page) => (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onClick={() => insertImportedPage(page)}
+                      className="w-full rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
+                    >
+                      <DesignMiniPreview nodes={page.nodes} className="mb-3 h-[132px]" />
+                      <div className="flex items-center gap-2">
+                        <FileText className="size-4 text-[#246bfe]" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{page.name}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-[#777]">{page.nodes.length} 个节点，点击复制成新页面</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {leftTab === "assets" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="mb-2 text-sm font-semibold">图片资源</div>
+              <div className="mb-4 text-xs leading-5 text-[#777]">Sketch 里解析出的 bitmap / assets 会显示在这里。点击插入，或拖到画布指定位置。</div>
+              {file.importedAssets?.length ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {file.importedAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      draggable
+                      onDragStart={(event) => startDragPayload(event, { kind: "asset", asset })}
+                      onClick={() => insertImportedAsset(asset)}
+                      className="group rounded-2xl border border-[#ececef] bg-white p-2 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
+                    >
+                      <div className="flex h-28 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#f4f6fb,#fff)]">
+                        <img src={asset.url} alt={asset.name} className="max-h-full max-w-full object-contain" />
+                      </div>
+                      <div className="mt-2 truncate text-xs font-semibold">{asset.name}</div>
+                      <div className="mt-1 truncate text-[11px] text-[#777]">{asset.sourceRef ?? asset.mimeType}</div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[#d8d8de] bg-white p-5 text-sm leading-6 text-[#777]">
+                  还没有解析到图片资源。导入包含 bitmap 的 Sketch 文件后，这里会出现缩略图和图片地址。
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {leftTab === "prd" ? (
+            <div className="flex min-h-0 flex-1 flex-col p-4">
+              <div className="mb-3">
+                <div className="text-sm font-semibold">PRD 草稿</div>
+                <div className="mt-1 text-xs leading-5 text-[#777]">先承载 PRD 内容，后续从这里生成页面和 UI Schema。</div>
+              </div>
+              <Textarea
+                value={file.prdText}
+                onChange={(event) => updateFile((current) => ({ ...current, prdText: event.target.value }))}
+                className="min-h-0 flex-1 resize-none border-[#e4e4e7] bg-[#fafafa] leading-6"
+              />
+            </div>
+          ) : null}
+        </aside>
+
+        <main className="relative min-h-0 flex-1 overflow-hidden bg-[#f3f3f4]">
+          <div
+            ref={canvasViewportRef}
+            className={`h-full w-full touch-none ${tool === "hand" || isSpacePressed ? "cursor-grab" : tool === "select" ? "cursor-crosshair" : "cursor-default"}`}
+            style={{
+              backgroundImage: "linear-gradient(rgba(0,0,0,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.035) 1px, transparent 1px)",
+              backgroundSize: `${80 * zoom}px ${80 * zoom}px`,
+              backgroundPosition: `${pan.x}px ${pan.y}px`
+            }}
+            onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handleCanvasPointerMove}
+            onPointerUp={handleCanvasPointerEnd}
+            onPointerCancel={handleCanvasPointerEnd}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleCanvasDrop}
+            onWheel={(event) => {
+              if (event.metaKey || event.ctrlKey) {
+                event.preventDefault();
+                const rect = event.currentTarget.getBoundingClientRect();
+                handleZoom(zoom * (event.deltaY < 0 ? 1.08 : 0.92), {
+                  x: event.clientX - rect.left,
+                  y: event.clientY - rect.top
+                });
+              }
+            }}
+          >
+            <CanvasDesignRenderer nodes={renderedNodes} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
+            <div
+              className="pointer-events-none absolute origin-top-left"
+              style={{
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`
+              }}
+            >
+              {showSelectionBounds ? (
+                <SelectionBoundsView
+                  bounds={selectionBounds}
+                  onResizePointerDown={handleResizePointerDown}
+                />
+              ) : null}
+              {activeSelectionRect ? (
+                <div
+                  className="pointer-events-none absolute border border-[#246bfe] bg-[#246bfe]/10"
+                  style={{
+                    left: activeSelectionRect.x,
+                    top: activeSelectionRect.y,
+                    width: activeSelectionRect.width,
+                    height: activeSelectionRect.height,
+                    zIndex: 999999
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+          <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-3xl bg-white px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+            <ToolbarButton active={tool === "select"} label="选择" onClick={() => setTool("select")} icon={MousePointer2} />
+            <ToolbarButton active={tool === "hand"} label="平移" onClick={() => setTool("hand")} icon={Hand} />
+            <ToolbarButton active={rightTab === "prototype"} label="原型" onClick={() => setRightTab("prototype")} icon={Play} />
+            <div className="mx-1 h-7 w-px bg-[#e5e5e7]" />
+            <Button type="button" variant="ghost" size="sm" onClick={() => handleZoom(zoom - 0.1)}>缩小</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => handleZoom(zoom + 0.1)}>放大</Button>
+          </div>
+          <DesignMinimap
+            nodes={visibleNodes}
+            bounds={minimapBounds}
+            viewport={visibleSceneBounds}
+            onViewportChange={(nextViewport) => {
+              setPan({
+                x: -nextViewport.x * zoom,
+                y: -nextViewport.y * zoom
+              });
+            }}
+          />
+        </main>
+
+        <aside className="flex w-[320px] shrink-0 flex-col border-l border-[#e6e6e8] bg-white">
+          <div className="flex h-[54px] shrink-0 items-center border-b border-[#eeeeef] px-4">
+            {[
+              { id: "design", label: "设计" },
+              { id: "prototype", label: "原型" },
+              { id: "d2c", label: "D2C" }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setRightTab(tab.id as DesignRightTab)}
+                className={`mr-7 text-sm font-semibold ${rightTab === tab.id ? "text-[#171717]" : "text-[#777]"}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {rightTab === "design" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {selectedNode ? (
+                <div className="divide-y divide-[#eeeeef]">
+                  <InspectorSection title="图层">
+                    <Input value={selectedNode.name} onChange={(event) => updateNode(selectedNode.id, { name: event.target.value })} />
+                    <div className="mt-3 flex gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => updateNode(selectedNode.id, { visible: !selectedNode.visible })}>
+                        {selectedNode.visible ? <Eye className="mr-1 size-4" /> : <EyeOff className="mr-1 size-4" />}
+                        {selectedNode.visible ? "显示" : "隐藏"}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => updateNode(selectedNode.id, { locked: !selectedNode.locked })}>
+                        {selectedNode.locked ? <Lock className="mr-1 size-4" /> : <Unlock className="mr-1 size-4" />}
+                        {selectedNode.locked ? "锁定" : "未锁"}
+                      </Button>
+                    </div>
+                  </InspectorSection>
+                  <InspectorSection title="位置和尺寸">
+                    <div className="grid grid-cols-2 gap-3">
+                      <NumberField label="X" value={selectedNode.x} onChange={(value) => updateNode(selectedNode.id, { x: value })} />
+                      <NumberField label="Y" value={selectedNode.y} onChange={(value) => updateNode(selectedNode.id, { y: value })} />
+                      <NumberField label="W" value={selectedNode.width} onChange={(value) => updateNode(selectedNode.id, { width: value })} />
+                      <NumberField label="H" value={selectedNode.height} onChange={(value) => updateNode(selectedNode.id, { height: value })} />
+                    </div>
+                  </InspectorSection>
+                  <InspectorSection title="外观">
+                    <ColorField label="填充" value={selectedNode.fill} onChange={(value) => updateNode(selectedNode.id, { fill: value })} />
+                    <ColorField label="描边" value={selectedNode.stroke} onChange={(value) => updateNode(selectedNode.id, { stroke: value })} />
+                    <NumberField label="圆角" value={selectedNode.radius} onChange={(value) => updateNode(selectedNode.id, { radius: value })} />
+                  </InspectorSection>
+                  <InspectorSection title="文字">
+                    <Textarea value={selectedNode.text ?? ""} onChange={(event) => updateNode(selectedNode.id, { text: event.target.value })} className="min-h-24 resize-none" />
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <NumberField label="字号" value={selectedNode.fontSize} onChange={(value) => updateNode(selectedNode.id, { fontSize: value })} />
+                      <ColorField label="颜色" value={selectedNode.textColor} onChange={(value) => updateNode(selectedNode.id, { textColor: value })} />
+                    </div>
+                  </InspectorSection>
+                  <InspectorSection title="操作">
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={duplicateSelectedNode}>
+                        <Copy className="mr-1 size-4" />
+                        复制
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={deleteSelectedNode}>
+                        <Trash2 className="mr-1 size-4" />
+                        删除
+                      </Button>
+                    </div>
+                  </InspectorSection>
+                </div>
+              ) : (
+                <div className="p-5 text-sm leading-6 text-[#777]">
+                  选择画布里的组件后，可以在这里编辑位置、尺寸、颜色、圆角和文字。
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {rightTab === "prototype" ? (
+            <div className="p-5">
+              <div className="mb-2 text-sm font-semibold">原型交互</div>
+              <div className="text-sm leading-6 text-[#777]">第一版先预留页面跳转和弹窗交互入口，后续接入 PRD 到原型的自动生成。</div>
+              <Button type="button" variant="outline" className="mt-4 w-full justify-between" disabled>
+                点击后跳转
+                <ChevronDown className="size-4" />
+              </Button>
+            </div>
+          ) : null}
+
+          {rightTab === "d2c" ? (
+            <div className="p-5">
+              <div className="mb-2 text-sm font-semibold">React 导出</div>
+              <div className="text-sm leading-6 text-[#777]">后续把 UI Schema 映射到 React + Ant Design，目前先保留导出入口。</div>
+              <pre className="mt-4 overflow-auto rounded-2xl bg-[#101010] p-4 text-xs leading-6 text-[#d7f7d0]">
+{`<Button type="primary">
+  ${selectedNode?.text ?? "确认"}
+</Button>`}
+              </pre>
+            </div>
+          ) : null}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function SelectionBoundsView({
+  bounds,
+  onResizePointerDown
+}: {
+  bounds: RectBounds;
+  onResizePointerDown: (event: ReactPointerEvent<HTMLDivElement>, handle: ResizeHandle) => void;
+}) {
+  const handles: Array<{ id: ResizeHandle; className: string; cursor: string }> = [
+    { id: "nw", className: "-left-1.5 -top-1.5", cursor: "nwse-resize" },
+    { id: "ne", className: "-right-1.5 -top-1.5", cursor: "nesw-resize" },
+    { id: "sw", className: "-bottom-1.5 -left-1.5", cursor: "nesw-resize" },
+    { id: "se", className: "-bottom-1.5 -right-1.5", cursor: "nwse-resize" }
+  ];
+
+  return (
+    <div
+      className="pointer-events-none absolute border border-[#246bfe]"
+      style={{
+        left: bounds.x,
+        top: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        zIndex: 1000000
+      }}
+    >
+      {handles.map((handle) => (
+        <div
+          key={handle.id}
+          className={`pointer-events-auto absolute size-3 rounded-full border border-white bg-[#246bfe] ${handle.className}`}
+          style={{ cursor: handle.cursor }}
+          onPointerDown={(event) => onResizePointerDown(event, handle.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+const canvasImageCache = new Map<string, { image: HTMLImageElement; loaded: boolean; failed: boolean }>();
+
+function CanvasDesignRenderer({
+  nodes,
+  width,
+  height,
+  pan,
+  zoom
+}: {
+  nodes: DesignNode[];
+  width: number;
+  height: number;
+  pan: { x: number; y: number };
+  zoom: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [, setImageRevision] = useState(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.save();
+    context.translate(pan.x, pan.y);
+    context.scale(zoom, zoom);
+    [...nodes]
+      .sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0))
+      .forEach((node) => drawDesignNodeOnCanvas(context, node, () => setImageRevision((current) => current + 1)));
+    context.restore();
+  }, [height, nodes, pan.x, pan.y, width, zoom]);
+
+  return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" />;
+}
+
+function DesignMinimap({
+  nodes,
+  bounds,
+  viewport,
+  onViewportChange
+}: {
+  nodes: DesignNode[];
+  bounds: RectBounds;
+  viewport: RectBounds;
+  onViewportChange: (viewport: MinimapViewport) => void;
+}) {
+  const minimapWidth = 220;
+  const minimapHeight = 150;
+  const scale = Math.min(minimapWidth / Math.max(1, bounds.width), minimapHeight / Math.max(1, bounds.height));
+  const contentWidth = bounds.width * scale;
+  const contentHeight = bounds.height * scale;
+  const offsetX = (minimapWidth - contentWidth) / 2;
+  const offsetY = (minimapHeight - contentHeight) / 2;
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+
+  const toMiniRect = (rect: RectBounds) => ({
+    x: offsetX + (rect.x - bounds.x) * scale,
+    y: offsetY + (rect.y - bounds.y) * scale,
+    width: Math.max(4, rect.width * scale),
+    height: Math.max(4, rect.height * scale)
+  });
+  const viewportRect = toMiniRect(viewport);
+
+  const miniPointToViewport = (clientX: number, clientY: number, target: HTMLDivElement, dragOffset?: { dx: number; dy: number }) => {
+    const rect = target.getBoundingClientRect();
+    const miniX = clientX - rect.left - offsetX - (dragOffset?.dx ?? viewportRect.width / 2);
+    const miniY = clientY - rect.top - offsetY - (dragOffset?.dy ?? viewportRect.height / 2);
+    onViewportChange({
+      ...viewport,
+      x: bounds.x + miniX / scale,
+      y: bounds.y + miniY / scale
+    });
+  };
+
+  return (
+    <div className="absolute bottom-6 left-5 z-20 rounded-2xl border border-white/70 bg-white/88 p-2 shadow-[0_18px_45px_rgba(0,0,0,0.18)] backdrop-blur">
+      <div
+        className="relative overflow-hidden rounded-xl bg-[#f7f7f8]"
+        style={{ width: minimapWidth, height: minimapHeight }}
+        onPointerDown={(event) => {
+          const target = event.currentTarget;
+          dragRef.current = { dx: viewportRect.width / 2, dy: viewportRect.height / 2 };
+          miniPointToViewport(event.clientX, event.clientY, target);
+          target.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (!dragRef.current) {
+            return;
+          }
+          miniPointToViewport(event.clientX, event.clientY, event.currentTarget, dragRef.current);
+        }}
+        onPointerUp={(event) => {
+          dragRef.current = null;
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
+        onPointerCancel={(event) => {
+          dragRef.current = null;
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
+      >
+        <div
+          className="absolute"
+          style={{
+            left: offsetX,
+            top: offsetY,
+            width: contentWidth,
+            height: contentHeight
+          }}
+        >
+          {nodes.slice(0, 1800).map((node) => {
+            const rect = toMiniRect(nodeToBounds(node));
+            return (
+              <div
+                key={node.id}
+                className="absolute rounded-[1px]"
+                style={{
+                  left: rect.x - offsetX,
+                  top: rect.y - offsetY,
+                  width: Math.max(1, rect.width),
+                  height: Math.max(1, rect.height),
+                  background: getMinimapNodeColor(node),
+                  opacity: node.type === "text" ? 0.55 : 0.72
+                }}
+              />
+            );
+          })}
+        </div>
+        <div
+          className="absolute rounded border-2 border-[#246bfe] bg-[#246bfe]/10 shadow-[0_0_0_1px_rgba(255,255,255,0.85)]"
+          style={{
+            left: viewportRect.x,
+            top: viewportRect.y,
+            width: viewportRect.width,
+            height: viewportRect.height
+          }}
+        />
+      </div>
+      <div className="mt-1 flex items-center justify-between px-1 text-[10px] font-medium text-[#777]">
+        <span>地图</span>
+        <span>{nodes.length} layers</span>
+      </div>
+    </div>
+  );
+}
+
+function DesignNodeView({
+  node,
+  selected,
+  onPointerDown
+}: {
+  node: DesignNode;
+  selected: boolean;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
+  const baseStyle: CSSProperties = {
+    left: node.x,
+    top: node.y,
+    width: node.width,
+    height: node.height,
+    background: node.svgPath ? "transparent" : node.fill || "transparent",
+    borderColor: selected ? "#246bfe" : node.stroke,
+    borderWidth: selected ? Math.max(1, node.strokeWidth ?? 1) : node.svgPath || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
+    borderRadius: node.radius,
+    color: node.textColor,
+    fontSize: node.fontSize,
+    lineHeight: node.lineHeight ? `${node.lineHeight}px` : undefined,
+    textAlign: node.textAlign ?? "left",
+    opacity: node.opacity ?? 1,
+    transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+    transformOrigin: "center center",
+    boxShadow: node.shadow || undefined,
+    zIndex: node.zIndex,
+    clipPath: getNodeClipPath(node)
+  };
+  const importedSketchNode = Boolean(node.sourceLayerClass);
+
+  return (
+    <div
+      className={`absolute select-none ${selected ? "ring-4 ring-[#246bfe]/20" : ""}`}
+      style={baseStyle}
+      onPointerDown={onPointerDown}
+    >
+      <div className={`pointer-events-none flex h-full w-full items-center justify-center overflow-hidden text-center font-medium ${node.type === "image" || importedSketchNode ? "p-0" : "p-3"}`}>
+        {node.svgPath ? (
+          <svg
+            className="h-full w-full overflow-visible"
+            viewBox={`0 0 ${Math.max(1, node.width)} ${Math.max(1, node.height)}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <path
+              d={node.svgPath}
+              fill={getSvgPaint(node.fill, "transparent")}
+              fillRule={node.svgFillRule ?? "nonzero"}
+              stroke={getSvgPaint(node.stroke, "none")}
+              strokeWidth={node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1)}
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+        ) : node.type === "table" && !importedSketchNode ? (
+          <div className="h-full w-full overflow-hidden rounded bg-white text-left text-[13px] text-[#333]">
+            <div className="grid grid-cols-3 bg-[#eef1f7] px-3 py-2 font-semibold">
+              <span>日期</span>
+              <span>姓名</span>
+              <span>状态</span>
+            </div>
+            {[1, 2, 3, 4].map((row) => (
+              <div key={row} className="grid grid-cols-3 border-t border-[#e5e7eb] px-3 py-2">
+                <span>2026-05-03</span>
+                <span>需求 {row}</span>
+                <span>进行中</span>
+              </div>
+            ))}
+          </div>
+        ) : node.type === "input" && !importedSketchNode ? (
+          <div className="w-full rounded-xl border border-[#d7d7dc] bg-white px-4 py-3 text-left text-[#9a9aa0]">{node.text || "请输入内容"}</div>
+        ) : node.type === "button" && !importedSketchNode ? (
+          <div className="rounded-xl bg-[#246bfe] px-5 py-3 text-white">{node.text || "按钮"}</div>
+        ) : node.type === "image" ? (
+          node.imageUrl ? (
+            <img src={node.imageUrl} alt={node.name} className="h-full w-full rounded-[inherit] object-fill" draggable={false} />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,#f0f4ff,#fff)] text-[#6b7280]">Image</div>
+          )
+        ) : (
+          <span className={`max-h-full w-full overflow-hidden whitespace-pre-wrap break-words ${importedSketchNode ? "px-0.5" : ""}`}>{node.text || (importedSketchNode ? "" : node.name)}</span>
+        )}
+      </div>
+      {selected ? (
+        <div className="pointer-events-none">
+          <div className="absolute -top-8 left-0 rounded-lg bg-[#246bfe] px-2 py-1 text-xs font-semibold text-white">{node.name}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; className?: string }) {
+  const bounds = getNodesBounds(nodes);
+  const scale = Math.min(1, 220 / bounds.width, 120 / bounds.height);
+
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border border-[#eeeeef] bg-[#f7f7f8] ${className}`}>
+      <div
+        className="absolute origin-top-left"
+        style={{
+          width: bounds.width,
+          height: bounds.height,
+          transform: `translate(${12 - bounds.x * scale}px, ${12 - bounds.y * scale}px) scale(${scale})`
+        }}
+      >
+        {nodes.filter((node) => node.visible !== false).map((node) => (
+          <div
+            key={node.id}
+            className="absolute overflow-hidden"
+            style={{
+              left: node.x,
+              top: node.y,
+              width: node.width,
+              height: node.height,
+              background: node.svgPath ? "transparent" : node.type === "image" && node.imageUrl ? `url(${node.imageUrl}) center / 100% 100% no-repeat` : node.fill || "transparent",
+              borderColor: node.stroke,
+              borderWidth: node.svgPath || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
+              borderRadius: Math.max(2, node.radius),
+              color: node.textColor,
+              fontSize: Math.max(10, node.fontSize),
+              lineHeight: node.lineHeight ? `${node.lineHeight}px` : undefined,
+              textAlign: node.textAlign ?? "left",
+              opacity: node.opacity ?? 1,
+              transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+              transformOrigin: "center center",
+              boxShadow: node.shadow || undefined,
+              zIndex: node.zIndex,
+              clipPath: getNodeClipPath(node)
+            }}
+          >
+            {node.svgPath ? (
+              <svg
+                className="h-full w-full overflow-visible"
+                viewBox={`0 0 ${Math.max(1, node.width)} ${Math.max(1, node.height)}`}
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  d={node.svgPath}
+                  fill={getSvgPaint(node.fill, "transparent")}
+                  fillRule={node.svgFillRule ?? "nonzero"}
+                  stroke={getSvgPaint(node.stroke, "none")}
+                  strokeWidth={node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1)}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            ) : node.type !== "image" && (node.text || node.name) ? (
+              <div className="flex h-full w-full items-center justify-center overflow-hidden p-2 text-center">
+                <span className="truncate">{node.text || node.name}</span>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
+  if (node.visible === false || node.width <= 0 || node.height <= 0) {
+    return;
+  }
+
+  context.save();
+  applyCanvasClip(context, node);
+  context.translate(node.x + node.width / 2, node.y + node.height / 2);
+  if (node.rotation) {
+    context.rotate(node.rotation * Math.PI / 180);
+  }
+  if (node.flippedHorizontal || node.flippedVertical) {
+    context.scale(node.flippedHorizontal ? -1 : 1, node.flippedVertical ? -1 : 1);
+  }
+  context.translate(-node.width / 2, -node.height / 2);
+  context.globalAlpha = node.opacity ?? 1;
+  context.globalCompositeOperation = (node.blendMode ?? "source-over") as GlobalCompositeOperation;
+  context.filter = node.blurRadius ? `blur(${node.blurRadius}px)` : "none";
+  context.shadowColor = "transparent";
+
+  if (node.svgPath) {
+    drawSvgPathNode(context, node);
+  } else if (node.type === "image" && node.imageUrl) {
+    drawImageNode(context, node, requestRedraw);
+  } else {
+    drawBoxNode(context, node, requestRedraw);
+    if (node.text) {
+      drawTextNode(context, node, node.text);
+    }
+  }
+
+  context.restore();
+}
+
+function applyCanvasClip(context: CanvasRenderingContext2D, node: DesignNode) {
+  if (node.clipBounds) {
+    context.beginPath();
+    context.rect(node.clipBounds.x, node.clipBounds.y, node.clipBounds.width, node.clipBounds.height);
+    context.clip();
+  }
+
+  if (node.clipPath?.svgPath) {
+    context.translate(node.clipPath.x, node.clipPath.y);
+    try {
+      context.clip(new Path2D(node.clipPath.svgPath), node.clipPath.fillRule === "evenodd" ? "evenodd" : "nonzero");
+    } catch {
+      context.translate(-node.clipPath.x, -node.clipPath.y);
+      return;
+    }
+    context.translate(-node.clipPath.x, -node.clipPath.y);
+  }
+}
+
+function drawSvgPathNode(context: CanvasRenderingContext2D, node: DesignNode) {
+  try {
+    const path = new Path2D(node.svgPath);
+    const fill = getCanvasFillStyle(context, node, node.fill);
+    const stroke = getCanvasPaint(node.stroke);
+    if (fill) {
+      context.fillStyle = fill;
+      context.fill(path, node.svgFillRule === "evenodd" ? "evenodd" : "nonzero");
+    }
+    if (stroke && (node.strokeWidth ?? 0) > 0) {
+      context.strokeStyle = stroke;
+      context.lineWidth = Math.max(0, node.strokeWidth ?? 1);
+      context.stroke(path);
+    }
+  } catch {
+    drawBoxNode(context, node);
+  }
+}
+
+function drawImageNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
+  const imageUrl = node.imageUrl;
+  if (!imageUrl) {
+    drawImageFallback(context, node);
+    return;
+  }
+
+  const cached = getCanvasImage(imageUrl, requestRedraw);
+  if (cached.loaded) {
+    context.drawImage(cached.image, 0, 0, node.width, node.height);
+  } else {
+    drawImageFallback(context, node);
+  }
+}
+
+function drawBoxNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
+  const fill = getCanvasFillStyle(context, node, node.fill);
+  const stroke = getCanvasPaint(node.stroke);
+  const radius = Math.max(0, Math.min(node.radius, node.width / 2, node.height / 2));
+  const path = roundedRectPath(0, 0, node.width, node.height, radius);
+  if (node.fillImageUrl) {
+    drawFillImage(context, node, path, requestRedraw);
+  }
+  if (fill) {
+    context.fillStyle = fill;
+    context.fill(path);
+  }
+  if (stroke && (node.strokeWidth ?? 0) > 0) {
+    context.strokeStyle = stroke;
+    context.lineWidth = Math.max(0, node.strokeWidth ?? 1);
+    context.stroke(path);
+  }
+}
+
+function drawFillImage(context: CanvasRenderingContext2D, node: DesignNode, path: Path2D, requestRedraw: () => void) {
+  const imageUrl = node.fillImageUrl;
+  if (!imageUrl) {
+    return;
+  }
+  const cached = getCanvasImage(imageUrl, requestRedraw);
+  if (!cached.loaded) {
+    return;
+  }
+  context.save();
+  context.clip(path);
+  context.drawImage(cached.image, 0, 0, node.width, node.height);
+  context.restore();
+}
+
+function drawImageFallback(context: CanvasRenderingContext2D, node: DesignNode) {
+  context.fillStyle = "#f3f4f6";
+  context.fill(roundedRectPath(0, 0, node.width, node.height, Math.min(12, node.radius)));
+  context.fillStyle = "#9ca3af";
+  context.font = "14px sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("Image", node.width / 2, node.height / 2);
+}
+
+function drawTextNode(context: CanvasRenderingContext2D, node: DesignNode, text: string) {
+  const fill = getCanvasPaint(node.textColor) || "#171717";
+  const lineHeight = node.lineHeight ?? node.fontSize * 1.35;
+  const font = getCanvasFont(node);
+  const lines = wrapCanvasText(context, text, Math.max(8, node.width - 12), font);
+  context.fillStyle = fill;
+  context.font = font;
+  if ("letterSpacing" in context) {
+    (context as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = node.letterSpacing ? `${node.letterSpacing}px` : "0px";
+  }
+  context.textAlign = node.textAlign === "right" ? "right" : node.textAlign === "center" ? "center" : "left";
+  context.textBaseline = "middle";
+  const x = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 : 6;
+  const totalHeight = lines.length * lineHeight;
+  const startY = Math.max(lineHeight / 2, node.height / 2 - totalHeight / 2 + lineHeight / 2);
+  lines.slice(0, Math.max(1, Math.floor(node.height / lineHeight))).forEach((line, index) => {
+    context.fillText(line, x, startY + index * lineHeight);
+  });
+}
+
+function getCanvasFont(node: DesignNode) {
+  const family = node.fontFamily ? `"${node.fontFamily}", "PingFang SC", "Microsoft YaHei", sans-serif` : `"PingFang SC", "Microsoft YaHei", sans-serif`;
+  return `${node.fontWeight ?? 400} ${node.fontSize}px ${family}`;
+}
+
+function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number, font: string) {
+  context.font = font;
+  const lines: string[] = [];
+  text.split("\n").forEach((paragraph) => {
+    let current = "";
+    Array.from(paragraph).forEach((char) => {
+      const next = `${current}${char}`;
+      if (current && context.measureText(next).width > maxWidth) {
+        lines.push(current);
+        current = char;
+      } else {
+        current = next;
+      }
+    });
+    lines.push(current);
+  });
+  return lines.length > 0 ? lines : [text];
+}
+
+function roundedRectPath(x: number, y: number, width: number, height: number, radius: number) {
+  const path = new Path2D();
+  path.moveTo(x + radius, y);
+  path.lineTo(x + width - radius, y);
+  path.quadraticCurveTo(x + width, y, x + width, y + radius);
+  path.lineTo(x + width, y + height - radius);
+  path.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  path.lineTo(x + radius, y + height);
+  path.quadraticCurveTo(x, y + height, x, y + height - radius);
+  path.lineTo(x, y + radius);
+  path.quadraticCurveTo(x, y, x + radius, y);
+  path.closePath();
+  return path;
+}
+
+function getCanvasImage(url: string, requestRedraw: () => void) {
+  const cached = canvasImageCache.get(url);
+  if (cached) {
+    return cached;
+  }
+
+  const image = new window.Image();
+  const next = { image, loaded: false, failed: false };
+  canvasImageCache.set(url, next);
+  image.onload = () => {
+    next.loaded = true;
+    requestRedraw();
+  };
+  image.onerror = () => {
+    next.failed = true;
+    requestRedraw();
+  };
+  image.src = url;
+  return next;
+}
+
+function getCanvasPaint(value: string | undefined) {
+  const paint = value?.trim();
+  if (!paint || paint === "transparent" || paint.startsWith("linear-gradient") || paint.startsWith("radial-gradient") || paint.startsWith("url(")) {
+    return "";
+  }
+  return paint;
+}
+
+function getMinimapNodeColor(node: DesignNode) {
+  if (node.type === "text") {
+    return "#5f6368";
+  }
+  if (node.type === "image" || node.imageUrl || node.fillImageUrl) {
+    return "#9db8ff";
+  }
+  const paint = node.fill?.trim();
+  if (paint && paint !== "transparent" && /^#|rgb|hsl/i.test(paint)) {
+    return paint;
+  }
+  if (node.svgPath) {
+    return "#4b5563";
+  }
+  return "#d8d8dd";
+}
+
+function getCanvasFillStyle(context: CanvasRenderingContext2D, node: DesignNode, value: string | undefined): string | CanvasGradient {
+  const paint = value?.trim();
+  if (!paint || paint === "transparent" || paint.startsWith("url(")) {
+    return "";
+  }
+  if (paint.startsWith("linear-gradient")) {
+    return createCanvasLinearGradient(context, node, paint) || "";
+  }
+  if (paint.startsWith("radial-gradient")) {
+    return createCanvasRadialGradient(context, node, paint) || "";
+  }
+  return paint;
+}
+
+function createCanvasLinearGradient(context: CanvasRenderingContext2D, node: DesignNode, value: string) {
+  const args = extractCssFunctionArgs(value);
+  if (args.length < 2) {
+    return undefined;
+  }
+  const firstArg = args[0];
+  const angle = firstArg.endsWith("deg") ? Number(firstArg.replace("deg", "")) : 180;
+  const stops = (firstArg.endsWith("deg") ? args.slice(1) : args).map(parseCssColorStop).filter(Boolean) as Array<{ color: string; position: number }>;
+  if (stops.length === 0) {
+    return undefined;
+  }
+
+  const radians = (angle - 90) * Math.PI / 180;
+  const length = Math.max(node.width, node.height);
+  const centerX = node.width / 2;
+  const centerY = node.height / 2;
+  const dx = Math.cos(radians) * length / 2;
+  const dy = Math.sin(radians) * length / 2;
+  const gradient = context.createLinearGradient(centerX - dx, centerY - dy, centerX + dx, centerY + dy);
+  stops.forEach((stop) => gradient.addColorStop(stop.position, stop.color));
+  return gradient;
+}
+
+function createCanvasRadialGradient(context: CanvasRenderingContext2D, node: DesignNode, value: string) {
+  const stops = extractCssFunctionArgs(value).map(parseCssColorStop).filter(Boolean) as Array<{ color: string; position: number }>;
+  if (stops.length === 0) {
+    return undefined;
+  }
+
+  const radius = Math.max(node.width, node.height) / 2;
+  const gradient = context.createRadialGradient(node.width / 2, node.height / 2, 0, node.width / 2, node.height / 2, radius);
+  stops.forEach((stop) => gradient.addColorStop(stop.position, stop.color));
+  return gradient;
+}
+
+function extractCssFunctionArgs(value: string) {
+  const start = value.indexOf("(");
+  const end = value.lastIndexOf(")");
+  if (start < 0 || end <= start) {
+    return [];
+  }
+  const content = value.slice(start + 1, end);
+  const args: string[] = [];
+  let depth = 0;
+  let current = "";
+  Array.from(content).forEach((char) => {
+    if (char === "(") depth += 1;
+    if (char === ")") depth -= 1;
+    if (char === "," && depth === 0) {
+      args.push(current.trim());
+      current = "";
+      return;
+    }
+    current += char;
+  });
+  if (current.trim()) {
+    args.push(current.trim());
+  }
+  return args;
+}
+
+function parseCssColorStop(value: string) {
+  const match = /^(?<color>.+?)\s+(?<position>-?\d+(?:\.\d+)?)%$/.exec(value.trim());
+  if (!match?.groups) {
+    return { color: value.trim(), position: 0 };
+  }
+  return {
+    color: match.groups.color.trim(),
+    position: Math.max(0, Math.min(1, Number(match.groups.position) / 100))
+  };
+}
+
+function getSvgPaint(value: string | undefined, fallback: string) {
+  const paint = value?.trim();
+  if (!paint || paint === "transparent") {
+    return fallback;
+  }
+  if (/^(#|rgb|hsl|currentColor|none)/i.test(paint)) {
+    return paint;
+  }
+  return fallback;
+}
+
+function getNodeClipPath(node: DesignNode) {
+  if (node.clipPath?.svgPath) {
+    const translatedPath = translateSvgPath(node.clipPath.svgPath, node.clipPath.x - node.x, node.clipPath.y - node.y);
+    return `path("${translatedPath}")`;
+  }
+
+  const clip = node.clipBounds;
+  if (!clip) {
+    return undefined;
+  }
+
+  const nodeBounds = nodeToBounds(node);
+  if (!rectsIntersect(clip, nodeBounds)) {
+    return "inset(50% 50% 50% 50%)";
+  }
+
+  const top = Math.max(0, clip.y - node.y);
+  const left = Math.max(0, clip.x - node.x);
+  const right = Math.max(0, node.x + node.width - (clip.x + clip.width));
+  const bottom = Math.max(0, node.y + node.height - (clip.y + clip.height));
+  return `inset(${top}px ${right}px ${bottom}px ${left}px)`;
+}
+
+function findTopDesignNodeAtPoint(nodes: DesignNode[], point: { x: number; y: number }) {
+  return [...nodes]
+    .map((node, index) => ({ node, index }))
+    .sort((first, second) => (second.node.zIndex ?? second.index) - (first.node.zIndex ?? first.index))
+    .find(({ node }) => pointInDesignNode(node, point))?.node ?? null;
+}
+
+function pointInDesignNode(node: DesignNode, point: { x: number; y: number }) {
+  if (!rectContainsPoint(nodeToBounds(node), point)) {
+    return false;
+  }
+  if (node.clipBounds && !rectContainsPoint(node.clipBounds, point)) {
+    return false;
+  }
+  if (node.clipPath && !rectContainsPoint(node.clipPath, point)) {
+    return false;
+  }
+  return true;
+}
+
+function rectContainsPoint(rect: RectBounds, point: { x: number; y: number }) {
+  return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
+}
+
+function translateSvgPath(path: string, offsetX: number, offsetY: number) {
+  const tokens = path.match(/[MLCZ]|-?\d+(?:\.\d+)?/g) ?? [];
+  const coordinateCounts: Record<string, number> = { M: 2, L: 2, C: 6, Z: 0 };
+  const output: string[] = [];
+  let command = "";
+  let numberIndex = 0;
+
+  tokens.forEach((token) => {
+    if (/^[MLCZ]$/.test(token)) {
+      command = token;
+      numberIndex = 0;
+      output.push(token);
+      return;
+    }
+
+    const numeric = Number(token);
+    const coordinateCount = coordinateCounts[command] ?? 0;
+    const isXCoordinate = coordinateCount > 0 && numberIndex % 2 === 0;
+    const translated = numeric + (isXCoordinate ? offsetX : offsetY);
+    output.push(String(Number(translated.toFixed(3))));
+    numberIndex += 1;
+  });
+
+  return output.join(" ");
+}
+
+function getNodesBounds(nodes: DesignNode[]) {
+  if (nodes.length === 0) {
+    return { x: 0, y: 0, width: 220, height: 120 };
+  }
+  const minX = Math.min(...nodes.map((node) => node.x));
+  const minY = Math.min(...nodes.map((node) => node.y));
+  const maxX = Math.max(...nodes.map((node) => node.x + node.width));
+  const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(120, maxX - minX + 24),
+    height: Math.max(80, maxY - minY + 24)
+  };
+}
+
+function expandBounds(bounds: RectBounds, padding: number): RectBounds {
+  return {
+    x: bounds.x - padding,
+    y: bounds.y - padding,
+    width: bounds.width + padding * 2,
+    height: bounds.height + padding * 2
+  };
+}
+
+function unionBounds(first: RectBounds, second: RectBounds): RectBounds {
+  const minX = Math.min(first.x, second.x);
+  const minY = Math.min(first.y, second.y);
+  const maxX = Math.max(first.x + first.width, second.x + second.width);
+  const maxY = Math.max(first.y + first.height, second.y + second.height);
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY)
+  };
+}
+
+function getNodesBoundsForSelection(nodes: DesignNode[]): RectBounds | null {
+  if (nodes.length === 0) {
+    return null;
+  }
+  const minX = Math.min(...nodes.map((node) => node.x));
+  const minY = Math.min(...nodes.map((node) => node.y));
+  const maxX = Math.max(...nodes.map((node) => node.x + node.width));
+  const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY)
+  };
+}
+
+function normalizeRect(start: { x: number; y: number }, current: { x: number; y: number }): RectBounds {
+  const x = Math.min(start.x, current.x);
+  const y = Math.min(start.y, current.y);
+  return {
+    x,
+    y,
+    width: Math.abs(current.x - start.x),
+    height: Math.abs(current.y - start.y)
+  };
+}
+
+function nodeToBounds(node: DesignNode): RectBounds {
+  return {
+    x: node.x,
+    y: node.y,
+    width: node.width,
+    height: node.height
+  };
+}
+
+function rectsIntersect(a: RectBounds, b: RectBounds) {
+  return a.x <= b.x + b.width
+    && a.x + a.width >= b.x
+    && a.y <= b.y + b.height
+    && a.y + a.height >= b.y;
+}
+
+function resizeSelectionNodes(session: ResizeSession, point: { x: number; y: number }) {
+  const minSize = 6;
+  const originalRight = session.bounds.x + session.bounds.width;
+  const originalBottom = session.bounds.y + session.bounds.height;
+  const nextLeft = session.handle.includes("w") ? Math.min(point.x, originalRight - minSize) : session.bounds.x;
+  const nextTop = session.handle.includes("n") ? Math.min(point.y, originalBottom - minSize) : session.bounds.y;
+  const nextRight = session.handle.includes("e") ? Math.max(point.x, session.bounds.x + minSize) : originalRight;
+  const nextBottom = session.handle.includes("s") ? Math.max(point.y, session.bounds.y + minSize) : originalBottom;
+  const nextWidth = Math.max(minSize, nextRight - nextLeft);
+  const nextHeight = Math.max(minSize, nextBottom - nextTop);
+  const scaleX = nextWidth / Math.max(1, session.bounds.width);
+  const scaleY = nextHeight / Math.max(1, session.bounds.height);
+  const patchByNodeId = new Map<string, Partial<DesignNode>>();
+
+  session.originals.forEach((node) => {
+    patchByNodeId.set(node.id, {
+      x: Math.round(nextLeft + (node.x - session.bounds.x) * scaleX),
+      y: Math.round(nextTop + (node.y - session.bounds.y) * scaleY),
+      width: Math.max(minSize, Math.round(node.width * scaleX)),
+      height: Math.max(minSize, Math.round(node.height * scaleY))
+    });
+  });
+
+  return patchByNodeId;
+}
+
+function ToolbarButton({
+  active,
+  label,
+  icon: Icon,
+  onClick
+}: {
+  active: boolean;
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+}) {
+  return (
+    <Button type="button" variant="ghost" size="sm" className={`gap-1 ${active ? "bg-[#eaf1ff] text-[#246bfe] hover:bg-[#eaf1ff]" : ""}`} onClick={onClick}>
+      <Icon className="size-4" />
+      <span className="hidden xl:inline">{label}</span>
+    </Button>
+  );
+}
+
+function InspectorSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="p-5">
+      <div className="mb-3 text-sm font-semibold">{title}</div>
+      {children}
+    </section>
+  );
+}
+
+function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-[#777]">{label}</span>
+      <Input type="number" value={value} onChange={(event) => onChange(Number(event.target.value) || 0)} />
+    </label>
+  );
+}
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="mb-3 grid grid-cols-[80px_1fr] items-center gap-3">
+      <span className="text-xs font-medium text-[#777]">{label}</span>
+      <div className="flex items-center gap-2 rounded-xl border border-[#e4e4e7] px-3 py-2">
+        <input type="color" value={normalizeColor(value)} onChange={(event) => onChange(event.target.value)} className="size-7 rounded border-0 bg-transparent p-0" />
+        <Input value={value} onChange={(event) => onChange(event.target.value)} className="h-8 border-0 px-0 shadow-none focus-visible:ring-0" />
+      </div>
+    </label>
+  );
+}
+
+function nodeIcon(type: DesignNodeType) {
+  const className = "size-4 shrink-0";
+  if (type === "text") return <Type className={className} />;
+  if (type === "table") return <Table2 className={className} />;
+  if (type === "image") return <Image className={className} />;
+  if (type === "button") return <RectangleHorizontal className={className} />;
+  if (type === "frame") return <Frame className={className} />;
+  return <Box className={className} />;
+}
+
+function loadDesignFile(storageKey: string, projectName: string): AiDesignFile {
+  const stored = window.localStorage.getItem(storageKey);
+  if (stored) {
+    try {
+      return normalizeDesignFile(JSON.parse(stored), projectName);
+    } catch {}
+  }
+  return createInitialDesignFile(projectName);
+}
+
+function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile {
+  const fallback = createInitialDesignFile(projectName);
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+
+  const source = value as Partial<AiDesignFile>;
+  const pages = Array.isArray(source.pages) && source.pages.length > 0
+    ? source.pages
+    : fallback.pages;
+
+  return {
+    ...fallback,
+    ...source,
+    id: source.id ?? fallback.id,
+    name: source.name ?? fallback.name,
+    prdText: source.prdText ?? fallback.prdText,
+    pages,
+    importedComponents: Array.isArray(source.importedComponents) ? source.importedComponents : [],
+    importedAssets: Array.isArray(source.importedAssets) ? source.importedAssets : [],
+    updatedAt: source.updatedAt ?? fallback.updatedAt
+  };
+}
+
+function createInitialDesignFile(projectName: string): AiDesignFile {
+  const now = new Date().toISOString();
+  return {
+    id: createId("design"),
+    name: `${projectName} AI Design`,
+    prdText: "这里承载当前项目的 PRD 草稿。后续 AI 会根据 PRD 生成页面清单、UI Schema 和可编辑画布。",
+    updatedAt: now,
+    importedComponents: [],
+    importedAssets: [],
+    pages: [
+      {
+        id: createId("page"),
+        name: "页面 1",
+        nodes: [
+          createNode("frame", { x: 520, y: 260, name: "分区 1", width: 360, height: 210, fill: "#f2f2f3", text: "分区 1" }),
+          createNode("container", { x: 615, y: 325, name: "容器 3", width: 190, height: 130, fill: "#c52b32", stroke: "#c52b32", text: "" }),
+          createNode("container", { x: 960, y: 290, name: "容器 4", width: 118, height: 150, fill: "#ffffff", stroke: "#ffffff", text: "" }),
+          createNode("table", { x: 520, y: 670, name: "表格/多内容/两行", width: 520, height: 270, fill: "#ffffff", text: "" })
+        ]
+      }
+    ]
+  };
+}
+
+function createNode(type: DesignNodeType, overrides: Partial<DesignNode> = {}): DesignNode {
+  const base: DesignNode = {
+    id: createId("node"),
+    type,
+    name: defaultNodeName(type),
+    x: 420,
+    y: 320,
+    width: type === "text" ? 220 : type === "table" ? 520 : type === "input" ? 260 : 180,
+    height: type === "text" ? 64 : type === "table" ? 270 : type === "button" ? 64 : 120,
+    fill: type === "button" ? "#246bfe" : type === "text" ? "transparent" : "#ffffff",
+    stroke: type === "text" ? "transparent" : "#d8d8dd",
+    radius: type === "button" || type === "input" ? 14 : 8,
+    text: defaultNodeText(type),
+    textColor: type === "button" ? "#ffffff" : "#171717",
+    fontSize: type === "text" ? 22 : 14,
+    visible: true,
+    locked: false
+  };
+  return { ...base, ...overrides };
+}
+
+function defaultNodeName(type: DesignNodeType) {
+  return {
+    frame: "Frame",
+    container: "Container",
+    text: "Text",
+    button: "Button",
+    input: "Input",
+    table: "Table",
+    card: "Card",
+    image: "Image"
+  }[type];
+}
+
+function defaultNodeText(type: DesignNodeType) {
+  return {
+    frame: "Frame",
+    container: "Container",
+    text: "输入文字",
+    button: "确认",
+    input: "请输入内容",
+    table: "",
+    card: "Card",
+    image: ""
+  }[type];
+}
+
+function createId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeColor(value: string) {
+  if (/^#[0-9a-f]{6}$/i.test(value)) {
+    return value;
+  }
+  return "#ffffff";
+}

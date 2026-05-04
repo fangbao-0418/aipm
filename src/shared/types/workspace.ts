@@ -42,6 +42,100 @@ export interface WorkspaceArtifact {
   updatedAt: string;
 }
 
+export type WorkspaceDesignNodeType =
+  | "frame"
+  | "container"
+  | "text"
+  | "button"
+  | "input"
+  | "table"
+  | "card"
+  | "image";
+
+export interface WorkspaceDesignNode {
+  id: string;
+  type: WorkspaceDesignNodeType;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fill: string;
+  stroke: string;
+  strokeWidth?: number;
+  radius: number;
+  text?: string;
+  textColor: string;
+  fontSize: number;
+  lineHeight?: number;
+  textAlign?: "left" | "center" | "right" | "justify";
+  visible: boolean;
+  locked: boolean;
+  imageUrl?: string;
+  fillImageUrl?: string;
+  svgPath?: string;
+  svgFillRule?: "nonzero" | "evenodd";
+  clipBounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  clipPath?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    svgPath: string;
+    fillRule?: "nonzero" | "evenodd";
+  };
+  sourceRef?: string;
+  sourceLayerClass?: string;
+  opacity?: number;
+  rotation?: number;
+  blendMode?: string;
+  blurRadius?: number;
+  fontFamily?: string;
+  fontWeight?: number;
+  letterSpacing?: number;
+  flippedHorizontal?: boolean;
+  flippedVertical?: boolean;
+  shadow?: string;
+  zIndex?: number;
+}
+
+export interface WorkspaceDesignPage {
+  id: string;
+  name: string;
+  nodes: WorkspaceDesignNode[];
+}
+
+export interface WorkspaceDesignComponent {
+  id: string;
+  name: string;
+  sourceFileName: string;
+  nodeCount: number;
+  nodes: WorkspaceDesignNode[];
+}
+
+export interface WorkspaceDesignAsset {
+  id: string;
+  name: string;
+  sourceFileName: string;
+  type: "image";
+  mimeType: string;
+  url: string;
+  sourceRef?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface WorkspaceDesignImportResult {
+  pages: WorkspaceDesignPage[];
+  components: WorkspaceDesignComponent[];
+  assets: WorkspaceDesignAsset[];
+}
+
 export interface WorkspaceStage {
   type: WorkspaceStageType;
   name: string;
@@ -200,6 +294,44 @@ export interface WorkspaceStageDocumentVersion {
   summary: string;
   documentMarkdown: string;
   documentHtml: string;
+}
+
+export interface WorkspaceProjectDocument {
+  id: string;
+  projectId: string;
+  title: string;
+  sortOrder: number;
+  deleted: boolean;
+  contentBlocks: unknown[];
+  contentHtml: string;
+  contentText: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceProjectDocumentMeta {
+  id: string;
+  projectId: string;
+  title: string;
+  sortOrder: number;
+  deleted: boolean;
+  contentFilePath: string;
+  htmlFilePath: string;
+  textFilePath: string;
+  latestVersionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceProjectDocumentVersion {
+  id: string;
+  documentId: string;
+  projectId: string;
+  versionNumber: number;
+  source: "manual" | "ai" | "import" | "rollback";
+  summary: string;
+  snapshotFilePath: string;
+  createdAt: string;
 }
 
 export interface WorkspaceStagePlanInput {

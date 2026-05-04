@@ -1,0 +1,464 @@
+好，这一步是你整个系统的**地基**，我给你一套**可生产使用的 Schema v2 设计**，目标是：
+
+> ✅ 一份 Schema → 可编辑 → 可被 AI 修改 → 可映射 React / Vue / Flutter / iOS / Android
+
+我不会给你“理想模型”，而是给你**能落地 + 能扩展 + 不会后期推翻**的版本。
+
+***
+
+# 一、设计原则（先统一思想）
+
+### 1️⃣ 单一数据源
+
+> Schema = 唯一真相（SSOT）
+
+* UI、PRD、代码生成全部依赖它
+
+* 不允许 UI 直接写死逻辑
+
+***
+
+### 2️⃣ 强约束 + 弱扩展
+
+👉 必须保证：
+
+* 结构稳定（AI不会乱生成）
+
+* 同时允许扩展（跨端差异）
+
+***
+
+### 3️⃣ 分层设计（非常关键）
+
+Schema v2 拆成 5 层：
+
+```text
+Meta（元信息）
+Tree（结构）
+Layout（布局）
+Props（属性）
+Style（样式）
+Interaction（交互）
+```
+
+***
+
+# 二、Schema v2 总体结构
+
+```json
+{
+  "version": "2.0",
+  "meta": {},
+  "pages": []
+}
+```
+
+***
+
+# 三、Page 结构
+
+```json
+{
+  "id": "page_home",
+  "name": "首页",
+  "route": "/home",
+  "children": [],
+  "layout": {},
+  "style": {}
+}
+```
+
+***
+
+# 四、Node（组件节点）结构（核心）
+
+```json
+{
+  "id": "node_xxx",
+  "type": "Button",
+  "name": "提交按钮",
+
+  "props": {},
+  "style": {},
+  "layout": {},
+  "interaction": {},
+
+  "children": []
+}
+```
+
+***
+
+# 五、核心字段设计（逐个拆）
+
+***
+
+## 5.1 type（组件类型）
+
+```json
+"type": "Button"
+```
+
+👉 必须是“抽象组件”，不能是具体实现
+
+***
+
+## 5.2 props（跨端逻辑属性）
+
+👉 和 UI 框架无关
+
+```json
+"props": {
+  "text": "提交",
+  "disabled": false
+}
+```
+
+***
+
+## 5.3 style（视觉层）
+
+统一设计：
+
+```json
+"style": {
+  "width": 120,
+  "height": 40,
+  "padding": [8, 16],
+  "margin": [0, 0, 0, 0],
+
+  "backgroundColor": "#1890ff",
+  "borderRadius": 8,
+
+  "fontSize": 14,
+  "color": "#fff",
+
+  "shadow": {
+    "x": 0,
+    "y": 2,
+    "blur": 6,
+    "color": "rgba(0,0,0,0.2)"
+  }
+}
+```
+
+***
+
+## 5.4 layout（布局层）
+
+👉 支持两种模式（关键）
+
+***
+
+### 🧠 模式1：绝对布局（原型工具）
+
+```json
+"layout": {
+  "mode": "absolute",
+  "x": 100,
+  "y": 200,
+  "zIndex": 1
+}
+```
+
+***
+
+### 🧠 模式2：流式布局（代码生成用）
+
+```json
+"layout": {
+  "mode": "flex",
+  "direction": "row",
+  "justify": "center",
+  "align": "center",
+  "gap": 8
+}
+```
+
+***
+
+👉 ⚠️ 核心设计：
+
+> **编辑器用 absolute，生成代码用 flex**
+
+***
+
+## 5.5 interaction（交互层）
+
+```json
+"interaction": {
+  "onClick": {
+    "type": "navigate",
+    "target": "/detail"
+  }
+}
+```
+
+***
+
+支持：
+
+* navigate（跳转）
+
+* setState
+
+* apiCall（未来）
+
+***
+
+## 5.6 children（组件树）
+
+```json
+"children": []
+```
+
+👉 支持嵌套
+
+***
+
+# 六、组件抽象层（跨端关键）
+
+你必须定义一套“统一组件协议”👇
+
+***
+
+## 核心组件类型（建议 v1）
+
+```text
+Container
+Text
+Image
+Button
+Input
+List
+Card
+Navbar
+TabBar
+```
+
+***
+
+👉 这些是“跨端最小公约数”
+
+***
+
+# 七、跨端映射设计（重点）
+
+***
+
+## 7.1 React 映射
+
+```json
+{
+  "type": "Button"
+}
+```
+
+↓
+
+```jsx
+<button>提交</button>
+```
+
+***
+
+## 7.2 Vue 映射
+
+```vue
+<button>提交</button>
+```
+
+***
+
+## 7.3 Flutter 映射
+
+```dart
+ElevatedButton(
+  onPressed: () {},
+  child: Text("提交"),
+)
+```
+
+***
+
+👉 关键点：
+
+> Schema 不关心实现，只关心语义
+
+***
+
+# 八、D2C 引擎设计（核心）
+
+***
+
+## Pipeline：
+
+```text
+Schema
+ ↓
+AST（中间层）
+ ↓
+Renderer（不同端）
+ ↓
+Code
+```
+
+***
+
+## AST 示例
+
+```json
+{
+  "component": "Button",
+  "props": {},
+  "children": []
+}
+```
+
+***
+
+👉 好处：
+
+* 解耦 Schema 和代码
+
+* 支持多端
+
+***
+
+# 九、AI Patch 设计（必须支持）
+
+***
+
+## Patch结构
+
+```json
+{
+  "action": "update",
+  "targetId": "node_1",
+  "payload": {
+    "style.backgroundColor": "#ff0000"
+  }
+}
+```
+
+***
+
+支持：
+
+* add
+
+* update
+
+* delete
+
+***
+
+👉 AI只输出 patch，不改全量
+
+***
+
+# 十、扩展能力（为未来留口子）
+
+***
+
+## 10.1 平台差异（关键）
+
+```json
+"platform": {
+  "react": {},
+  "flutter": {},
+  "ios": {},
+  "android": {}
+}
+```
+
+***
+
+👉 用来处理：
+
+* Flutter 特殊属性
+
+* iOS safe area
+
+***
+
+## 10.2 状态管理（进阶）
+
+```json
+"state": {
+  "loading": false
+}
+```
+
+***
+
+# 十一、一个完整示例
+
+```json
+{
+  "id": "btn_1",
+  "type": "Button",
+
+  "props": {
+    "text": "购买"
+  },
+
+  "style": {
+    "width": 120,
+    "height": 40,
+    "backgroundColor": "#ff4d4f",
+    "borderRadius": 6,
+    "color": "#fff"
+  },
+
+  "layout": {
+    "mode": "absolute",
+    "x": 100,
+    "y": 300
+  },
+
+  "interaction": {
+    "onClick": {
+      "type": "navigate",
+      "target": "/detail"
+    }
+  }
+}
+```
+
+***
+
+# 十二、这套 Schema 的优势
+
+✅ 可被 AI 稳定生成 ✅ 可编辑（拖拽就是改 layout） ✅ 可跨端 ✅ 支持局部修改 ✅ 可扩展
+
+***
+
+# 十三、你接下来必须做的两件事
+
+***
+
+## 1️⃣ 定义组件映射表（非常关键）
+
+```ts
+Button → ReactButton
+Button → FlutterButton
+```
+
+***
+
+## 2️⃣ 写一个 Renderer（先做 React）
+
+👉 输入 Schema → 渲染页面
+
+***
+
+# 十四、一句话总结
+
+> 👉 Schema v2 的本质是：**“跨端 UI 的中间语言（DSL）”**
+
+***
+
+如果你要继续，我可以帮你下一步👇
+
+👉 出一份「React Renderer 实现（可直接跑）」 👉 或「AI Prompt 模板（保证生成100%符合Schema）」

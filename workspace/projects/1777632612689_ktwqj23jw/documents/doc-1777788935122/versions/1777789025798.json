@@ -1,0 +1,43 @@
+{
+  "id": "doc-1777788935122",
+  "projectId": "1777632612689_ktwqj23jw",
+  "title": "未命名文档 1",
+  "sortOrder": 1,
+  "deleted": false,
+  "contentBlocks": [
+    {
+      "id": "95362fe1-a6eb-46ee-8c49-3c2414764c24",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "3",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "18db15c6-a340-46ff-886f-6eb17593aa24",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [],
+      "children": []
+    }
+  ],
+  "contentHtml": "<div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"95362fe1-a6eb-46ee-8c49-3c2414764c24\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"95362fe1-a6eb-46ee-8c49-3c2414764c24\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">3</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"18db15c6-a340-46ff-886f-6eb17593aa24\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"18db15c6-a340-46ff-886f-6eb17593aa24\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\"><span class=\"ProseMirror-trailingBreak\" style=\"display: inline-block;\"></span></p></div></div></div></div>",
+  "contentText": "3\n",
+  "createdAt": "2026-05-03T06:15:35.122Z",
+  "updatedAt": "2026-05-03T06:17:05.796Z",
+  "source": "manual",
+  "versionNumber": 3
+}

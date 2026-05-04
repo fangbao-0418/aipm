@@ -6,7 +6,9 @@ import type {
   Stage,
   StageDocumentVersion,
   StageTaskPlan,
-  StageType
+  StageType,
+  WorkspaceRequirementDocument,
+  WorkspaceRequirementDocumentVersion
 } from "../types";
 
 export interface WorkspaceBundleResponse {
@@ -24,6 +26,124 @@ export interface WorkspaceLlmSettingsUpdateResponse {
     baseUrl: string;
     message: string;
   };
+}
+
+export type WorkspaceDesignNodeType =
+  | "frame"
+  | "container"
+  | "text"
+  | "button"
+  | "input"
+  | "table"
+  | "card"
+  | "image";
+
+export interface WorkspaceDesignNode {
+  id: string;
+  type: WorkspaceDesignNodeType;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fill: string;
+  stroke: string;
+  strokeWidth?: number;
+  radius: number;
+  text?: string;
+  textColor: string;
+  fontSize: number;
+  lineHeight?: number;
+  textAlign?: "left" | "center" | "right" | "justify";
+  visible: boolean;
+  locked: boolean;
+  imageUrl?: string;
+  fillImageUrl?: string;
+  svgPath?: string;
+  svgFillRule?: "nonzero" | "evenodd";
+  clipBounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  clipPath?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    svgPath: string;
+    fillRule?: "nonzero" | "evenodd";
+  };
+  sourceRef?: string;
+  sourceLayerClass?: string;
+  opacity?: number;
+  rotation?: number;
+  blendMode?: string;
+  blurRadius?: number;
+  fontFamily?: string;
+  fontWeight?: number;
+  letterSpacing?: number;
+  flippedHorizontal?: boolean;
+  flippedVertical?: boolean;
+  shadow?: string;
+  zIndex?: number;
+}
+
+export interface WorkspaceDesignPage {
+  id: string;
+  name: string;
+  nodes: WorkspaceDesignNode[];
+}
+
+export interface WorkspaceDesignComponent {
+  id: string;
+  name: string;
+  sourceFileName: string;
+  nodeCount: number;
+  nodes: WorkspaceDesignNode[];
+}
+
+export interface WorkspaceDesignAsset {
+  id: string;
+  name: string;
+  sourceFileName: string;
+  type: "image";
+  mimeType: string;
+  url: string;
+  sourceRef?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface WorkspaceDesignImportResult {
+  pages: WorkspaceDesignPage[];
+  components: WorkspaceDesignComponent[];
+  assets: WorkspaceDesignAsset[];
+}
+
+interface WorkspaceDocumentApiRecord {
+  id: string;
+  projectId: string;
+  title: string;
+  sortOrder: number;
+  deleted: boolean;
+  contentBlocks: unknown[];
+  contentHtml: string;
+  contentText: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface WorkspaceDocumentVersionApiRecord {
+  id: string;
+  documentId: string;
+  projectId: string;
+  versionNumber: number;
+  source: "manual" | "ai" | "import" | "rollback";
+  summary: string;
+  snapshotFilePath: string;
+  createdAt: string;
 }
 
 interface BundleStreamStartedEvent {
@@ -417,6 +537,20 @@ export async function uploadRequirementFiles(projectId: string, files: File[]) {
   return response.json() as Promise<WorkspaceBundleResponse>;
 }
 
+export async function importAiDesignFile(projectId: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`/api/workspace/projects/${projectId}/design/import`, {
+    method: "POST",
+    body: formData
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  return response.json() as Promise<WorkspaceDesignImportResult>;
+}
+
 export function getWorkspaceSourceFileUrl(projectId: string, fileId: string) {
   return `/api/workspace/projects/${projectId}/intake/files/${fileId}`;
 }
@@ -515,6 +649,75 @@ export async function updateWorkspaceLlmSettings(
   });
 }
 
+export async function listWorkspaceDocuments(projectId: string) {
+  const response = await requestJson<WorkspaceDocumentApiRecord[]>(`/api/workspace/projects/${projectId}/documents`);
+  return response.filter((document) => !document.deleted).map(mapWorkspaceDocumentRecord);
+}
+
+export async function createWorkspaceDocument(projectId: string, input?: { title?: string }) {
+  const response = await requestJson<WorkspaceDocumentApiRecord>(`/api/workspace/projects/${projectId}/documents`, {
+    method: "POST",
+    body: JSON.stringify(input ?? {})
+  });
+  return mapWorkspaceDocumentRecord(response);
+}
+
+export async function getWorkspaceDocument(projectId: string, documentId: string) {
+  const response = await requestJson<WorkspaceDocumentApiRecord>(`/api/workspace/projects/${projectId}/documents/${documentId}`);
+  return mapWorkspaceDocumentRecord(response);
+}
+
+export async function saveWorkspaceDocument(
+  projectId: string,
+  documentId: string,
+  document: WorkspaceRequirementDocument
+) {
+  const response = await requestJson<WorkspaceDocumentApiRecord>(`/api/workspace/projects/${projectId}/documents/${documentId}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      title: document.title,
+      sortOrder: document.sortOrder ?? 0,
+      contentBlocks: document.contentBlocks ?? [{ type: "paragraph", content: "" }],
+      contentHtml: document.contentHtml,
+      contentText: document.contentText
+    })
+  });
+  return mapWorkspaceDocumentRecord(response);
+}
+
+export async function deleteWorkspaceDocument(projectId: string, documentId: string) {
+  return requestJson<{ ok: true; projectId: string; documentId: string }>(`/api/workspace/projects/${projectId}/documents/${documentId}`, {
+    method: "DELETE"
+  });
+}
+
+export async function reorderWorkspaceDocuments(projectId: string, orderedIds: string[]) {
+  const response = await requestJson<WorkspaceDocumentApiRecord[]>(`/api/workspace/projects/${projectId}/documents/order`, {
+    method: "PUT",
+    body: JSON.stringify({ orderedIds })
+  });
+  return response.filter((document) => !document.deleted).map(mapWorkspaceDocumentRecord);
+}
+
+export async function listWorkspaceDocumentVersions(projectId: string, documentId: string) {
+  const response = await requestJson<WorkspaceDocumentVersionApiRecord[]>(`/api/workspace/projects/${projectId}/documents/${documentId}/versions`);
+  return response.map(mapWorkspaceDocumentVersionRecord);
+}
+
+export async function getWorkspaceDocumentVersion(projectId: string, documentId: string, versionId: string) {
+  const response = await requestJson<WorkspaceDocumentApiRecord & { versionNumber?: number; source?: string }>(
+    `/api/workspace/projects/${projectId}/documents/${documentId}/versions/${versionId}`
+  );
+  return mapWorkspaceDocumentRecord(response);
+}
+
+export async function restoreWorkspaceDocumentVersion(projectId: string, documentId: string, versionId: string) {
+  const response = await requestJson<WorkspaceDocumentApiRecord>(`/api/workspace/projects/${projectId}/documents/${documentId}/versions/${versionId}/restore`, {
+    method: "POST"
+  });
+  return mapWorkspaceDocumentRecord(response);
+}
+
 export async function saveRequirementStructureDocument(projectId: string, document: string) {
   return requestJson<WorkspaceBundleResponse>(`/api/workspace/projects/${projectId}/requirement-structure/document`, {
     method: "PUT",
@@ -608,4 +811,28 @@ function findSseBoundary(buffer: string) {
   return crlfIndex < lfIndex
     ? { index: crlfIndex, length: 4 }
     : { index: lfIndex, length: 2 };
+}
+
+function mapWorkspaceDocumentRecord(document: WorkspaceDocumentApiRecord): WorkspaceRequirementDocument {
+  return {
+    id: document.id,
+    title: document.title,
+    sortOrder: document.sortOrder,
+    contentBlocks: document.contentBlocks,
+    contentHtml: document.contentHtml,
+    contentText: document.contentText,
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt
+  };
+}
+
+function mapWorkspaceDocumentVersionRecord(version: WorkspaceDocumentVersionApiRecord): WorkspaceRequirementDocumentVersion {
+  return {
+    id: version.id,
+    documentId: version.documentId,
+    versionNumber: version.versionNumber,
+    source: version.source,
+    summary: version.summary,
+    createdAt: version.createdAt
+  };
 }

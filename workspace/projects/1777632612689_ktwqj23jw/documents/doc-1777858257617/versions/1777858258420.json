@@ -1,0 +1,26 @@
+{
+  "id": "doc-1777858257617",
+  "projectId": "1777632612689_ktwqj23jw",
+  "title": "未命名文档 4",
+  "sortOrder": 1,
+  "deleted": false,
+  "contentBlocks": [
+    {
+      "id": "b37465fa-5559-4ad9-88cb-c87b51e42b59",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [],
+      "children": []
+    }
+  ],
+  "contentHtml": "<div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b37465fa-5559-4ad9-88cb-c87b51e42b59\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b37465fa-5559-4ad9-88cb-c87b51e42b59\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\"><span class=\"ProseMirror-trailingBreak\" style=\"display: inline-block;\"></span></p></div></div></div></div>",
+  "contentText": "",
+  "createdAt": "2026-05-04T01:30:57.617Z",
+  "updatedAt": "2026-05-04T01:30:58.416Z",
+  "source": "manual",
+  "versionNumber": 2
+}

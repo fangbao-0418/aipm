@@ -1,0 +1,3799 @@
+[
+  {
+    "id": "b37465fa-5559-4ad9-88cb-c87b51e42b59",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "可以。下面是 ",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "Sketch → Web 高还原渲染",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": " 需要解析的完整清单。 目标不是做低代码，而是：",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "导入 ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": ".sketch",
+        "styles": {
+          "code": true
+        }
+      },
+      {
+        "type": "text",
+        "text": " 后，在 Web 画布上尽可能还原视觉稿",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "38791492-6c67-48fb-aa70-78830f0e8579",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Sketch 文件本质是 ZIP，内部有 JSON 文档和 bitmap 等资源；官方也维护 Sketch 文件格式 schema / TypeScript 类型，可以作为解析依据。(",
+        "styles": {}
+      },
+      {
+        "type": "link",
+        "href": "https://developer.sketch.com/file-format/?utm_source=chatgpt.com",
+        "content": [
+          {
+            "type": "text",
+            "text": "Sketch Developers",
+            "styles": {}
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": ")",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7f1bac3a-6ac0-4101-b9dc-2767578bde56",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "bb5eae94-b133-458f-9d85-c80760b845f5",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 1,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Sketch 还原解析清单",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "276206d4-6bc6-41be-a739-9252d59cd621",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "1. 文件级结构",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c7ebffb7-df7f-427b-9e76-7b0d2abd58a8",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "必须读取：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6bf68b14-ffef-41eb-9cfb-374aa9a041b8",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "document.json\nmeta.json\nuser.json\nworkspace.json\npages/*.json\nimages/*\npreviews/*",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "005fd69b-e47d-4817-bbb0-6238c0ef1e1e",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "重点字段：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c05a1ec2-bb97-4217-8278-dc5e0fb4086e",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "document.pages\ndocument.assets\ndocument.layerStyles\ndocument.layerTextStyles\ndocument.sharedSwatches\ndocument.foreignSymbols\ndocument.foreignLayerStyles\ndocument.foreignTextStyles\ndocument.fontReferences",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a2ae87c4-835e-437d-b6cb-52842d869f36",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "3bfc25b3-0468-41df-8700-33f680fbb835",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2. 页面与画板",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "75214e98-eb74-4fb0-b699-d9e10e3f62ff",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8bc59bd6-4449-4ce4-9e31-d025f1bba036",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "page\nartboard\nsymbolMaster\nframe\ngroup",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5d2a116e-7ae6-4d45-ac4d-2a5bdc5fbf0d",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "要处理：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f1213652-8ec6-404b-856a-50ed4f40c65b",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "页面名称\n画板名称\n画板宽高\n画板背景色\n画板坐标\n画板裁剪\n画板包含的 layers",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e922c6ed-481d-44ee-99a3-fff4d0bb2b74",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "144c803b-ef20-4738-8156-cbbd44bea74a",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Page → 页面\nArtboard → Frame\nSymbolMaster → 可复用素材组件\nGroup → Group / Container",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4d6da20b-1eef-45a1-a33c-cdb7c695049a",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "465da411-c538-4b59-a8f9-5bc7cef80309",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "3. 图层类型",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "97da1eb5-af54-471b-a8fe-a722a2900075",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "必须覆盖：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "12f48caa-7986-47ce-9cd5-c27add06ecf8",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "artboard\ngroup\nsymbolMaster\nsymbolInstance\nshapeGroup\nrectangle\noval\ntriangle\nstar\npolygon\nline\nshapePath\ntext\nbitmap\nslice\nhotspot",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5bfbeab0-bd94-4ae2-86f9-200c7f583460",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "建议你的内部节点类型：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "dde589f1-5513-4444-a8ed-fb89c53e0d0b",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Frame\nGroup\nShape\nText\nImage\nVector\nSymbolInstance\nSlice\nHotspot",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7aa4f7c2-2362-48ee-9db2-01f8406461c8",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "422363fa-31f7-417a-92fa-9bf57c828c19",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "4. 通用图层字段",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8ddfac56-dc17-4bb5-b1c5-98ae06157eb3",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "每个 layer 都要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b197010d-ade3-406f-b4ab-62e28b133004",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "do_objectID\nname\n_class\nframe.x\nframe.y\nframe.width\nframe.height\nrotation\nisVisible\nisLocked\nhasClickThrough\nisFlippedHorizontal\nisFlippedVertical\nresizingConstraint\nresizingType\nshouldBreakMaskChain\nhasClippingMask\nclippingMaskMode\nclippingMask",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6e560330-1f71-452b-b6e8-7a95a661c054",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "345a1a71-624b-4dfd-a295-c8611c2a3f4c",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "id\nname\ntype\nx / y / width / height\ntransform: rotate / scaleX / scaleY\ndisplay / visibility\nlocked\noverflow / clip / mask",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d4d66c24-4f0c-49b9-a446-176032a75ba9",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "ba2a5f82-daad-4309-9c3f-1e5a7248ce48",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "5. 坐标系统",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c424d589-bd7d-4f9b-9982-35b92d5d03c6",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "必须处理：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2f7842f0-0b82-48c1-a10a-e4ee483850f4",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "父子相对坐标\nabsolute 坐标换算\nrotation 后包围盒\nflip 后坐标\ngroup 内部偏移\nmask 区域影响\nsymbolInstance 缩放",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f66b92cb-dddf-44b1-8de4-a16591b8986c",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 最简单渲染方式：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b1954112-3715-4fbf-a546-856a87e46fe4",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "每个节点 position:absolute\n父容器 position:relative\n子节点使用相对父节点坐标",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "32c9e8d1-db22-442a-96fc-86915a95b7ef",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "dd0babba-57e0-4d00-a08f-c70ac61e0164",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "6. 层级顺序",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2031e900-e66e-4cbe-b779-671f8b4fc3a7",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "必须处理：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "32c32296-65b7-4a87-907e-35a2fee53656",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "layers 数组顺序\nz-index\n隐藏节点\n锁定节点\ngroup / frame 嵌套\nsymbol 展开后的层级\nmask 与被裁剪节点的顺序",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0a41d893-cd01-4975-881b-36f1e689002f",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "注意：Sketch 层级顺序和 Web 叠放顺序要测试，必要时反转 children 顺序。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3de80e2a-95b8-4cd4-8f12-090e5eb2fad9",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "234c3ecb-0a1c-402f-bf7f-171f91f9f6bd",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "7. Fill 填充",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "11c338f4-f61d-45ae-b52b-0a25663f0bd7",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "be48e01c-3525-425d-859f-12cf439f276a",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "style.fills[]\nfill.isEnabled\nfill.fillType\nfill.color\nfill.gradient\nfill.image\nfill.patternFillType\nfill.contextSettings.opacity",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2cbe388a-efda-4966-9385-5a1b946346ee",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "支持类型：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "169aee03-6097-42d7-8ae8-810b2ad351f0",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "solid color\nlinear gradient\nradial gradient\nangular gradient\nimage pattern",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d87ee4fa-36de-4c77-bee3-e8a3d00eb02b",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ded49cda-95ce-4f76-bdc9-7d6cd64a7778",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "background-color\nbackground-image: linear-gradient(...)\nbackground-image: radial-gradient(...)\nbackground-image: url(...)\nbackground-size\nbackground-position\nbackground-repeat",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "85e0954b-6ac3-42e4-89b7-3aa80e914a51",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "96b361a8-f4c0-465b-9427-1fcdbe79150e",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "8. Border 描边",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8ddb71f6-2481-4400-9fa1-98fcdba32d24",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "001636cd-3ede-49c6-89cd-a2a85146ed98",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "style.borders[]\nborder.isEnabled\nborder.color\nborder.thickness\nborder.position\nborder.fillType\nborder.gradient",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "85cb8a07-4be0-41cc-b56c-659d890a807f",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "还要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1b018c52-9627-44b7-8789-24f7b44f3c77",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "style.borderOptions.dashPattern\nstyle.borderOptions.lineCapStyle\nstyle.borderOptions.lineJoinStyle",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9bbf2805-8d8f-47f1-8d2a-890a3abc55c4",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e8ef6a17-027b-45f3-b1af-a0d53a329b8f",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "border\noutline\nbox-shadow 模拟 outside/center border\nSVG stroke",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9c376c75-2708-4e4b-b768-d2ddd11cb7a2",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "注意：复杂 shape 的描边建议走 SVG。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "cf5e8d81-ea1a-4bd6-8fd9-5c8f37a75b99",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "384d1532-5f8a-4f56-9b26-1b8410514f70",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "9. 圆角",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "43ef15cb-ce4c-41d9-842a-c98250dfc64c",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7f8c6b8d-dbc1-4b12-b473-da935b09c870",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "fixedRadius\ncornerRadius\npoints[].cornerRadius",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a2cad1c5-f52b-4539-a4a9-7ff1f4a78079",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "不同对象处理：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b5d1e562-bb75-458d-90d8-a2b4570aebbc",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "rectangle → border-radius\nshapePath → SVG path + radius\n复杂矢量 → SVG",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "edfecc44-9b3b-4ce7-af8d-b376a616b38c",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "bdb1ee14-d267-486d-9f50-8c3b63e3a334",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "10. 阴影",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6da6851a-e71b-4789-8616-ef30800409cf",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b451f207-f783-4450-8283-b19882d20d8c",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "style.shadows[]\nstyle.innerShadows[]\nshadow.isEnabled\nshadow.color\nshadow.offsetX\nshadow.offsetY\nshadow.blurRadius\nshadow.spread",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "233a282e-f2df-4ec9-b3f4-f6ec5cd608e7",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3d30b0e3-5dd7-419f-976a-7840cc4bc4b0",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "box-shadow\nfilter: drop-shadow(...)\nSVG filter",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6975444a-9cde-437f-b6e8-9466998d727e",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "多阴影要组合成：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2504974c-df13-4466-920a-f43fae839fd7",
+    "type": "codeBlock",
+    "props": {
+      "language": "css"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "box-shadow: 0 4px 12px rgba(...), 0 1px 2px rgba(...);",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "133baf01-3bb5-4f54-9839-f1c589ba721c",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "1844a435-dd82-4f4b-9204-0a0bd1a31c43",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "11. Blur 模糊",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a6b4ff77-693f-4b98-9b58-c51abd167fe4",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "17219f99-1f9d-497e-a01a-c4292f596eb7",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "style.blur\nblur.isEnabled\nblur.type\nblur.radius\nblur.motionAngle\nblur.center",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "dfe5834e-9155-42e7-83b0-7138792042cc",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "类型：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f18e1f84-e31b-48fb-ba2f-138e2ca782dd",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "layer blur\nbackground blur\nmotion blur\nzoom blur",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b8df4404-2526-4bb6-84bc-2a061fca3ac1",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9fee214d-3e42-43ab-aca1-458943147964",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "filter: blur(...)\nbackdrop-filter: blur(...)",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c618a266-9282-4626-8e5e-755728d7a7ed",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "motion / zoom blur Web 很难 100% 还原，建议降级。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6ef54ecc-8157-412f-92bb-4f4a42248c73",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "6321496a-b034-4247-84a8-a2e0e2612caa",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "12. 透明度与混合模式",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "55f367fa-c97a-4be5-8366-6b2a4bca08ac",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b5144e3e-3804-4fc5-8eb0-7111feb8e245",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "style.contextSettings.opacity\nstyle.contextSettings.blendMode",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "81f1c057-e771-44c0-8a85-cfb1680c5a0a",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "114cdb45-06f8-40ee-8dcf-9726574548e9",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "opacity\nmix-blend-mode\nbackground-blend-mode",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3822a285-7df6-4ddb-a0d6-60e21dbe2fa9",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "注意：Sketch 和浏览器 blend mode 视觉可能不完全一致。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8b44f577-0313-4735-bbc8-3d5e12cee499",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "7b1b94a3-84b0-45f8-93af-38ee9334df11",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "13. 文本内容",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "61480f51-28b1-476d-bd79-082db7823bb8",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "必须解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "49bf57a9-acbb-4986-9695-a20b700a05f7",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "attributedString.string\nattributedString.attributes",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6b41a4a3-7d72-46bd-b465-ddae7c078d91",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "基础字段：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f10372ae-3d74-4b68-90e4-c64c10166907",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "fontFamily\nfontPostScriptName\nfontSize\nfontWeight\nlineHeight\nletterSpacing\nparagraphSpacing\ntextAlign\nverticalAlign\ntextColor\nunderline\nstrikethrough\ntextTransform",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e8e0f34f-0fc1-498a-8ecc-b84decf6d87f",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "还要处理：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d0cdbb74-e778-45bc-9246-2317618dced1",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "多段富文本\n不同颜色\n不同字号\n不同字体\nemoji\niconfont\n缺失字体\n文本固定宽高\n文本自动高度\n文本裁剪",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b57fbbc4-f1fe-4ce5-8c6e-dde713fc476e",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "212727a9-6c21-4d51-8252-69b45dada7d3",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "div/span\nwhite-space\nline-height\nletter-spacing\nfont-family\nfont-size\nfont-weight\ntext-align\noverflow\ntext-overflow",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "31587494-b286-41ad-8480-1001c5cfe73d",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "多段文本建议：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "38bae2e4-48a0-42c2-82fa-d331b4367964",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Text node\n ├ span range 1\n ├ span range 2\n └ span range 3",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e770b5dd-d0fc-4fd7-8669-350f56fa0215",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "44fa27ef-826b-4ec8-9ccc-409ce0551476",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "14. 字体资源",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0d152de5-4972-4916-b156-7025db3f0555",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "87aaed0f-6a89-476f-9c97-94ea169af180",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "fontReferences\ntext layer font name\nfont postscript name",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "839acae3-75b0-4cc9-9e22-fd61af3d493c",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "但要注意：Sketch 文件通常不内嵌字体文件，只记录字体引用。你需要：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e1bbd483-6d17-473c-96da-fe02d75d6782",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "检测缺失字体\n提示用户上传字体\n注册 @font-face\n重新渲染",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "70e44e82-0b25-4a25-87fc-fdeb9c50f4d8",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Iconfont 也是 Text：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2e7bf229-75d3-4c9e-8ca5-042555487c13",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "fontFamily = iconfont\ntext = \\ue600",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c6007af1-1c7c-436d-bab7-6b0d1a87ac11",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "没有字体文件就无法准确显示。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "10cf9d0b-16c8-45ef-9ab2-569275410330",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "1a9e9694-f991-472c-885f-b779f9f13b96",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "15. 图片资源",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d6e3ce28-038f-4910-a6ee-3004e86ad5ae",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析两种来源：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2c5eaf9c-3b7e-4307-b614-e2b3463b8f7c",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "bitmap.image._ref\nstyle.fills[].image._ref",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a58ed846-4b52-4758-9acd-1c4a213c3f0a",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "处理流程：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "19af8116-04d6-4d7d-9d32-83b8a95aeed4",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "读取 _ref\n从 images 资源里取 buffer\n保存到你的 assets\n生成 URL\n写入 schema",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "82b05992-91e8-497d-bd7a-e40e9d7a62ec",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 渲染：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ba15f1ae-7550-4392-8f9d-23f3966291be",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "bitmap → <img>\npattern fill → background-image",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6ef246b3-9ac3-45c9-84bd-e8ce3f27f53e",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "还要处理：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "41e524a2-b550-48b7-9497-b50722e64928",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "图片裁剪\nfill 模式\ncontain / cover\ntile\nstretch\nimage opacity\nimage tint",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0d50a44c-51c3-4b77-b772-59c30cfe074d",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "d197b766-9d9f-4113-a8a8-b43d29be9bcc",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "16. 矢量路径",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "40bb5bbf-01c3-4433-90e9-a08a4462e40f",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "如果想高还原，必须解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fee3d3d6-a893-4047-ba50-b85e1bcda3db",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "shapePath\nshapeGroup.layers\npoints[]\npoint\ncurveFrom\ncurveTo\ncornerRadius\ncurveMode\nisClosed",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "580cd33f-aad2-48b9-a8d2-4602d571232d",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 建议转：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7ab8e57c-89fc-41b0-83bf-5bbd8aeec4a9",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "SVG path d",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "36ef867b-acef-4cc2-ab91-babb5f9afd07",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "还要处理：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2d6ec79b-366c-4110-9222-18ed9fc5209a",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "fill-rule\nstroke-linecap\nstroke-linejoin\nstroke-dasharray",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "343aa5cd-27e1-4988-8d2a-934da76424fc",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "f80d9641-573a-4bcc-94d1-0572312b5455",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "17. 布尔运算",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "99a45fc3-9ec3-4b50-ab77-9a64235e3ced",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "11c8c791-8265-4730-8ab6-32b5856129bc",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "booleanOperation",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5eb6b675-f277-4eef-9bd7-e48d857eafc4",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "常见：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "38e640d3-088b-45a6-a61d-d9ef8196de3a",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "union\nsubtract\nintersect\ndifference",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d339d1e0-63bc-41e4-974c-5de22556fb15",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 处理方案：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ae3ebfc5-9936-4aa4-9cab-e90b953e662e",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "优先转换 SVG path\n复杂情况用离屏 canvas / flatten 后图片化",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f7276475-a6e0-429a-b09b-cf7df5277c43",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "第一版可以降级为：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f3c1e5ba-24b4-41d6-a7eb-09f68b8fa8e4",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "保留子 shape 叠放\n或转图片",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "68fe7421-0854-4f56-a706-a75ccec7aa90",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "83a0fe1c-07a3-49d8-8dec-3f4069a29c14",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "18. Mask / Clip",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e895c3d7-9c20-460a-8b7f-38e6bcd1667f",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "17890882-a14d-4530-b144-0ced4bd7d1ca",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "hasClippingMask\nclippingMaskMode\nshouldBreakMaskChain",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2333ffbd-9fb9-4ba0-8d83-2c88c4ee27f8",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0dd69fc2-16a4-42b8-8c4f-1807157f4561",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "overflow:hidden\nclip-path\nmask-image\nSVG mask",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d3793565-7cd1-4479-8ce3-1c1f0787b3a7",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "优先级：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c109c587-1212-40d0-9d0a-075a6502d24c",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "矩形 mask → overflow:hidden\n圆形 / path mask → clip-path / SVG mask\n复杂 mask → 图片化",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4bfcc049-5fa9-455b-ba24-002eb878a210",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "d4d91f28-9069-4862-af54-9f614d936726",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "19. Symbol / 组件",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0d78adfc-5770-48e0-8d00-ae4b90b4f0fc",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "必须解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1129284e-ce74-4263-957b-f597497e068a",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "symbolMaster\nsymbolInstance\nsymbolID\noverrideValues\noverrideName\noverrideValue",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "cd78d310-089e-446c-a013-4be16631014d",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Sketch 的 overrides 可覆盖文本、图片、嵌套 Symbol、颜色、文本属性、Layer Style 等。(",
+        "styles": {}
+      },
+      {
+        "type": "link",
+        "href": "https://www.sketch.com/docs/symbols-and-styles/overrides/?utm_source=chatgpt.com",
+        "content": [
+          {
+            "type": "text",
+            "text": "Sketch",
+            "styles": {}
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": ")",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9de016f2-6dc9-46b9-b315-0f934fc2ccf4",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "建议处理：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "79925541-a8e0-44f8-9cf2-acfccf721654",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "symbolMaster → Asset\nsymbolInstance → Instance\noverrideValues → patch 到 master schema",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b104094b-a9c0-4f9f-81ca-bec2dd8a858e",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "第一版策略：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "70db239a-d2a7-41ce-95b8-a8c1fa481027",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "symbolInstance 直接展开成普通节点\n只处理 text override / image override",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9dbf6bd3-8ad6-4df0-8afb-ed140d4c65e5",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "第二版再做：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "693e366b-e150-41c1-952e-7f1728ad4f8a",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "AssetRef\nnested override\nstyle override\nlibrary symbol",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5e32d548-cb9e-481f-a479-84cc652b8516",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "ddf9c65a-e01a-45ff-89a4-cf0949fd3196",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "20. Shared Styles",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2a9256b7-05da-454c-9aa0-135e7a77e4bf",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "590c6638-ae79-4870-a00a-bd88949c6704",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "document.layerStyles\ndocument.layerTextStyles\ndocument.foreignLayerStyles\ndocument.foreignTextStyles",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c6309714-b709-4af0-9143-83e838497e68",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用途：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "005a57c2-5df4-45d4-b187-5b339269522d",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "样式复用\n样式名称\n样式引用\n跨文件 library style",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ea30b152-c50e-4e14-8761-4ea812305dee",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web / Schema 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c7dd0b4b-7836-4db2-af3e-1433799e3cd3",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "styleId\nstyleName\nresolvedStyle",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ace67c55-e3bd-4b75-be78-aa5d0ca41ddb",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "建议导入时：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "041bbc9a-6238-4a72-9cc7-7ca92bf8d31e",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "先 resolve 成实际样式\n再保留 styleId 方便后续编辑",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "750e9576-72a9-4916-8725-f071c69300b0",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "799b6c97-8278-49f8-a9e7-d3337d403081",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "21. Swatches / Colors / Gradients",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1c4fa34a-0697-466e-84e2-3667acf8f9a7",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "616d22a9-b831-4c56-99ff-66c005982260",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "document.assets.colorAssets\ndocument.assets.gradientAssets\ndocument.assets.colors\ndocument.assets.gradients\ndocument.sharedSwatches\ndocument.foreignSwatches",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f8d391e7-d77c-449e-a119-f95bfc6db5f8",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用途：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e0a625b6-9a15-4c80-be22-8ea36726b7b4",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "颜色变量\n渐变变量\n设计 Token",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "31f8943c-01e3-46bf-ab3f-59b3426ad5aa",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "86a1a753-5c68-4574-be8f-97151cc1ddcb",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "22. Library 外部资源",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5d4fc4e7-f756-4e4b-8299-84dd8f29cbd3",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e6346e29-49e9-4491-9e3d-6fa224e41f83",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "foreignSymbols\nforeignLayerStyles\nforeignTextStyles\nforeignSwatches",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "dc8e532e-96bd-4983-a677-3f8ed94bf034",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "问题：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3db1fba8-6f33-4a91-a691-e763e3aa1d49",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": ".sketch 文件里可能只有引用\n不一定有完整源内容",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "03eb5299-dc2e-4444-ba84-461e916ec428",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "处理策略：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fbbe20d9-3f72-4d99-9ad8-c051cc6bc284",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "能解析则导入\n不能解析则标记 missingLibraryAsset\n提示用户上传依赖库",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "eb43be6b-f039-4a8a-9563-2b0892dd56e4",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "30e13bd3-a3cb-410f-9fe7-3b542dccd7d9",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "23. Export / Slice",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7d22640a-8d2a-455f-8541-94b2e4e3c102",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "04e5e2bc-baf8-4b84-a193-1864801aea53",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "exportOptions\nexportFormats\nslice\nincludedLayerIds",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9dfcb21b-8049-475f-8295-e11f89df1682",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用途：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ca6fbc75-9c06-4d60-b3f4-306b9d24aea2",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "导入导出配置\n资源切片\n图片导出",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "21b996ba-1d69-4239-91a4-c634936cc69c",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 渲染不是必须，但导入设计资源时有用。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1a250702-3419-4756-90c1-68a8468ca45b",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "bae84426-e73a-4ddc-ad1e-edbbaa50a0e0",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "24. Prototype / Hotspot",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "589d7681-d851-459e-a069-8b6e85b6e1f8",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "如果需要原型还原，解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3d47a045-8cb3-4e5f-818c-da907e6d4c65",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "hotspot\nflow\nprototypeStartPoint\ntargetArtboardID\nanimationType\ntransition\nmaintainScrollPosition",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d54b5592-4866-45ee-a18e-4844fbc5b7b0",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c15322d1-3bb9-48c6-b0e3-1e46c5fef743",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "click area\nnavigate target\noverlay\ntransition",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "471f98d7-ecb0-4566-b87a-e5378ed8801b",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "第一版建议只支持：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "103c8860-5d2f-4b63-bf3e-190696d11024",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "hotspot → 点击区域\ntargetArtboardID → 页面跳转",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "35b9f366-bd6b-468c-abc9-9383f9f801da",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "8df65410-6557-453f-8330-48917cdfb09b",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "25. Resizing / Constraints",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2de116e5-2a38-45e0-8625-eba02ef9ba86",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6f065bac-3784-48c8-8c2c-d298b6927ed1",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "resizingConstraint\nresizingType",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "10cb8782-bf9f-44b3-84f8-b51199c40f81",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用途：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a7c97849-40a3-4e02-801f-6e4c68cef84e",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "响应式 resize\nartboard 尺寸变化时子元素位置",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "958d79db-b8c1-465e-b0bb-e01bd6067163",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4f145671-a109-480c-994f-31b5ba488899",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "constraints.horizontal\nconstraints.vertical",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "90e04469-95c8-4a46-a278-c50f0747e37c",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "如果只是静态还原，可以先不生效，但要保存。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "52397ee9-3f29-4a91-bf31-a7766a229dcb",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "c46650b7-0580-485b-8cda-b8a52b5c991f",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "26. Grid / Layout Settings",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9a9dd1f1-802e-4ad6-94ee-f07a8f0b0428",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d0690328-0181-4dd4-b5bf-8eb0df6ec53e",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "layout\ngrid\nhorizontalRulerData\nverticalRulerData",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "535221a8-83b9-4d68-bf66-88a5eb32d4a3",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用途：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8fd941be-daf6-44f2-93be-9eb5d8f35e85",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "网格\n栅格\n参考线\n标尺",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6958fe53-5df6-430e-b23a-d1910e36baac",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "326f6de5-9da9-45f9-b20d-ad8eed7179af",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "canvas grid overlay\nguide lines",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "180b3044-5aef-456b-a650-ce0f43da8306",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "7c8b4a67-700e-409f-a708-53df2d6248f6",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "27. Artboard 背景",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4ddabad4-5563-46a5-b94d-94ce5cd5106a",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8b193222-2782-46e0-9120-68e774bae21d",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "hasBackgroundColor\nbackgroundColor\nincludeBackgroundColorInExport",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "11b6019f-7345-4ea1-9499-bd5c6f0c4c7f",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Web 映射：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e14e3ca9-76c4-4f05-bc33-580f89a1179a",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "frame background\nexport background",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9731610e-f7b2-496a-8a45-7ef2b6c120bf",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "2f601f37-13eb-4f88-9406-fbe2fdbd7d19",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "28. Metadata",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "623ce755-d80c-4995-b3a2-5ede833e35fc",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b68f03e6-dc8f-4eff-9582-dd10d7baf6ca",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "meta.app\nmeta.version\nmeta.build\nmeta.pagesAndArtboards\nmeta.commit\ncompatibilityVersion",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "34840ea6-48c0-4813-bcec-da34f68ad1aa",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用途：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ce197483-4e80-4a5a-8e0c-2684b591783f",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "版本兼容\n导入日志\n错误排查\nSketch 版本提示",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2c72df77-ee30-4534-b32c-34bab4bb716b",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "01dc6dfc-756b-4712-a76b-26ebceca9d80",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "29. User / Workspace",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b27799e6-4730-481b-86d6-d4609cb37a53",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需要解析但不是渲染核心：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8c637ba5-c042-42e3-aa6d-e06bbe4c1278",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "user.json\nworkspace.json",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5399a974-4342-4bc5-b026-5b3821df977a",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用途：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e1485e82-5045-44a0-a978-3d888563c376",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "视图状态\n缩放\n当前页面\n辅助线显示状态",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8240a344-9c45-40d4-85a6-dd09345d43a0",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "1e3ab676-5dcc-44c8-8002-0fabba6034f2",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 1,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "建议最终转换结构",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "aaa1eeba-7cf0-4df4-a9c9-b9909024fbd2",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "你的中间 Schema 至少要有：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ce98f17f-5474-4e97-9aee-7e244af536da",
+    "type": "codeBlock",
+    "props": {
+      "language": "json"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"pages\": [],\n  \"assets\": {\n    \"images\": [],\n    \"fonts\": [],\n    \"symbols\": [],\n    \"styles\": [],\n    \"colors\": []\n  },\n  \"missing\": {\n    \"fonts\": [],\n    \"libraries\": [],\n    \"images\": []\n  },\n  \"importReport\": {\n    \"supported\": [],\n    \"degraded\": [],\n    \"unsupported\": []\n  }\n}",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7154b866-92f7-436a-84d3-a8faad26fa08",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "4880978a-c794-4209-baf4-c17199391ded",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 1,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "优先级总结",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b846a893-20e7-44b7-9277-c428e7ccc817",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "P0：没有就无法渲染",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b89f9b66-fc28-4d1e-9409-cc9721e72583",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "pages\nartboards\nlayers\nframe\nvisibility\ngroup hierarchy\ntext\nshape\nbitmap\nfills\nborders\nradius\nimages",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2a874260-0f23-44c9-89f0-d19187669a84",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "P1：决定高保真",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a0e468c2-4d1b-4295-8285-c5b046071443",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "shadows\ngradients\ntext rich styles\nsymbol instance\nsymbol override\nshared styles\nmask\nvector path",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "bd68baa6-061a-41c9-9ba9-06c8f141c1b5",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "P2：接近 100%",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ba3e749b-5f81-4c58-a769-390b113b0d3e",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "boolean operations\nblend mode\nbackground blur\nlibrary assets\nprototype hotspot\nexport slices\nconstraints\ngrid/guides",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0bcb5fe9-8246-4dd7-9876-fece44415feb",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "P3：可降级",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "076e8606-1b8f-4188-962f-5456573df1e0",
+    "type": "codeBlock",
+    "props": {
+      "language": "text"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "motion blur\nzoom blur\n复杂 mask\n复杂矢量布尔\n缺失字体\n外部 library symbol",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "36e271c9-6ecf-488c-b2b6-fc1da93935ec",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "一句话：",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "想高还原，解析范围必须从“layer 树”扩展到“资源、字体、Symbol、样式、矢量、Mask、Library”。",
+        "styles": {
+          "bold": true
+        }
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9181b43b-5658-4722-ba43-aacea4c760bf",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  }
+]

@@ -29,6 +29,7 @@ interface ChatPanelProps {
   onBundleUpdate: (bundle: WorkspaceBundleResponse) => void;
   onRefresh: () => void | Promise<void>;
   onOpenWorkspace?: () => void;
+  onOpenDesign?: () => void;
 }
 
 export function ChatPanel({
@@ -38,7 +39,8 @@ export function ChatPanel({
   stages,
   onBundleUpdate,
   onRefresh,
-  onOpenWorkspace
+  onOpenWorkspace,
+  onOpenDesign
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -442,6 +444,15 @@ export function ChatPanel({
               className="rounded-full"
             >
               我的工作空间
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onOpenDesign}
+              className="rounded-full"
+            >
+              AI Design
             </Button>
             <div className="rounded-full border border-[var(--color-border)] bg-white px-3 py-1 text-xs text-[var(--color-text-secondary)]">
               当前阶段：{getCurrentStage()?.name ?? "需求采集"}

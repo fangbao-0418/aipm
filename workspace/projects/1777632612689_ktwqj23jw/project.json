@@ -4,8 +4,8 @@
   "description": "11",
   "industry": "fintech",
   "systemPrompt": "11",
-  "createdAt": "2026-05-02T03:05:18.570Z",
-  "updatedAt": "2026-05-02T03:05:18.570Z",
+  "createdAt": "2026-05-04T01:32:32.881Z",
+  "updatedAt": "2026-05-04T01:32:32.881Z",
   "currentStage": "requirement-collection",
   "llmSettings": {
     "provider": "openai",

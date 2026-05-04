@@ -19,7 +19,7 @@ interface WorkspaceServerOptions {
 }
 
 export async function startWorkspaceServer(options: WorkspaceServerOptions = {}) {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: 100 * 1024 * 1024 });
   const activeBundleStreams = new Map<string, AbortController>();
   const runtime = createAppRuntime();
   const {
@@ -78,7 +78,7 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
 
   await app.register(fastifyMultipart, {
     limits: {
-      fileSize: 20 * 1024 * 1024,
+      fileSize: 200 * 1024 * 1024,
       files: 10
     }
   });
@@ -348,6 +348,73 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
     reply.code(204);
   });
 
+  app.get("/api/workspace/projects/:id/documents", async (request) => {
+    const params = request.params as { id: string };
+    return workspaceProjectService.listProjectDocuments(params.id);
+  });
+
+  app.post("/api/workspace/projects/:id/documents", async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = request.body as { title?: string };
+    const document = await workspaceProjectService.createProjectDocument(params.id, body);
+    reply.code(201);
+    return document;
+  });
+
+  app.get("/api/workspace/projects/:id/documents/:documentId", async (request, reply) => {
+    const params = request.params as { id: string; documentId: string };
+    const document = await workspaceProjectService.getProjectDocument(params.id, params.documentId);
+    if (!document) {
+      reply.code(404);
+      return { message: "Document not found" };
+    }
+    return document;
+  });
+
+  app.put("/api/workspace/projects/:id/documents/:documentId", async (request) => {
+    const params = request.params as { id: string; documentId: string };
+    const body = request.body as {
+      title: string;
+      sortOrder: number;
+      contentBlocks: unknown[];
+      contentHtml: string;
+      contentText: string;
+      deleted?: boolean;
+    };
+    return workspaceProjectService.saveProjectDocument(params.id, params.documentId, body);
+  });
+
+  app.delete("/api/workspace/projects/:id/documents/:documentId", async (request) => {
+    const params = request.params as { id: string; documentId: string };
+    return workspaceProjectService.deleteProjectDocument(params.id, params.documentId);
+  });
+
+  app.put("/api/workspace/projects/:id/documents/order", async (request) => {
+    const params = request.params as { id: string };
+    const body = request.body as { orderedIds: string[] };
+    return workspaceProjectService.reorderProjectDocuments(params.id, body.orderedIds ?? []);
+  });
+
+  app.get("/api/workspace/projects/:id/documents/:documentId/versions", async (request) => {
+    const params = request.params as { id: string; documentId: string };
+    return workspaceProjectService.listProjectDocumentVersions(params.id, params.documentId);
+  });
+
+  app.get("/api/workspace/projects/:id/documents/:documentId/versions/:versionId", async (request, reply) => {
+    const params = request.params as { id: string; documentId: string; versionId: string };
+    const version = await workspaceProjectService.getProjectDocumentVersion(params.id, params.documentId, params.versionId);
+    if (!version) {
+      reply.code(404);
+      return { message: "Document version not found" };
+    }
+    return version;
+  });
+
+  app.post("/api/workspace/projects/:id/documents/:documentId/versions/:versionId/restore", async (request) => {
+    const params = request.params as { id: string; documentId: string; versionId: string };
+    return workspaceProjectService.restoreProjectDocumentVersion(params.id, params.documentId, params.versionId);
+  });
+
   app.post("/api/workspace/projects/:id/intake/message", async (request) => {
     const params = request.params as { id: string };
     const body = request.body as { message: string };
@@ -442,6 +509,29 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
     }
 
     return workspaceProjectService.uploadRequirementFiles(params.id, buffers);
+  });
+
+  app.post("/api/workspace/projects/:id/design/import", async (request) => {
+    const params = request.params as { id: string };
+    const upload = await request.file();
+    if (!upload) {
+      throw new Error("Design file is required");
+    }
+
+    const bytes = await upload.toBuffer();
+    return workspaceProjectService.importDesignFile(params.id, {
+      filename: upload.filename,
+      mimeType: upload.mimetype,
+      bytes
+    });
+  });
+
+  app.get("/api/workspace/projects/:id/design/assets/:assetId", async (request, reply) => {
+    const params = request.params as { id: string; assetId: string };
+    const result = await workspaceProjectService.getDesignAsset(params.id, params.assetId);
+    reply.header("Content-Type", result.mimeType || "application/octet-stream");
+    reply.header("Cache-Control", "public, max-age=31536000, immutable");
+    return reply.send(result.bytes);
   });
 
   app.get("/api/workspace/projects/:id/intake/files/:fileId", async (request, reply) => {

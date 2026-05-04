@@ -1,0 +1,3333 @@
+[
+  {
+    "id": "a4e9bc9e-8555-43aa-8489-b7164df2cb54",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 1,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "AI 原型 & PRD 生成平台 — 需求文档（PRD v1.0）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "783a8546-652d-493e-af4f-fb08e89e16a0",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "一、产品定位",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "893f57f1-8a86-4090-ac54-d1bfaf305e46",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "1.1 产品目标",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "56921a6e-a80c-42e2-93bf-93e1b183138b",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "构建一个「AI驱动的产品设计平台」，实现：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fb8f7ae4-99fa-4110-ac29-554fed5f9e26",
+    "type": "quote",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "从自然语言 → PRD → UI原型 → 可编辑 → 生成多端代码",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ae8fabdd-cf2d-4544-88b5-e89738a5cf51",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "降低产品经理、设计师、开发之间的沟通成本。",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e2fc9d17-e657-477f-bf63-0250b57a2a1f",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "4193508d-b6d7-4ea8-b57b-2e68dea5296b",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "1.2 核心价值",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "293f83ef-852c-4360-9868-dac7518616ad",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "需求快速结构化（AI生成PRD）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5bd1e7bd-b5b0-4450-983c-2beb3654b308",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "自动生成页面结构与UI原型",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "16cb286a-ef19-45d8-a07c-e30fd434d264",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "支持可视化编辑（类似轻量墨刀）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "28203f72-a41e-49a0-ba62-5af9e9ac7cf2",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "支持局部AI调整（而非重生成）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9ef825d1-d29a-4537-a3c5-29889f20de55",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "支持多端代码导出（D2C）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b3b11dd5-3ab8-4040-80cf-8c3be3668614",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "afcb9e75-1e23-4da5-bbfa-b083cf883118",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "1.3 目标用户",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "feecb63c-046e-4836-9265-387cb3570b81",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "产品经理",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5ace6205-76d8-4c81-a9d0-4d2ee7ce4c98",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "独立开发者",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "cf65e80f-5e6c-42e0-919c-edbfe77d79c3",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "创业团队",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b1735c3c-72e7-416d-aa78-229e9f23c22c",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "设计师（轻量场景）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fc48e09f-5726-4c33-8d41-59bfea9a7924",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "42e7bd0e-5ec8-4755-81fe-15734778f159",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "二、核心功能模块",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f5889a19-1169-4e7e-817e-8d74db742f79",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "a1e2a84e-01ef-4085-9489-ba8ef58d31b0",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.1 AI生成模块（核心）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c04313c7-9273-41e2-909f-93f2b7b6402e",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "功能描述",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "75ffee40-fa20-47fb-b560-e82e0e19b3d2",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用户输入自然语言：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4572f0c3-e8ae-4e76-9bad-2391e76934fa",
+    "type": "quote",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "“做一个电商App首页，包含banner、商品列表、分类入口”",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0ace6c6c-04a8-40c8-b8a6-0b2c0152db23",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "系统自动生成：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "943db56b-e1f0-47b7-bbba-13228d67d726",
+    "type": "numberedListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "PRD文档",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "97f3c1b1-10aa-4595-8660-84d9cd5015b9",
+    "type": "numberedListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "页面结构（Page Tree）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fa32915d-e0e4-4eca-b360-d4e78881a46f",
+    "type": "numberedListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "UI Schema（组件树）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2cb85dfd-0708-42cc-b959-9867235932bb",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "00d7b716-9e00-4eea-b123-5859af0b6c60",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "输出结构（标准化）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c06649eb-72f7-46e0-a2ef-2cc7496f3fad",
+    "type": "codeBlock",
+    "props": {
+      "language": "json"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"prd\": {},\n  \"pages\": [],\n  \"designSchema\": {}\n}",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1ea7f2e7-c924-4d34-90f6-fa4ef5fb1455",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "c8ce535e-105e-4586-812d-56bca255a98e",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "子能力",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4364286e-c257-45f3-811f-4ea766e1ef7a",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.1.1 PRD生成",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c3ea6f2e-0311-4c5f-a46b-e935a1cfc024",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "产品背景",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3cfb3115-22f3-49c7-b935-67d21ae45566",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用户画像",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e4b8bf83-4d9e-446a-960c-58d8b9117e16",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "功能列表",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "46dabec8-30b0-4ef4-88d8-2245097801c1",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "页面结构",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5bd18b4f-b10a-4396-a3c2-44e1d8c0ef0d",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.1.2 页面拆解",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fdc6d431-36ec-4431-a5f8-f3a5995c3e23",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "自动生成页面列表",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2668804d-43b1-4766-874c-a933db1f7ac0",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "页面层级关系",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9be9879a-908e-48bf-aaff-15801dcc7a9a",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.1.3 组件生成",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8b9357b2-9ef1-4ca0-a154-fdad263424d1",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "自动选择组件类型",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1a285c99-d6ae-4870-9f83-8d2b94a41f7e",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "自动生成布局结构",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "726cd9b2-c224-4bbb-b074-5695139fac09",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "0ecf2ea6-2246-4d54-a00a-1fe642932a87",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.2 Schema中枢（系统核心）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "344f3c01-c875-4a3a-8084-47ac61fcb003",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "设计原则",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1fb03d44-94fd-4917-aa15-8aaf0be94eaa",
+    "type": "quote",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "所有内容必须结构化，不允许直接生成代码",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e86c4c25-3499-4a26-bafa-308454075ab8",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "708e30c1-a9d1-4b3d-885c-56f723e0b397",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Schema结构",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "290acbda-7e0f-4158-8536-a4a97f5878c4",
+    "type": "codeBlock",
+    "props": {
+      "language": "json"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"type\": \"page\",\n  \"children\": [\n    {\n      \"type\": \"banner\",\n      \"props\": {}\n    }\n  ],\n  \"layout\": {\n    \"x\": 0,\n    \"y\": 0\n  }\n}",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "134cf92f-33ef-4139-82c7-d738db8a3bb8",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "53cb8db1-b155-40ac-93e3-667c34d96811",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "能力",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "84096f6f-aa07-4365-881b-91ffa7df1313",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "统一UI描述",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4ffd26b9-c733-4a43-83fc-bcfbf451d2f2",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "支持跨端渲染",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "53245d39-2af3-4061-ab39-7b13a97809b0",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "支持AI修改",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8810c86d-bbdc-43a4-b36b-d47cbdeeeacc",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "支持代码生成",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "99af67b3-de21-4e75-a2d3-8641b584d05a",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "143548f4-2342-4cb4-8b38-8b9c3079375c",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.3 可视化编辑器（轻量原型工具）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2d2ca6c1-9fdf-4225-ad2a-31312a2d82f0",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "1999fe99-ad8a-41b0-a5df-e2da1f684878",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "核心能力",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4e7dfdb0-a662-4782-9f62-62e423131a78",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.3.1 画布系统",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a454a705-b676-4816-944b-3e78cd966274",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "拖拽组件",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ecea2b6f-0e38-4e3a-92c1-6bd77acc3eaf",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "自由布局（绝对定位）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f8dc9613-4b69-473a-aa06-3325bb3e3ab7",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "缩放画布",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4e1df3a4-f056-4b43-a622-9f7ced8f6645",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.3.2 组件操作",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e3e1712e-8740-40e2-8f54-18617a4ff54d",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "选中",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1dcd1fde-96ee-45de-aaaf-7035415c1664",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "多选",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "131302e5-6eb7-4e72-b2e8-2971629e8efd",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "删除",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8e1f5451-5883-4ed1-a3a4-06e7d56d83d6",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "复制",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "85a0277a-6756-4dd2-bb95-e15d4e818a81",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.3.3 属性面板",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "815e281e-288c-4136-a95c-2e83b00b05d8",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "修改组件属性",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e46c0aa9-b558-473d-aeaf-d269b3b1b9d5",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "样式编辑（颜色、间距）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3e64ed0a-a418-4172-a324-5f859f1d6128",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.3.4 图层管理",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "cbcca94b-86bf-4eee-b4e0-caf143bfc193",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "层级调整",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "61319e17-a651-4c75-adf0-9ed152e5e961",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "分组",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "28676d1b-da4d-4b5f-8047-79d12bbe4b27",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "5ae10f37-3337-48c4-8333-9359ebcbdc02",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.4 AI局部调整（差异化重点）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1432d638-aa96-431f-a997-d4d7e51b1bb3",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "f62de3be-2e8d-42ea-b41c-088a5065a4c4",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "功能描述",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "691b42c3-eab4-4b0a-bf39-77726a0c29d2",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用户可以针对：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "757ead8a-b288-419a-b179-c1725f1c1884",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "单个组件",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "43f46b09-bdc2-4187-83d7-5e5cfbb6b3c1",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "某一块区域",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ed1816cd-60d8-4246-9a07-bcc7b453f84e",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "某个页面",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "29869302-7310-4dd3-8b02-bad2acd5fd7c",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "进行AI修改",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9660a675-1ec0-47f8-bce1-217d8b42a469",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "1a74383e-8186-497b-9895-d85977f7ae59",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "示例",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e5f7ae5d-dbb0-43cc-92b1-fabbfe9641cd",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用户选中按钮：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f84accad-a5d7-404a-a74e-91078a7d8445",
+    "type": "quote",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "“把这个按钮改成渐变色，并加一点阴影”",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4d88d5ac-c977-46fa-ba8c-27d5bab72081",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "68b93dae-a2be-45fa-ae61-58f8e6b04690",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "系统行为",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "26bc8d4f-7caf-4edd-826d-324dee3d4b3c",
+    "type": "numberedListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "定位组件节点",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1dda5c8e-76a7-4587-93a6-5f6b47dc57f1",
+    "type": "numberedListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "AI生成修改patch",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "90317f06-ebf8-4de7-8c28-891bc032ce8c",
+    "type": "numberedListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "应用到schema",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3e19dbb5-0acc-42a9-978f-89cef0f32340",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "9dc3a757-fcc3-43b4-bd59-fe109581e55a",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Patch示例",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "57cc8acd-8571-4937-b461-a270d47666db",
+    "type": "codeBlock",
+    "props": {
+      "language": "json"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"targetId\": \"btn_1\",\n  \"changes\": {\n    \"style\": {\n      \"background\": \"linear-gradient(...)\"\n    }\n  }\n}",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "42d75659-c309-4515-b433-aa7db8b33972",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "cce278b4-e89c-469e-b079-122adccbf1f6",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.5 预览 & 原型能力",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "32b20276-18a6-439a-beb2-8e68402fe28f",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "页面跳转",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "143869af-e7d9-4175-a278-dc037929aebe",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "点击事件",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "135dfb0a-7ef6-4a7e-b3d8-7b2bd59d04ab",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "简单状态切换",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fa08c861-8bb1-490b-ba9f-fa40e56b658d",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "6ebfa9ff-7fe2-4f75-9c03-de19686907d5",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.6 多端代码生成（D2C）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "555e7de4-aa6b-4188-9c07-19186dabe65d",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "602ae507-a044-421f-83f3-fec13e75d0b4",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "支持目标（逐步实现）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b11f343d-8396-4cad-931c-aac2998ac8e5",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phase 1",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e708edca-d5fe-4374-92c7-ed9fe75866a6",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "React（优先）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "19443de8-5832-4a05-97ad-804f95bc1d76",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Vue",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b0768f05-b88d-42d4-80e4-773e492ea8b8",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phase 2",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ddf54676-be8e-46bf-8926-85a462236eb8",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Flutter",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b4591641-933e-42d0-802f-bae4eb5d4a52",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phase 3",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e4a5cbd6-75a6-4780-9c34-e848913423d7",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "iOS（SwiftUI）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a13e544b-abfc-4ffc-ab30-93c8419b6661",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Android（Jetpack Compose）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5f478f14-7b50-49e1-bbe4-868d516f5144",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "fe263c22-5c16-4bf7-9c60-1bc4b7f9bbac",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "生成策略",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2ac7b572-89fd-4371-bd21-bf80a8207401",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "❌ 禁止：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d279e24a-987b-4d89-a36e-5cf85243a509",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "直接让AI生成代码",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "880beeb9-6e03-4fe8-ba97-c56075ba700c",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 4,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "✅ 正确方式：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "aed6fe44-506e-46b1-97d8-6fef6fc0a7dd",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Schema → Code Generator",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5d6d6530-722a-43fd-9479-a9c5b6f85b56",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "d22ff686-bb27-46fc-92cc-5719df8d32eb",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "示例",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "ec51060b-a20f-4384-9ea3-f865c03e9f1f",
+    "type": "codeBlock",
+    "props": {
+      "language": "json"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"type\": \"button\",\n  \"props\": {\n    \"text\": \"提交\"\n  }\n}",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "b92c45be-79cd-4058-bcd6-337a3f033ab5",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "↓",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "81822e15-aa1c-4091-af0b-63ea008950b5",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "React：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "890ae62c-f36b-4ce2-a43d-14b7695726f5",
+    "type": "codeBlock",
+    "props": {
+      "language": "jsx"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "<Button>提交</Button>",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4a77cfa7-8243-46c6-a0f1-9e555680dee9",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "e2813408-95bc-4fa4-a111-d0696884c5c4",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "2.7 项目管理",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "65e996d6-29a6-4cc4-964f-3609f9662989",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "项目保存",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "389d75b9-b0ea-4b23-874a-44f535dd3154",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "页面管理",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d058b41d-1e60-4c69-8adb-34ec72ea06ee",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "版本历史（基础）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "994da3e6-e0db-49e7-981f-9c6e660895ef",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "75d4412b-d0bc-4977-88e8-c7ffefda36fa",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "三、技术架构",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "00e2a91f-859d-4c96-8b2d-c04b8bc41432",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "fb86b4c1-ca16-4877-8405-4f50f20b4b9d",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "3.1 前端",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "86e201d6-0322-4100-9b8a-fc17f437608d",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "React + TypeScript",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "9e12c08d-6c9b-4499-81f5-e6d96247751b",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "画布：Konva",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "426ebf33-4a49-47b4-969e-4a8af1225ea3",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "状态管理：Zustand",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "cab01b2a-d37e-4438-95b9-c11a3f78009b",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "163f1bfd-ee06-4683-aa67-35a82995b814",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "3.2 后端",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8fe57298-244f-4c87-85bb-cf86ce647570",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Node.js（NestJS）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a36cb367-efdb-450f-8e75-db7d14c0e8f6",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "存储：MongoDB",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "85db7c23-d515-4146-beac-498412ae3f2b",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "ef5ff1f8-cf6e-44fc-bfdc-8cd8465e12aa",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "3.3 AI层",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "46c2ba23-0cf3-40da-9c6d-84b8696e3966",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "LLM（OpenAI / Claude）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8aab09c7-a8ea-4794-9218-e6357ad5d9d8",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Prompt模板系统",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "32c737f4-96ce-4151-9672-ce1f0b8884a1",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Schema生成器",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "44e233f9-21a1-4204-b63a-5f34f3009d01",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "2cdcb3ba-9c82-4888-b55e-605db99918e1",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "3.4 渲染层",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e0aabd0b-b768-4aaa-a8d6-c0bcbab1e99c",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Schema → React Renderer",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4ca52d1c-525a-4973-a51f-b1ad74137ba8",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Schema → 多端代码",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "62817a51-8949-43b6-9367-0011aa9f6048",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "a8d15a1a-5992-476e-bbd8-2656e8ff7cbf",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "四、关键技术设计",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "86d412df-8572-4874-8cc1-5d445ce1c634",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "38c40e85-0167-4f14-8a9b-92d58753d24a",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "4.1 单一数据源",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7c1b7b9a-3659-44c3-8c04-80bf5f3bc89f",
+    "type": "quote",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "所有数据以 Schema 为唯一真相",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "93199ff7-f929-437b-a250-07bc2ad7652d",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "8ff67f4f-85bb-4f55-8acf-8fe091fe2953",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "4.2 编辑 = 修改Schema",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7b2b47c3-e5d1-49d5-98b3-fe5aa48fed80",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "拖拽 → 改坐标",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "76c5af60-348b-4464-a837-b1b5a8b6c5dd",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "改属性 → 改props",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c82dd55e-ce95-415c-969b-8914e5939cb5",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "AI修改 → patch",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "5c3c577a-d560-43fb-b361-a841628a3304",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "f2937819-9872-4027-aa63-a74a748d4b9e",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "4.3 AI操作方式",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "23cea4e5-68ad-41e4-85f2-6dc98a9380df",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "全量生成（初始化）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "23d1d292-9247-4738-a8e9-bfe6afd08f9e",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "局部patch（编辑）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "325d921f-5348-43af-9552-f4b63db476e3",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "f84c291c-1ea2-47db-b669-4d71657c4c5f",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "五、版本规划",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e48fd2ab-bb60-49ac-b79b-e7f015cda78b",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "593c74dd-dff0-4982-8cc0-a021077a346d",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phase 1（2周）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2f3b1330-8805-4717-9d8b-9db924baff86",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "AI生成页面结构",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "71503243-7ff0-4f17-8a83-796ef8fc018c",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Schema渲染",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "47243f6b-c8cc-46d2-8674-1e1060178e83",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "简单预览",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "02c4a7ef-4a6b-4775-b02b-999d1aea07ff",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "24fa450b-3b71-4437-b6b4-099d9fa1873f",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phase 2（4周）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "54d8cf5a-785b-4cbc-9746-6c6edbd8573f",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "可视化编辑",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "bd226567-3995-4501-8cf2-f26d942b525f",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "属性面板",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "3a97c6dc-e7af-4290-ada3-84f69e2f1620",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "保存",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f6ac9eab-c776-4a07-bdd1-5168258daef5",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "47e235a0-043a-4cbe-a4c3-a5eb5b8a7a2e",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phase 3（6周）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "17100807-5115-49cc-a420-e3443d6a61bc",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "AI局部修改",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "efc77a05-af57-4f89-864d-4028cf7e33d6",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "多页面",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "edc19ea3-e61a-418e-a488-3334e8baf8f8",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "页面跳转",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "80816d63-b947-4c57-8b85-b1b93fb9c944",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "b94d3647-70e1-4976-8fc7-0825dc6ee52d",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phase 4（进阶）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "393d0970-1c2c-41df-a85d-b41a5fd5aca7",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "代码生成（React）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "cda28296-4299-4f54-acb5-692bca805cd1",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "设计优化AI",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "79f7632f-e65b-474c-89d2-22e831a9e9f2",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "63e8225a-ef87-4954-88fa-482d86eed3f1",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phase 5（高级）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "524e9eae-c9f9-4fef-bebd-ee9f7af064bb",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Flutter / iOS / Android",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "a90115c8-f97c-4124-99c4-5b9ea1aea19c",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "协同编辑",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c4ee1238-577c-4b63-85f1-254a30b081c6",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "f7a39e25-f3c1-4e38-b4a0-a557c4b9c93c",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "六、风险点",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "71b47e66-65ff-41ae-b493-1668a647ac96",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "82d8659f-9905-41f4-a31e-e4fd0aaf0ab5",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "6.1 AI生成不稳定",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "24947fa4-5663-4bb0-b03d-bb3b1be555e2",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "解决：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "457b5c4d-1269-44ed-9f81-cc19870f2ac3",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Prompt模板化",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "69a676c3-b036-4333-ad13-d0000479de9d",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Schema校验",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8aa56465-3153-45f9-9a13-b0d7fbb82710",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "e23871a1-d1ec-40d1-9314-2443a4e47f18",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "6.2 编辑器复杂度",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "09a5cd78-45b5-41ad-82f7-8474d1f9c26b",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "解决：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f2f241fd-9e42-4d09-90f5-151650255bb1",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "先做最小功能",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "1fd75520-5a82-4348-a64a-4ab648a3bf72",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "不做复杂布局系统",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8fa1f35f-7b2e-4cd3-a397-8e1b4829f34b",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "341c7a93-ec17-4c9f-b1e8-095fe553267c",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "6.3 多端代码差异",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "bb2ffecd-ada8-4cde-8db6-44cfc8982dee",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "解决：",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d3b4bcd7-7375-4635-938c-2955f2c285f7",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "中间层抽象（DSL）",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e7baf5d6-72a6-4377-adc4-44deb8f8b742",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "dc3496cb-7c8f-4b92-ab46-e73307a1d68d",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "七、核心指标",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "af344431-9b2e-4b72-aadd-e8ee4bed710a",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "PRD生成成功率",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "476e9def-73e5-4921-b5c8-28547a78755a",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "UI生成可用率",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4904eb3a-0913-4449-a73e-489b3ecc895d",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "用户编辑次数",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e585957d-7fae-405a-9bff-4544f87b6c98",
+    "type": "bulletListItem",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "代码导出成功率",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "894d26b6-3b88-40e1-931f-14937e965693",
+    "type": "divider",
+    "props": {},
+    "children": []
+  },
+  {
+    "id": "9edb9278-8b56-448d-99ed-8ef6b0f4363d",
+    "type": "heading",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "八、一句话总结",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "d5b77028-19b7-4f29-ac7a-c061cd3361a1",
+    "type": "quote",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "这是一个“以Schema为核心，用AI驱动生成与修改的设计到代码平台”",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "03474874-3b6c-4118-9cd6-05f7995f17f9",
+    "type": "paragraph",
+    "props": {
+      "backgroundColor": "default",
+      "textColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  }
+]

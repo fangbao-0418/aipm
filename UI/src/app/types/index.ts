@@ -112,11 +112,21 @@ export type WorkspaceViewMode = "table" | "tree" | "mindmap" | "business-model" 
 export interface WorkspaceRequirementDocument {
   id: string;
   title: string;
+  sortOrder?: number;
   contentHtml: string;
   contentText: string;
   contentBlocks?: unknown[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WorkspaceRequirementDocumentVersion {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  source: "manual" | "ai" | "import" | "rollback";
+  summary: string;
+  createdAt: string;
 }
 
 export type BusinessModelMode = "flow" | "state";

@@ -2,6 +2,10 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import type { Requirement, ScoreRecord } from "../../shared/types/models.js";
 import type { Task } from "../../shared/types/tasks.js";
+import type {
+  WorkspaceProjectDocumentMeta,
+  WorkspaceProjectDocumentVersion
+} from "../../shared/types/workspace.js";
 import { ProjectContext } from "../files/project-context.js";
 
 interface RequirementIndexQuery {
@@ -65,6 +69,40 @@ export class IndexDatabase {
           updated_at TEXT NOT NULL,
           PRIMARY KEY (requirement_id, artifact_type)
         );
+
+        CREATE TABLE IF NOT EXISTS workspace_documents (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          sort_order INTEGER NOT NULL,
+          deleted INTEGER NOT NULL DEFAULT 0,
+          content_file_path TEXT NOT NULL,
+          html_file_path TEXT NOT NULL,
+          text_file_path TEXT NOT NULL,
+          latest_version_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_documents_project_updated
+        ON workspace_documents(project_id, updated_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_documents_project_sort
+        ON workspace_documents(project_id, sort_order ASC);
+
+        CREATE TABLE IF NOT EXISTS workspace_document_versions (
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          version_number INTEGER NOT NULL,
+          summary TEXT NOT NULL,
+          snapshot_file_path TEXT NOT NULL,
+          source TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_document_versions_document
+        ON workspace_document_versions(document_id, version_number DESC);
       `);
     }
   }
@@ -175,6 +213,215 @@ export class IndexDatabase {
         artifact_path = excluded.artifact_path,
         updated_at = excluded.updated_at
     `).run(requirementId, artifactType, artifactPath, updatedAt);
+  }
+
+  async upsertWorkspaceDocumentMeta(meta: WorkspaceProjectDocumentMeta) {
+    await this.ensureReady();
+    this.db!.prepare(`
+      INSERT INTO workspace_documents (
+        id, project_id, title, sort_order, deleted, content_file_path, html_file_path, text_file_path, latest_version_id, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        project_id = excluded.project_id,
+        title = excluded.title,
+        sort_order = excluded.sort_order,
+        deleted = excluded.deleted,
+        content_file_path = excluded.content_file_path,
+        html_file_path = excluded.html_file_path,
+        text_file_path = excluded.text_file_path,
+        latest_version_id = excluded.latest_version_id,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
+    `).run(
+      meta.id,
+      meta.projectId,
+      meta.title,
+      meta.sortOrder,
+      meta.deleted ? 1 : 0,
+      meta.contentFilePath,
+      meta.htmlFilePath,
+      meta.textFilePath,
+      meta.latestVersionId ?? null,
+      meta.createdAt,
+      meta.updatedAt
+    );
+  }
+
+  async listWorkspaceDocumentMetas(projectId: string) {
+    await this.ensureReady();
+    const rows = this.db!.prepare(`
+      SELECT
+        id,
+        project_id,
+        title,
+        sort_order,
+        deleted,
+        content_file_path,
+        html_file_path,
+        text_file_path,
+        latest_version_id,
+        created_at,
+        updated_at
+      FROM workspace_documents
+      WHERE project_id = ?
+      ORDER BY sort_order ASC, updated_at DESC
+    `).all(projectId) as Array<{
+      id: string;
+      project_id: string;
+      title: string;
+      sort_order: number;
+      deleted: number;
+      content_file_path: string;
+      html_file_path: string;
+      text_file_path: string;
+      latest_version_id: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      projectId: row.project_id,
+      title: row.title,
+      sortOrder: row.sort_order,
+      deleted: Boolean(row.deleted),
+      contentFilePath: row.content_file_path,
+      htmlFilePath: row.html_file_path,
+      textFilePath: row.text_file_path,
+      latestVersionId: row.latest_version_id ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+  }
+
+  async getWorkspaceDocumentMeta(projectId: string, documentId: string) {
+    await this.ensureReady();
+    const row = this.db!.prepare(`
+      SELECT
+        id,
+        project_id,
+        title,
+        sort_order,
+        deleted,
+        content_file_path,
+        html_file_path,
+        text_file_path,
+        latest_version_id,
+        created_at,
+        updated_at
+      FROM workspace_documents
+      WHERE project_id = ? AND id = ?
+      LIMIT 1
+    `).get(projectId, documentId) as {
+      id: string;
+      project_id: string;
+      title: string;
+      sort_order: number;
+      deleted: number;
+      content_file_path: string;
+      html_file_path: string;
+      text_file_path: string;
+      latest_version_id: string | null;
+      created_at: string;
+      updated_at: string;
+    } | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      projectId: row.project_id,
+      title: row.title,
+      sortOrder: row.sort_order,
+      deleted: Boolean(row.deleted),
+      contentFilePath: row.content_file_path,
+      htmlFilePath: row.html_file_path,
+      textFilePath: row.text_file_path,
+      latestVersionId: row.latest_version_id ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
+  async deleteWorkspaceDocumentMeta(projectId: string, documentId: string) {
+    await this.ensureReady();
+    this.db!.prepare(`
+      DELETE FROM workspace_documents
+      WHERE project_id = ? AND id = ?
+    `).run(projectId, documentId);
+
+    this.db!.prepare(`
+      DELETE FROM workspace_document_versions
+      WHERE project_id = ? AND document_id = ?
+    `).run(projectId, documentId);
+  }
+
+  async upsertWorkspaceDocumentVersion(version: WorkspaceProjectDocumentVersion) {
+    await this.ensureReady();
+    this.db!.prepare(`
+      INSERT INTO workspace_document_versions (
+        id, document_id, project_id, version_number, summary, snapshot_file_path, source, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        document_id = excluded.document_id,
+        project_id = excluded.project_id,
+        version_number = excluded.version_number,
+        summary = excluded.summary,
+        snapshot_file_path = excluded.snapshot_file_path,
+        source = excluded.source,
+        created_at = excluded.created_at
+    `).run(
+      version.id,
+      version.documentId,
+      version.projectId,
+      version.versionNumber,
+      version.summary,
+      version.snapshotFilePath,
+      version.source,
+      version.createdAt
+    );
+  }
+
+  async listWorkspaceDocumentVersions(projectId: string, documentId: string) {
+    await this.ensureReady();
+    const rows = this.db!.prepare(`
+      SELECT
+        id,
+        document_id,
+        project_id,
+        version_number,
+        summary,
+        snapshot_file_path,
+        source,
+        created_at
+      FROM workspace_document_versions
+      WHERE project_id = ? AND document_id = ?
+      ORDER BY version_number DESC
+    `).all(projectId, documentId) as Array<{
+      id: string;
+      document_id: string;
+      project_id: string;
+      version_number: number;
+      summary: string;
+      snapshot_file_path: string;
+      source: WorkspaceProjectDocumentVersion["source"];
+      created_at: string;
+    }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      documentId: row.document_id,
+      projectId: row.project_id,
+      versionNumber: row.version_number,
+      summary: row.summary,
+      snapshotFilePath: row.snapshot_file_path,
+      source: row.source,
+      createdAt: row.created_at
+    }));
   }
 
   async listRequirementIds(query: RequirementIndexQuery = {}) {

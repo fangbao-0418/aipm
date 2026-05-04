@@ -1,0 +1,1255 @@
+{
+  "id": "doc-1777788935122",
+  "projectId": "1777632612689_ktwqj23jw",
+  "title": "未命名文档 1",
+  "sortOrder": 1,
+  "deleted": false,
+  "contentBlocks": [
+    {
+      "id": "95362fe1-a6eb-46ee-8c49-3c2414764c24",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "结论先说清楚： 👉 ",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "在 ChatGPT Plus 里，5.5 和 5.4“没有官方写死不同额度”，但实际使用消耗是有明显差异的。",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "35de9a19-ef4b-43a8-8bab-fc4a328f3cf4",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "1306be12-2748-45a0-bda2-6d930d403d0c",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "🧾 1. 官方层面：额度是“按模型档位”，不是写死 5.5 vs 5.4",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "5ddbf001-2b23-49b8-8829-81b5e9f69c71",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "目前公开信息里：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "6e21c3f9-fe17-4bcb-a416-ffbf89ba0bd1",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Plus 的深度模型（类似 5.4 Thinking） 👉 ",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "大约 3000 次 / 周级别使用额度",
+          "styles": {
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "text": " (",
+          "styles": {}
+        },
+        {
+          "type": "link",
+          "href": "https://ai.zenken.co.jp/en/post/chatgpt-usage/?utm_source=chatgpt.com",
+          "content": [
+            {
+              "type": "text",
+              "text": "Zenken AI",
+              "styles": {}
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ")",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "f93d7297-07fb-4b04-9f14-9f3593d1cb0d",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "但：",
+          "styles": {}
+        }
+      ],
+      "children": [
+        {
+          "id": "fe114fb9-9dcd-497b-b841-fef30a27c206",
+          "type": "bulletListItem",
+          "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "官方通常不会写“5.5 有多少条 / 5.4 有多少条”",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "bc45f8d6-3e7c-4a98-b659-4a9e694fca63",
+          "type": "bulletListItem",
+          "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "而是统一成：",
+              "styles": {}
+            }
+          ],
+          "children": [
+            {
+              "id": "7f1ed4be-1a68-4df0-8f1f-69339a19e503",
+              "type": "quote",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default"
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "“高性能模型共享额度池 + 动态限制”",
+                  "styles": {
+                    "bold": true
+                  }
+                }
+              ],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f2681051-d07e-4889-8e3c-eaa2a5615de4",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 所以表面上看：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "ea16a7fd-c35b-48a3-a024-5b14f8b719cb",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.5 和 5.4 = 用的是同一类额度池",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b1fdf6f5-b6ad-4ae0-a823-864e3b662cfd",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "087ddd50-f3c0-4dec-9a5b-a9f29d02ff8c",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "⚠️ 2. 实际体验差异（重点）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b13bf097-5cc8-457b-a4dd-be433cef2855",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "虽然额度规则一样，但👇",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "bea852da-2707-410d-a542-b27d385dbecc",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "💸 GPT-5.5 会更快用完额度",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "9f1e3429-e90d-4cad-99a3-298edbda0ce4",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "原因很直接：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "3e1f58fa-cf5c-41c4-b2b5-45d4f8e03053",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.5 ",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "单 token 成本 ≈ 2倍",
+          "styles": {
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "text": " (",
+          "styles": {}
+        },
+        {
+          "type": "link",
+          "href": "https://llm-stats.com/blog/research/gpt-5-5-vs-gpt-5-4?utm_source=chatgpt.com",
+          "content": [
+            {
+              "type": "text",
+              "text": "LLM Stats",
+              "styles": {}
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ")",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "27e6cb47-9556-47a9-9748-4fac6c17be79",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "推理更深 → 单次请求更“重”",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "f28c7aa2-ac55-444c-95c1-6d6ecd863e6c",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Agent / 长链路 → token消耗更大",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "921c1390-1150-4141-b22a-2c094950ccdc",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 结果：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "933a3ef2-4465-436d-b861-f3449342314b",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "同样一个任务，5.5 更容易“烧额度”",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "50144c8d-cb10-4f3e-b7a7-ceffa9a65c95",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "cd1c7db2-e390-4ef7-8b51-25475cd0060f",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "🧠 3. 但也有一个反直觉点",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "34be6b2d-8dbf-44dd-a101-2026e74c8fc5",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "5.5 并不是纯亏：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2366e10b-dd5e-4460-9230-a005e805e77e",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "更强 → ",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "更少 retry",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "30e27bc5-eac8-40a9-a0f9-1abc1718298c",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "更准 → ",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "可能少问几次",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "2cce3ecf-0f53-45de-af53-ff63ec6faf8a",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "有些任务：",
+          "styles": {}
+        }
+      ],
+      "children": [
+        {
+          "id": "40454ad1-b725-40b1-a918-33e8b1e5d1f4",
+          "type": "bulletListItem",
+          "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "5.4：3~5轮",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "4e399215-63f2-4475-bf20-3691ee8b272d",
+          "type": "bulletListItem",
+          "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "5.5：1~2轮搞定",
+              "styles": {}
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "dfa2db25-967d-48a7-85b7-c6e265fadbba",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 所以：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "d5b29940-9a10-47a4-be0f-798ea3ba0591",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "有些场景总消耗差距没那么大",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "aa561771-12c1-4e76-a4ae-157928c1529c",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "b15241fc-3f5f-4648-9353-69585376b4d1",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "📊 4. 总体真实情况（给你最实用结论）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "15757005-1e89-4da2-9b54-a487b888a8d7",
+      "type": "table",
+      "props": {
+        "textColor": "default"
+      },
+      "content": {
+        "type": "tableContent",
+        "columnWidths": [
+          null,
+          null,
+          null
+        ],
+        "headerRows": 1,
+        "rows": [
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "维度",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "GPT-5.4",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "GPT-5.5",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "官方额度规则",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "✅ 一样",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "✅ 一样",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "单次消耗",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "🟢 较低",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "🔴 更高",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "达到限额速度",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "🟢 慢",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "🔴 更快",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          },
+          {
+            "cells": [
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "复杂任务效率",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "🟡 中",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              },
+              {
+                "type": "tableCell",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "🟢 高",
+                    "styles": {}
+                  }
+                ],
+                "props": {
+                  "colspan": 1,
+                  "rowspan": 1,
+                  "backgroundColor": "default",
+                  "textColor": "default",
+                  "textAlignment": "left"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "id": "96ffc81e-4338-4516-b678-c80e432daf72",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "73802389-43cd-4d91-954d-eca77f868c24",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "🧭 5. 怎么用最划算（给你策略）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "726bda5d-783b-4f8d-a0d2-763fd23a877a",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "你现在做 AI 产品 / agent，这个很关键👇",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "3a8b1b29-6f0d-4ead-a223-ec6096d01eb6",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 3,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "✅ 推荐用法（最优组合）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "b5000b48-b70e-40d1-894e-b041d9aeff91",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "日常：",
+          "styles": {}
+        }
+      ],
+      "children": [
+        {
+          "id": "9c30b625-082a-4a20-8d1d-4970a4541b0c",
+          "type": "bulletListItem",
+          "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "👉 用 ",
+              "styles": {}
+            },
+            {
+              "type": "text",
+              "text": "5.4",
+              "styles": {
+                "bold": true
+              }
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "623e8735-0b1b-45fb-9741-b7f52d2d8e12",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "关键任务：",
+          "styles": {}
+        }
+      ],
+      "children": [
+        {
+          "id": "23c983fc-ccf6-4951-a337-0d66ff2b1850",
+          "type": "bulletListItem",
+          "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "👉 切 ",
+              "styles": {}
+            },
+            {
+              "type": "text",
+              "text": "5.5",
+              "styles": {
+                "bold": true
+              }
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "694f6d3f-31f5-42f3-ad6c-7c24e0fc718d",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "超复杂（比如：",
+          "styles": {}
+        }
+      ],
+      "children": [
+        {
+          "id": "0c76d924-a1c8-4d45-87b9-96912039b5a3",
+          "type": "bulletListItem",
+          "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "PRD → UI → code 一条龙）",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "b2d8e6b3-1782-4719-b3b4-6ee4839e04c0",
+          "type": "bulletListItem",
+          "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "👉 直接 5.5",
+              "styles": {}
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "3cafdc5f-5772-48dc-a24a-9f8d023116a6",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "58b680b1-f4ee-430b-8ece-4542762f6529",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 1,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "🧨 一句话总结（最重要）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "5586ae25-6a02-4e7e-8704-7cf545712a6f",
+      "type": "quote",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Plus 额度规则一样，但 5.5 是“性能换额度”，会更快用完。",
+          "styles": {
+            "bold": true
+          }
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "4273cb90-0c69-42e6-845f-b1f63999dee0",
+      "type": "divider",
+      "props": {},
+      "children": []
+    },
+    {
+      "id": "df9cc284-d346-4871-ad35-eb55e040db82",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "如果你要做你那个👇 👉「AI生成 PRD + UI + 代码」",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "c0896055-00eb-420a-9a54-2d4924e80b80",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "我可以帮你设计一套：",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "767f7ec9-beef-458f-8d13-3af66f77ca58",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "👉 ",
+          "styles": {}
+        },
+        {
+          "type": "text",
+          "text": "“5.4省额度 + 5.5做关键推理”的调度策略",
+          "styles": {
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "text": " （能省 30%+ 用量）",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "624c8560-2997-449b-ac27-6ce4c1f23ac2",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "要的话我直接给你完整架构 👍",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "cd511090-114b-461e-886c-215aac5eed2c",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [],
+      "children": []
+    }
+  ],
+  "contentHtml": "<div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"95362fe1-a6eb-46ee-8c49-3c2414764c24\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"95362fe1-a6eb-46ee-8c49-3c2414764c24\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">结论先说清楚： 👉 <strong>在 ChatGPT Plus 里，5.5 和 5.4“没有官方写死不同额度”，但实际使用消耗是有明显差异的。</strong></p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"35de9a19-ef4b-43a8-8bab-fc4a328f3cf4\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"35de9a19-ef4b-43a8-8bab-fc4a328f3cf4\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"1306be12-2748-45a0-bda2-6d930d403d0c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"1306be12-2748-45a0-bda2-6d930d403d0c\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">🧾 1. 官方层面：额度是“按模型档位”，不是写死 5.5 vs 5.4</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5ddbf001-2b23-49b8-8829-81b5e9f69c71\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5ddbf001-2b23-49b8-8829-81b5e9f69c71\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">目前公开信息里：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"6e21c3f9-fe17-4bcb-a416-ffbf89ba0bd1\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"6e21c3f9-fe17-4bcb-a416-ffbf89ba0bd1\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">Plus 的深度模型（类似 5.4 Thinking） 👉 <strong>大约 3000 次 / 周级别使用额度</strong> (<a target=\"_blank\" rel=\"noopener noreferrer nofollow\" classname=\"bn-inline-content-section\" data-inline-content-type=\"link\" href=\"https://ai.zenken.co.jp/en/post/chatgpt-usage/?utm_source=chatgpt.com\">Zenken AI</a>)</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f93d7297-07fb-4b04-9f14-9f3593d1cb0d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f93d7297-07fb-4b04-9f14-9f3593d1cb0d\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">但：</p></div><div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"fe114fb9-9dcd-497b-b841-fef30a27c206\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"fe114fb9-9dcd-497b-b841-fef30a27c206\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">官方通常不会写“5.5 有多少条 / 5.4 有多少条”</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"bc45f8d6-3e7c-4a98-b659-4a9e694fca63\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"bc45f8d6-3e7c-4a98-b659-4a9e694fca63\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">而是统一成：</p></div><div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"7f1ed4be-1a68-4df0-8f1f-69339a19e503\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"7f1ed4be-1a68-4df0-8f1f-69339a19e503\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\"><strong>“高性能模型共享额度池 + 动态限制”</strong></blockquote></div></div></div></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f2681051-d07e-4889-8e3c-eaa2a5615de4\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f2681051-d07e-4889-8e3c-eaa2a5615de4\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 所以表面上看：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"ea16a7fd-c35b-48a3-a024-5b14f8b719cb\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ea16a7fd-c35b-48a3-a024-5b14f8b719cb\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\"><strong>5.5 和 5.4 = 用的是同一类额度池</strong></blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b1fdf6f5-b6ad-4ae0-a823-864e3b662cfd\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b1fdf6f5-b6ad-4ae0-a823-864e3b662cfd\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"087ddd50-f3c0-4dec-9a5b-a9f29d02ff8c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"087ddd50-f3c0-4dec-9a5b-a9f29d02ff8c\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">⚠️ 2. 实际体验差异（重点）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b13bf097-5cc8-457b-a4dd-be433cef2855\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b13bf097-5cc8-457b-a4dd-be433cef2855\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">虽然额度规则一样，但👇</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"bea852da-2707-410d-a542-b27d385dbecc\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"bea852da-2707-410d-a542-b27d385dbecc\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">💸 GPT-5.5 会更快用完额度</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9f1e3429-e90d-4cad-99a3-298edbda0ce4\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9f1e3429-e90d-4cad-99a3-298edbda0ce4\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">原因很直接：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3e1f58fa-cf5c-41c4-b2b5-45d4f8e03053\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3e1f58fa-cf5c-41c4-b2b5-45d4f8e03053\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">5.5 <strong>单 token 成本 ≈ 2倍</strong> (<a target=\"_blank\" rel=\"noopener noreferrer nofollow\" classname=\"bn-inline-content-section\" data-inline-content-type=\"link\" href=\"https://llm-stats.com/blog/research/gpt-5-5-vs-gpt-5-4?utm_source=chatgpt.com\">LLM Stats</a>)</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"27e6cb47-9556-47a9-9748-4fac6c17be79\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"27e6cb47-9556-47a9-9748-4fac6c17be79\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">推理更深 → 单次请求更“重”</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"f28c7aa2-ac55-444c-95c1-6d6ecd863e6c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"f28c7aa2-ac55-444c-95c1-6d6ecd863e6c\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">Agent / 长链路 → token消耗更大</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"921c1390-1150-4141-b22a-2c094950ccdc\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"921c1390-1150-4141-b22a-2c094950ccdc\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 结果：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"933a3ef2-4465-436d-b861-f3449342314b\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"933a3ef2-4465-436d-b861-f3449342314b\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\"><strong>同样一个任务，5.5 更容易“烧额度”</strong></blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"50144c8d-cb10-4f3e-b7a7-ceffa9a65c95\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"50144c8d-cb10-4f3e-b7a7-ceffa9a65c95\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"cd1c7db2-e390-4ef7-8b51-25475cd0060f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"cd1c7db2-e390-4ef7-8b51-25475cd0060f\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">🧠 3. 但也有一个反直觉点</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"34be6b2d-8dbf-44dd-a101-2026e74c8fc5\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"34be6b2d-8dbf-44dd-a101-2026e74c8fc5\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">5.5 并不是纯亏：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2366e10b-dd5e-4460-9230-a005e805e77e\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2366e10b-dd5e-4460-9230-a005e805e77e\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">更强 → <strong>更少 retry</strong></p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"30e27bc5-eac8-40a9-a0f9-1abc1718298c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"30e27bc5-eac8-40a9-a0f9-1abc1718298c\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">更准 → <strong>可能少问几次</strong></p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"2cce3ecf-0f53-45de-af53-ff63ec6faf8a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"2cce3ecf-0f53-45de-af53-ff63ec6faf8a\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">有些任务：</p></div><div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"40454ad1-b725-40b1-a918-33e8b1e5d1f4\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"40454ad1-b725-40b1-a918-33e8b1e5d1f4\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">5.4：3~5轮</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"4e399215-63f2-4475-bf20-3691ee8b272d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"4e399215-63f2-4475-bf20-3691ee8b272d\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">5.5：1~2轮搞定</p></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"dfa2db25-967d-48a7-85b7-c6e265fadbba\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"dfa2db25-967d-48a7-85b7-c6e265fadbba\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 所以：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"d5b29940-9a10-47a4-be0f-798ea3ba0591\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d5b29940-9a10-47a4-be0f-798ea3ba0591\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\">有些场景总消耗差距没那么大</blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"aa561771-12c1-4e76-a4ae-157928c1529c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"aa561771-12c1-4e76-a4ae-157928c1529c\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b15241fc-3f5f-4648-9353-69585376b4d1\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b15241fc-3f5f-4648-9353-69585376b4d1\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">📊 4. 总体真实情况（给你最实用结论）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"15757005-1e89-4da2-9b54-a487b888a8d7\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"15757005-1e89-4da2-9b54-a487b888a8d7\"><div class=\"bn-block-content\" data-content-type=\"table\"><div class=\"tableWrapper\"><div class=\"tableWrapper-inner\"></div><table class=\"bn-inline-content\" style=\"--default-cell-min-width: 120px;\" data-show-children=\"true\"><colgroup><col><col><col></colgroup><tr><th colspan=\"1\" rowspan=\"1\"><p>维度</p></th><th colspan=\"1\" rowspan=\"1\"><p>GPT-5.4</p></th><th colspan=\"1\" rowspan=\"1\"><p>GPT-5.5</p></th></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>官方额度规则</p></td><td colspan=\"1\" rowspan=\"1\"><p>✅ 一样</p></td><td colspan=\"1\" rowspan=\"1\"><p>✅ 一样</p></td></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>单次消耗</p></td><td colspan=\"1\" rowspan=\"1\"><p>🟢 较低</p></td><td colspan=\"1\" rowspan=\"1\"><p>🔴 更高</p></td></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>达到限额速度</p></td><td colspan=\"1\" rowspan=\"1\"><p>🟢 慢</p></td><td colspan=\"1\" rowspan=\"1\"><p>🔴 更快</p></td></tr><tr><td colspan=\"1\" rowspan=\"1\"><p>复杂任务效率</p></td><td colspan=\"1\" rowspan=\"1\"><p>🟡 中</p></td><td colspan=\"1\" rowspan=\"1\"><p>🟢 高</p></td></tr></table></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"96ffc81e-4338-4516-b678-c80e432daf72\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"96ffc81e-4338-4516-b678-c80e432daf72\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"73802389-43cd-4d91-954d-eca77f868c24\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"73802389-43cd-4d91-954d-eca77f868c24\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">🧭 5. 怎么用最划算（给你策略）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"726bda5d-783b-4f8d-a0d2-763fd23a877a\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"726bda5d-783b-4f8d-a0d2-763fd23a877a\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">你现在做 AI 产品 / agent，这个很关键👇</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3a8b1b29-6f0d-4ead-a223-ec6096d01eb6\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3a8b1b29-6f0d-4ead-a223-ec6096d01eb6\"><div class=\"bn-block-content\" data-content-type=\"heading\" data-level=\"3\"><h3 class=\"bn-inline-content\">✅ 推荐用法（最优组合）</h3></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b5000b48-b70e-40d1-894e-b041d9aeff91\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b5000b48-b70e-40d1-894e-b041d9aeff91\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">日常：</p></div><div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"9c30b625-082a-4a20-8d1d-4970a4541b0c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"9c30b625-082a-4a20-8d1d-4970a4541b0c\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">👉 用 <strong>5.4</strong></p></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"623e8735-0b1b-45fb-9741-b7f52d2d8e12\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"623e8735-0b1b-45fb-9741-b7f52d2d8e12\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">关键任务：</p></div><div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"23c983fc-ccf6-4951-a337-0d66ff2b1850\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"23c983fc-ccf6-4951-a337-0d66ff2b1850\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">👉 切 <strong>5.5</strong></p></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"694f6d3f-31f5-42f3-ad6c-7c24e0fc718d\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"694f6d3f-31f5-42f3-ad6c-7c24e0fc718d\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">超复杂（比如：</p></div><div class=\"bn-block-group\" data-node-type=\"blockGroup\"><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"0c76d924-a1c8-4d45-87b9-96912039b5a3\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"0c76d924-a1c8-4d45-87b9-96912039b5a3\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">PRD → UI → code 一条龙）</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"b2d8e6b3-1782-4719-b3b4-6ee4839e04c0\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"b2d8e6b3-1782-4719-b3b4-6ee4839e04c0\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">👉 直接 5.5</p></div></div></div></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"3cafdc5f-5772-48dc-a24a-9f8d023116a6\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"3cafdc5f-5772-48dc-a24a-9f8d023116a6\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"58b680b1-f4ee-430b-8ece-4542762f6529\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"58b680b1-f4ee-430b-8ece-4542762f6529\"><div class=\"bn-block-content\" data-content-type=\"heading\"><h1 class=\"bn-inline-content\">🧨 一句话总结（最重要）</h1></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"5586ae25-6a02-4e7e-8704-7cf545712a6f\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"5586ae25-6a02-4e7e-8704-7cf545712a6f\"><div class=\"bn-block-content\" data-content-type=\"quote\"><blockquote class=\"bn-inline-content\"><strong>Plus 额度规则一样，但 5.5 是“性能换额度”，会更快用完。</strong></blockquote></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"4273cb90-0c69-42e6-845f-b1f63999dee0\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"4273cb90-0c69-42e6-845f-b1f63999dee0\"><div class=\"bn-block-content\" data-content-type=\"divider\"><hr></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"df9cc284-d346-4871-ad35-eb55e040db82\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"df9cc284-d346-4871-ad35-eb55e040db82\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">如果你要做你那个👇 👉「AI生成 PRD + UI + 代码」</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"c0896055-00eb-420a-9a54-2d4924e80b80\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"c0896055-00eb-420a-9a54-2d4924e80b80\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">我可以帮你设计一套：</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"767f7ec9-beef-458f-8d13-3af66f77ca58\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"767f7ec9-beef-458f-8d13-3af66f77ca58\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">👉 <strong>“5.4省额度 + 5.5做关键推理”的调度策略</strong> （能省 30%+ 用量）</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"624c8560-2997-449b-ac27-6ce4c1f23ac2\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"624c8560-2997-449b-ac27-6ce4c1f23ac2\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\">要的话我直接给你完整架构 👍</p></div></div></div><div class=\"bn-block-outer\" data-node-type=\"blockOuter\" data-id=\"cd511090-114b-461e-886c-215aac5eed2c\"><div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"cd511090-114b-461e-886c-215aac5eed2c\"><div class=\"bn-block-content\" data-content-type=\"paragraph\"><p class=\"bn-inline-content\"><span class=\"ProseMirror-trailingBreak\" style=\"display: inline-block;\"></span></p></div></div></div></div>",
+  "contentText": "结论先说清楚： 👉 **在 ChatGPT Plus 里，5.5 和 5.4“没有官方写死不同额度”，但实际使用消耗是有明显差异的。**\n\n***\n\n# 🧾 1. 官方层面：额度是“按模型档位”，不是写死 5.5 vs 5.4\n\n目前公开信息里：\n\n* Plus 的深度模型（类似 5.4 Thinking） 👉 **大约 3000 次 / 周级别使用额度** ([Zenken AI](https://ai.zenken.co.jp/en/post/chatgpt-usage/?utm_source=chatgpt.com))\n\n* 但：\n\n  * 官方通常不会写“5.5 有多少条 / 5.4 有多少条”\n\n  * 而是统一成：\n\n> **“高性能模型共享额度池 + 动态限制”**\n\n👉 所以表面上看：\n\n> **5.5 和 5.4 = 用的是同一类额度池**\n\n***\n\n# ⚠️ 2. 实际体验差异（重点）\n\n虽然额度规则一样，但👇\n\n### 💸 GPT-5.5 会更快用完额度\n\n原因很直接：\n\n* 5.5 **单 token 成本 ≈ 2倍** ([LLM Stats](https://llm-stats.com/blog/research/gpt-5-5-vs-gpt-5-4?utm_source=chatgpt.com))\n\n* 推理更深 → 单次请求更“重”\n\n* Agent / 长链路 → token消耗更大\n\n👉 结果：\n\n> **同样一个任务，5.5 更容易“烧额度”**\n\n***\n\n# 🧠 3. 但也有一个反直觉点\n\n5.5 并不是纯亏：\n\n* 更强 → **更少 retry**\n\n* 更准 → **可能少问几次**\n\n* 有些任务：\n\n  * 5.4：3~5轮\n\n  * 5.5：1~2轮搞定\n\n👉 所以：\n\n> 有些场景总消耗差距没那么大\n\n***\n\n# 📊 4. 总体真实情况（给你最实用结论）\n\n| 维度     | GPT-5.4 | GPT-5.5 |\n| ------ | ------- | ------- |\n| 官方额度规则 | ✅ 一样    | ✅ 一样    |\n| 单次消耗   | 🟢 较低   | 🔴 更高   |\n| 达到限额速度 | 🟢 慢    | 🔴 更快   |\n| 复杂任务效率 | 🟡 中    | 🟢 高    |\n\n***\n\n# 🧭 5. 怎么用最划算（给你策略）\n\n你现在做 AI 产品 / agent，这个很关键👇\n\n### ✅ 推荐用法（最优组合）\n\n* 日常：\n\n  * 👉 用 **5.4**\n\n* 关键任务：\n\n  * 👉 切 **5.5**\n\n* 超复杂（比如：\n\n  * PRD → UI → code 一条龙）\n\n  * 👉 直接 5.5\n\n***\n\n# 🧨 一句话总结（最重要）\n\n> **Plus 额度规则一样，但 5.5 是“性能换额度”，会更快用完。**\n\n***\n\n如果你要做你那个👇 👉「AI生成 PRD + UI + 代码」\n\n我可以帮你设计一套：\n\n👉 **“5.4省额度 + 5.5做关键推理”的调度策略** （能省 30%+ 用量）\n\n要的话我直接给你完整架构 👍\n",
+  "createdAt": "2026-05-03T06:15:35.122Z",
+  "updatedAt": "2026-05-03T06:18:02.034Z",
+  "source": "manual",
+  "versionNumber": 7
+}

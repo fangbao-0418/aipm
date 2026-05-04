@@ -2,46 +2,46 @@
   {
     "stage": "requirement-collection",
     "status": "in-progress",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   },
   {
     "stage": "requirement-structure",
     "status": "not-started",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   },
   {
     "stage": "requirement-clarification",
     "status": "not-started",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   },
   {
     "stage": "product-model",
     "status": "not-started",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   },
   {
     "stage": "prd",
     "status": "not-started",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   },
   {
     "stage": "prototype",
     "status": "not-started",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   },
   {
     "stage": "prototype-annotation",
     "status": "not-started",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   },
   {
     "stage": "ui-draft",
     "status": "not-started",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   },
   {
     "stage": "review",
     "status": "not-started",
-    "updatedAt": "2026-05-02T03:05:18.571Z"
+    "updatedAt": "2026-05-04T01:32:32.882Z"
   }
 ]

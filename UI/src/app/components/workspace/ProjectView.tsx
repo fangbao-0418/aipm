@@ -180,7 +180,11 @@ export function ProjectView() {
   const onOpenWorkspace = useCallback(() => {
     // setShowWorkspace(true);
     navigate(`/project/${projectId}/workspace`);
-  }, [])
+  }, [navigate, projectId]);
+
+  const onOpenDesign = useCallback(() => {
+    navigate(`/project/${projectId}/design`);
+  }, [navigate, projectId]);
 
   if (loading) {
     return (
@@ -212,6 +216,7 @@ export function ProjectView() {
         onBundleUpdate={applyBundle}
         onRefresh={refreshLocalState}
         onOpenWorkspace={onOpenWorkspace}
+        onOpenDesign={onOpenDesign}
       />
       
       {/* Right Panel - Stages */}

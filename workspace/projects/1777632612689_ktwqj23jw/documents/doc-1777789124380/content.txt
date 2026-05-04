@@ -1,0 +1,405 @@
+好，这一版我给你的是**接近 Figma / 墨刀级别的高保真 UI 结构稿（可直接给设计师落图）**，并且已经结合你产品的 AI 特性做了专门设计。
+
+⚠️ 重点：这不是“好看示意图”，而是**可实现的布局规范 + 模块划分 + 交互位定义**
+
+***
+
+# 一、整体布局（编辑器主界面）
+
+![Image](https://images.openai.com/static-rsc-4/AvUv-1YAvvqLG-5Lb6a7gnatjpATk7F8ePnsDhHtpNrxtycbsvRjpEYLACZAyaN6yAgzctJJX9vLdDDTgWYIbIECqzfOtIMjanel6yawvmL6FU6ItPTkn2fJG1E9FwmFVL2uBDoLNeuWN-j3gxdmH8ErRYSQsh2sVt23GurY0FIIAttfShFxKTg83x821ERs?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/wLlvxQ7-SfWWyjOs44PlRWlERtZa-dLn64GiJq3wVFjeX46aM2r9q-StqAnt_XFAoMxi83E3wEXng-ZWCggjFJZ9OdQ2onWh8wZPn_3QzjPyIi338ODVMi1wWIWAdzCWQNG-PucJakEd4umwIQfcrAZpkR39CurizBPyV7eufqlkdHhgLhR4pJ0-hUK5j2p6?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/BfEFbC0oO77EdL15CKWhB-zQ8-7kRu9OaxjOuiK4muPNFZy4Q5cP_yZvZCHPXUPRUy44HxHmMHtf13cBbqmWC8gsb23emR8kc4F_ggEXKjUKc_CVt750lyTqLF40fJEsm5dO_wW2pdZ3kwuZR8SM_zSnq_CjQtHjuy-oN50YruebtvmVU5WU3Q8KY_ibpC-8?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/OSNeu94OQCPIChC2CxSKoHWQz5TuzKO2DKVyumY8K0OIBniourV5_gwiRwRyWNwCQX9lrKl0B73Nkn48DnwEJ9a2oTHHm__mwRHQbYlfmz73xizOB4JoInHNGZ6AXXcLB7IgAx1cWK92--oG9WcQxJe04__ra9SbM5ktYxJTALjctBkXrykq81WLm1afagT7?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/JSySCLDVlTUHKOvmc4qTT_TGNc-PhzKTWPV48G9nBZjL2d1gMf9p8ppewItP9UqV9qbRg8R-pG3pDhonnfhRZTqdrxFHlhkvNgvFu3LI73kKPlA3w4md3ZKvbpYFeHJ8MEtP8gDatgw4WzB9SLrOMEDT6QtUyKVxPfwoerV5FyumXF0Dh-RU3C0hohsHetsr?purpose=fullsize)![Image](https://images.openai.com/static-rsc-4/QKWybgBYbIPdQ24Znon1gu9zMwimlo5whPSYRAMnixkfZhnhs7WAV3px3TCZ9z_fNqc31EyBhSYP6IcgMBxyyOy2AExf0jCRUNZKuU7ATG2XgEia1lrzznzlc_j7we8qKYvGt117VIIY7jacEqT8JeQEcaYZxKV1BwKsrQ8w-mG-Bz9R1Ua_D4q3X01oqMSL?purpose=fullsize)
+
+## 布局结构（核心）
+
+```text
+┌──────────────────────────────────────────────┐
+│ 顶部工具栏 TopBar                           │
+├──────────────┬───────────────────┬──────────┤
+│ 左侧面板     │     画布区域       │ 右侧面板 │
+│ Sidebar      │     Canvas        │ Inspector│
+├──────────────┴───────────────────┴──────────┤
+│ 底部状态栏 StatusBar                         │
+└──────────────────────────────────────────────┘
+```
+
+***
+
+# 二、顶部工具栏（TopBar）
+
+## UI结构
+
+```text
+[Logo] 项目名称
+
+[+ 新建] [AI生成] [保存] [撤销] [重做]
+
+| 工具区 |
+[选择] [手型] [文本] [矩形] [组件]
+
+| 视图区 |
+[缩放 100%] [适配屏幕]
+
+| 操作区 |
+[预览] [导出代码] [分享]
+```
+
+***
+
+## 交互说明（关键）
+
+| 操作    | 行为       |
+| ----- | -------- |
+| AI生成  | 打开AI输入弹窗 |
+| 撤销/重做 | 操作历史     |
+| 预览    | 全屏原型     |
+| 导出    | 打开导出弹窗   |
+
+***
+
+# 三、左侧面板（Sidebar）
+
+## 三个 Tab（必须有）
+
+```text
+[图层] [组件] [资源]
+```
+
+***
+
+## 3.1 图层（Layers）
+
+```text
+页面1
+ ├─ Header
+ ├─ Table
+ │   ├─ Row1
+ │   ├─ Row2
+ ├─ Button
+```
+
+👉 支持：
+
+* 拖拽排序
+
+* 隐藏/显示 👁
+
+* 锁定 🔒
+
+* 重命名
+
+***
+
+## 3.2 组件库（Components）
+
+```text
+基础组件
+  - Text
+  - Image
+  - Button
+  - Input
+
+业务组件
+  - 商品卡片
+  - 用户卡片
+  - 数据卡片
+
+Antd组件
+  - Table
+  - Form
+  - Modal
+```
+
+👉 交互：
+
+```text
+拖拽 → 画布
+点击 → 插入默认位置
+```
+
+***
+
+## 3.3 资源（Assets）
+
+```text
+素材组件
+模板
+图标
+图片
+```
+
+👉 来源：
+
+* 用户保存的组件
+
+* 系统模板
+
+* AI生成组件
+
+***
+
+# 四、画布区域（Canvas）
+
+## 结构
+
+```text
+[页面容器 Frame]
+
+  Header
+  Sidebar
+  Content区域
+
+      Table
+      Form
+      Button
+```
+
+***
+
+## 功能
+
+### 1️⃣ 选中
+
+```text
+点击组件 → 显示蓝色边框
+```
+
+***
+
+### 2️⃣ 拖拽
+
+```text
+拖动 → 更新位置
+```
+
+***
+
+### 3️⃣ 缩放
+
+```text
+Ctrl + 滚轮
+```
+
+***
+
+### 4️⃣ 多选
+
+```text
+Shift + 点击
+框选拖拽
+```
+
+***
+
+### 5️⃣ 对齐辅助线
+
+```text
+自动吸附（类似Figma）
+```
+
+***
+
+# 五、右侧面板（Inspector）
+
+👉 这是 UI 最重要的区域之一
+
+***
+
+## Tab结构
+
+```text
+[属性] [样式] [交互] [AI]
+```
+
+***
+
+## 5.1 属性（Props）
+
+```text
+组件：Button
+
+文本：提交
+类型：Primary
+大小：Large
+禁用：false
+```
+
+***
+
+## 5.2 样式（Style）
+
+```text
+宽度：120
+高度：40
+
+颜色：#1890ff
+圆角：8
+
+字体：14px
+颜色：#fff
+
+阴影：开关
+```
+
+***
+
+## 5.3 交互（Interaction）
+
+```text
+点击行为：
+
+[跳转]
+目标页面：/detail
+
+[请求API]（后期）
+```
+
+***
+
+## 5.4 AI面板（核心差异）
+
+```text
+输入框：
+👉 把这个按钮改成渐变色
+
+[应用] [重试]
+```
+
+***
+
+## AI交互流程
+
+```text
+输入指令
+↓
+发送 node + context
+↓
+返回 patch
+↓
+应用
+↓
+刷新UI
+```
+
+***
+
+# 六、AI生成入口（弹窗）
+
+## UI结构
+
+```text
+标题：AI生成页面
+
+输入框（大文本）
+
+示例：
+- 电商后台
+- 医疗系统
+- CRM系统
+
+选项：
+☑ Web后台
+☑ 使用Ant Design
+
+[生成按钮]
+```
+
+***
+
+## Loading设计（重要）
+
+```text
+生成中：
+
+✔ PRD生成完成
+✔ 页面结构生成
+⏳ UI生成中...
+```
+
+👉 提升体验（关键）
+
+***
+
+# 七、预览模式（Preview）
+
+```text
+全屏
+隐藏侧边栏
+真实点击交互
+```
+
+***
+
+# 八、代码导出弹窗
+
+```text
+选择框：
+
+☑ React + Ant Design
+☐ Vue（灰）
+
+[导出按钮]
+```
+
+***
+
+# 九、页面尺寸（设计规范）
+
+## Web后台
+
+```text
+画布宽度：1440px
+内容区：1200px
+栅格：24列
+```
+
+***
+
+## 间距规范
+
+```text
+间距：8 / 12 / 16 / 24 / 32
+```
+
+***
+
+# 十、颜色系统（建议）
+
+```text
+主色：#1677ff
+成功：#52c41a
+警告：#faad14
+错误：#ff4d4f
+```
+
+***
+
+# 十一、设计师交付重点
+
+UI 需要画这些：
+
+```text
+1. 编辑器整体布局
+2. 左侧面板（三Tab）
+3. 组件库样式
+4. 画布选中态
+5. 右侧属性面板
+6. AI面板
+7. AI生成弹窗
+8. 预览模式
+9. 导出弹窗
+```
+
+***
+
+# 十二、一句话总结
+
+> 这个 UI 的本质是：**Figma结构 + 墨刀交互 + AI操作层**
+
+***
+
+# 如果你要继续往下（强烈建议）
+
+我可以帮你直接做👇
+
+👉 1️⃣ 「Figma可导入的设计稿结构（frame + auto layout）」 👉 2️⃣ 「React + Tailwind 实现这个UI（可运行）」 👉 3️⃣ 「组件库UI规范（设计系统级别）」
+
+你现在这一步，其实已经可以让 UI 开始出稿了 👍

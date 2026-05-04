@@ -1,4 +1,6 @@
-import { extname } from "node:path";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, extname, join } from "node:path";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import XLSX from "xlsx";
@@ -11,6 +13,13 @@ import { buildFallbackChatDecision, type ChatDecision } from "./chat-rules.js";
 import { MainAgentOrchestratorService } from "./main-agent-orchestrator-service.js";
 import type {
   WorkspaceBundle,
+  WorkspaceDesignComponent,
+  WorkspaceDesignAsset,
+  WorkspaceDesignImportResult,
+  WorkspaceDesignNode,
+  WorkspaceDesignNodeType,
+  WorkspaceDesignPage,
+  WorkspaceProjectDocument,
   WorkspaceLlmSettings,
   WorkspaceRequirementPointSection,
   WorkspaceProject,
@@ -56,6 +65,26 @@ type LlmSettingsSaveResult = {
     baseUrl: string;
     message: string;
   };
+};
+
+type WorkspaceProjectDocumentSaveInput = {
+  title: string;
+  sortOrder: number;
+  contentBlocks: unknown[];
+  contentHtml: string;
+  contentText: string;
+  deleted?: boolean;
+};
+
+type WorkspaceDesignImportFile = {
+  filename: string;
+  mimeType: string;
+  bytes: Buffer;
+};
+
+type SketchSharedStyleMaps = {
+  layerStyleById: Map<string, Record<string, unknown>>;
+  textStyleById: Map<string, Record<string, unknown>>;
 };
 
 const structureSchema = z.object({
@@ -155,6 +184,97 @@ export class WorkspaceProjectService {
     const validation = await this.validateProjectLlm(projectId, settings, input.apiKey);
     const bundle = await this.repository.buildBundle(projectId);
     return { bundle, validation };
+  }
+
+  async listProjectDocuments(projectId: string) {
+    return this.repository.listProjectDocuments(projectId);
+  }
+
+  async createProjectDocument(projectId: string, input?: { title?: string }) {
+    const existing = await this.repository.listProjectDocuments(projectId);
+    const now = nowIso();
+    const document: WorkspaceProjectDocument = {
+      id: `doc-${Date.now()}`,
+      projectId,
+      title: input?.title?.trim() || `未命名文档 ${existing.length + 1}`,
+      sortOrder: existing.length + 1,
+      deleted: false,
+      contentBlocks: [{ type: "paragraph", content: "" }],
+      contentHtml: "<p></p>",
+      contentText: "",
+      createdAt: now,
+      updatedAt: now
+    };
+    await this.repository.saveProjectDocument(document, "manual");
+    return document;
+  }
+
+  async getProjectDocument(projectId: string, documentId: string) {
+    return this.repository.getProjectDocument(projectId, documentId);
+  }
+
+  async saveProjectDocument(projectId: string, documentId: string, input: WorkspaceProjectDocumentSaveInput) {
+    const existing = await this.repository.getProjectDocument(projectId, documentId);
+    if (!existing) {
+      throw new Error(`Document "${documentId}" not found.`);
+    }
+
+    const nextDocument: WorkspaceProjectDocument = {
+      ...existing,
+      title: input.title,
+      sortOrder: input.sortOrder,
+      deleted: input.deleted ?? existing.deleted,
+      contentBlocks: input.contentBlocks,
+      contentHtml: input.contentHtml,
+      contentText: input.contentText,
+      updatedAt: nowIso()
+    };
+
+    await this.repository.saveProjectDocument(nextDocument, "manual");
+    return nextDocument;
+  }
+
+  async deleteProjectDocument(projectId: string, documentId: string) {
+    await this.repository.deleteProjectDocument(projectId, documentId);
+    return { ok: true, projectId, documentId };
+  }
+
+  async reorderProjectDocuments(projectId: string, orderedIds: string[]) {
+    await this.repository.saveProjectDocumentOrder(projectId, orderedIds);
+    return this.repository.listProjectDocuments(projectId);
+  }
+
+  async listProjectDocumentVersions(projectId: string, documentId: string) {
+    return this.repository.listProjectDocumentVersions(projectId, documentId);
+  }
+
+  async getProjectDocumentVersion(projectId: string, documentId: string, versionId: string) {
+    return this.repository.getProjectDocumentVersion(projectId, documentId, versionId);
+  }
+
+  async restoreProjectDocumentVersion(projectId: string, documentId: string, versionId: string) {
+    const existing = await this.repository.getProjectDocument(projectId, documentId);
+    const version = await this.repository.getProjectDocumentVersion(projectId, documentId, versionId);
+
+    if (!existing || !version) {
+      throw new Error(`Document version "${versionId}" not found.`);
+    }
+
+    const restored: WorkspaceProjectDocument = {
+      id: existing.id,
+      projectId: existing.projectId,
+      title: version.title,
+      sortOrder: existing.sortOrder,
+      deleted: false,
+      contentBlocks: version.contentBlocks,
+      contentHtml: version.contentHtml,
+      contentText: version.contentText,
+      createdAt: existing.createdAt,
+      updatedAt: nowIso()
+    };
+
+    await this.repository.saveProjectDocument(restored, "rollback");
+    return restored;
   }
 
   async appendRequirementInput(projectId: string, message: string) {
@@ -301,6 +421,62 @@ export class WorkspaceProjectService {
     );
 
     return this.persistCollectionAndBundle(project, organized, currentCollection.sourceRecords.length > 0 ? "pending-review" : "in-progress");
+  }
+
+  async importDesignFile(projectId: string, file: WorkspaceDesignImportFile): Promise<WorkspaceDesignImportResult> {
+    await this.repository.getProject(projectId);
+    const imported = await importDesignSourceFile(file);
+    return this.persistImportedDesignAssets(projectId, imported);
+  }
+
+  async getDesignAsset(projectId: string, assetId: string) {
+    await this.repository.getProject(projectId);
+    const bytes = await this.repository.readDesignAsset(projectId, assetId);
+    return {
+      bytes,
+      mimeType: mimeTypeFromSketchImageRef(assetId)
+    };
+  }
+
+  private async persistImportedDesignAssets(projectId: string, imported: WorkspaceDesignImportResult): Promise<WorkspaceDesignImportResult> {
+    if (imported.assets.length === 0) {
+      return imported;
+    }
+
+    const persistedAssets = await Promise.all(imported.assets.map(async (asset) => {
+      const bytes = decodeDataUrl(asset.url);
+      if (!bytes) {
+        return asset;
+      }
+      const saved = await this.repository.saveDesignAsset(projectId, asset.name, bytes);
+      return {
+        ...asset,
+        url: `/api/workspace/projects/${projectId}/design/assets/${encodeURIComponent(saved.storedFilename)}`
+      };
+    }));
+    const assetByRef = new Map(persistedAssets.map((asset) => [asset.sourceRef, asset]));
+    const rewriteNodeAssetUrl = (node: WorkspaceDesignNode): WorkspaceDesignNode => {
+      const asset = node.sourceRef ? assetByRef.get(node.sourceRef) : undefined;
+      const fillAsset = imported.assets.find((candidate) => candidate.url === node.fillImageUrl);
+      const persistedFillAsset = fillAsset?.sourceRef ? assetByRef.get(fillAsset.sourceRef) : undefined;
+      return {
+        ...node,
+        imageUrl: asset?.url ?? node.imageUrl,
+        fillImageUrl: persistedFillAsset?.url ?? node.fillImageUrl
+      };
+    };
+
+    return {
+      pages: imported.pages.map((page) => ({
+        ...page,
+        nodes: page.nodes.map(rewriteNodeAssetUrl)
+      })),
+      components: imported.components.map((component) => ({
+        ...component,
+        nodes: component.nodes.map(rewriteNodeAssetUrl)
+      })),
+      assets: persistedAssets
+    };
   }
 
   async updateRequirementDocument(projectId: string, document: string) {
@@ -2002,6 +2178,1579 @@ function richTextHtmlToText(input: string) {
     .replace(/&gt;/g, ">")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+async function importDesignSourceFile(file: WorkspaceDesignImportFile): Promise<WorkspaceDesignImportResult> {
+  const extension = extname(file.filename).toLowerCase().replace(/^\./, "");
+  if (extension === "sketch") {
+    return importSketchDesignFile(file);
+  }
+  if (extension === "fig" || extension === "figma") {
+    return importVextraDesignFile(file);
+  }
+  throw new Error("仅支持导入 .sketch / .fig / .figma 文件");
+}
+
+async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<WorkspaceDesignImportResult> {
+  const extension = extname(file.filename).toLowerCase().replace(/^\./, "");
+  if (extension !== "sketch") {
+    throw new Error("仅支持导入 .sketch 文件");
+  }
+
+  const tempDir = await mkdtemp(join(tmpdir(), "aipm-sketch-import-"));
+  const tempPath = join(tempDir, basename(file.filename));
+
+  try {
+    await writeFile(tempPath, file.bytes);
+    const sketch = await import("@sketch-hq/sketch-file") as unknown as {
+      fromFile(filepath: string): Promise<{
+        contents: {
+          document?: {
+            assets?: unknown;
+            pages?: unknown[];
+            foreignSymbols?: unknown[];
+          };
+        };
+      }>;
+    };
+    const parsedFile = await sketch.fromFile(tempPath);
+    const document = safeObject(parsedFile.contents.document);
+    const sourcePages = toArray(document.pages);
+    const assets = await extractSketchImageAssets(tempPath, document, sourcePages, file.filename);
+    const assetByRef = new Map(assets.map((asset) => [asset.sourceRef, asset]));
+    const symbolById = buildSketchSymbolMap(sourcePages, document);
+    const sharedStyleMaps = buildSketchSharedStyleMaps(document);
+    const pages = sourcePages.flatMap((pageLike, pageIndex) => {
+      const pageName = getStringProp(pageLike, "name") || `Sketch 页面 ${pageIndex + 1}`;
+      const pageCandidates = getSketchTopLevelPageCandidates(pageLike);
+      const pageLayers = pageCandidates.length > 0 ? pageCandidates : [pageLike];
+
+      return pageLayers.map((layer, layerIndex) => {
+        const rawNodes = (pageCandidates.length > 0 ? [layer] : getSketchRenderableLayers(layer)).flatMap((renderLayer, renderIndex) => (
+          convertSketchLayer(renderLayer, {
+            depth: 0,
+            index: renderIndex,
+            parentX: 0,
+            parentY: 0,
+            scaleX: 1,
+            scaleY: 1,
+            assetByRef,
+            symbolById,
+            sharedStyleMaps
+          })
+        ));
+        const normalizedNodes = normalizeDesignNodesToLocalCanvas(rawNodes);
+        const layerName = pageCandidates.length > 0 ? getStringProp(layer, "name") : pageName;
+
+        return {
+          id: createDesignId("import-page"),
+          name: layerName || (pageCandidates.length > 0 ? `${pageName} ${layerIndex + 1}` : pageName),
+          nodes: normalizedNodes.length > 0 ? normalizedNodes : [
+            createDesignNode("frame", {
+              name: layerName || pageName || file.filename,
+              text: "已读取 Sketch 页面，但没有识别到可展示图层",
+              x: 420,
+              y: 280,
+              width: 420,
+              height: 220,
+              fill: "#f4f4f5"
+            })
+          ]
+        } satisfies WorkspaceDesignPage;
+      });
+    });
+
+    const symbolMasters = [
+      ...sourcePages.flatMap((pageLike) => collectSketchSymbolMasters(getSketchLayers(pageLike))),
+      ...toArray(document.foreignSymbols).flatMap((foreignSymbol) => {
+        const symbol = safeObject(foreignSymbol).symbolMaster ?? safeObject(foreignSymbol).originalMaster;
+        return symbol ? [symbol] : [];
+      })
+    ];
+    const components = (symbolMasters.length > 0
+      ? symbolMasters
+      : sourcePages.flatMap((pageLike) => getSketchLayers(pageLike).filter((layer) => isSketchComponentCandidate(layer)))
+    ).map((layer, index) => {
+      const nodes = convertSketchLayer(layer, {
+        depth: 0,
+        index,
+        parentX: 0,
+        parentY: 0,
+        scaleX: 1,
+        scaleY: 1,
+        assetByRef,
+        symbolById,
+        sharedStyleMaps
+      });
+
+      return {
+        id: createDesignId("import-component"),
+        name: getStringProp(layer, "name") || `Sketch 组件 ${index + 1}`,
+        sourceFileName: file.filename,
+        nodeCount: nodes.length,
+        nodes
+      } satisfies WorkspaceDesignComponent;
+    }).filter((component) => component.nodes.length > 0);
+
+    if (pages.length === 0) {
+      throw new Error("Sketch 文件已读取，但没有识别到页面");
+    }
+
+    return { pages, components, assets };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function importVextraDesignFile(file: WorkspaceDesignImportFile): Promise<WorkspaceDesignImportResult> {
+  const extension = extname(file.filename).toLowerCase().replace(/^\./, "");
+  if (!["fig", "figma"].includes(extension)) {
+    throw new Error("仅支持导入 .sketch / .fig / .figma 文件");
+  }
+
+  const tempDir = await mkdtemp(join(tmpdir(), "aipm-design-import-"));
+  const tempPath = join(tempDir, basename(file.filename));
+
+  try {
+    await writeFile(tempPath, file.bytes);
+    const vextra = await import("@kcaitech/vextra-core") as unknown as {
+      DataGuard: new () => { guard(data: unknown): unknown };
+      IO: {
+        importSketch(file: string, guard: { guard(data: unknown): unknown }): Promise<{ pagesMgr: unknown }>;
+        importFigma(file: string, guard: { guard(data: unknown): unknown }): Promise<{ pagesMgr: unknown }>;
+      };
+    };
+    const guard = new vextra.DataGuard();
+    const document = await vextra.IO.importFigma(tempPath, guard);
+    const sourcePages = getResourceValues(document.pagesMgr);
+    const pages = sourcePages.map((pageLike, pageIndex) => {
+      const rawNodes = getChildShapes(pageLike).flatMap((shape, shapeIndex) => (
+        convertVextraShape(shape, {
+          depth: 0,
+          index: shapeIndex,
+          parentX: 0,
+          parentY: 0
+        })
+      )).slice(0, 220);
+
+      return {
+        id: createDesignId("import-page"),
+        name: getStringProp(pageLike, "name") || `导入页面 ${pageIndex + 1}`,
+        nodes: rawNodes.length > 0 ? rawNodes : [
+          createDesignNode("frame", {
+            name: getStringProp(pageLike, "name") || file.filename,
+            text: "未识别到可展示节点",
+            x: 420,
+            y: 280,
+            width: 420,
+            height: 220,
+            fill: "#f4f4f5"
+          })
+        ]
+      } satisfies WorkspaceDesignPage;
+    });
+
+    const components = sourcePages.flatMap((pageLike) => getChildShapes(pageLike).slice(0, 24).map((shape, index) => {
+      const nodes = convertVextraShape(shape, {
+        depth: 0,
+        index,
+        parentX: 0,
+        parentY: 0
+      }).slice(0, 80);
+
+      return {
+        id: createDesignId("import-component"),
+        name: getStringProp(shape, "name") || `导入组件 ${index + 1}`,
+        sourceFileName: file.filename,
+        nodeCount: nodes.length,
+        nodes
+      } satisfies WorkspaceDesignComponent;
+    })).filter((component) => component.nodes.length > 0);
+
+    if (pages.length === 0) {
+      throw new Error("文件已读取，但没有识别到可导入页面");
+    }
+
+    return { pages, components, assets: [] };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+function convertVextraShape(
+  shape: unknown,
+  context: {
+    depth: number;
+    index: number;
+    parentX: number;
+    parentY: number;
+  }
+): WorkspaceDesignNode[] {
+  if (!shape || typeof shape !== "object" || context.depth > 4) {
+    return [];
+  }
+
+  const shapeObject = shape as Record<string, unknown>;
+  const frame = readShapeFrame(shapeObject);
+  const shapeType = String(shapeObject.type ?? "");
+  const nodeType = mapVextraShapeType(shapeType, getStringProp(shapeObject, "name"));
+  const node = createDesignNode(nodeType, {
+    id: createDesignId("import-node"),
+    name: getStringProp(shapeObject, "name") || defaultDesignNodeName(nodeType),
+    x: Math.round(context.parentX + frame.x),
+    y: Math.round(context.parentY + frame.y),
+    width: Math.max(16, Math.round(frame.width)),
+    height: Math.max(16, Math.round(frame.height)),
+    fill: readShapeFill(shapeObject, nodeType),
+    stroke: readShapeStroke(shapeObject),
+    radius: readShapeRadius(shapeObject, nodeType),
+    text: readShapeText(shapeObject, nodeType),
+    textColor: readTextColor(shapeObject, nodeType),
+    fontSize: nodeType === "text" ? 18 : 14,
+    visible: shapeObject.isVisible !== false,
+    locked: shapeObject.isLocked === true
+  });
+
+  const children = getChildShapes(shapeObject).flatMap((child, index) => (
+    convertVextraShape(child, {
+      depth: context.depth + 1,
+      index,
+      parentX: 0,
+      parentY: 0
+    })
+  ));
+
+  return [node, ...children].slice(0, 120);
+}
+
+function convertSketchLayer(
+  layer: unknown,
+  context: {
+    depth: number;
+    index: number;
+    parentX: number;
+    parentY: number;
+    scaleX: number;
+    scaleY: number;
+    assetByRef?: Map<string | undefined, WorkspaceDesignAsset>;
+    symbolById?: Map<string, unknown>;
+    sharedStyleMaps?: SketchSharedStyleMaps;
+    clipBounds?: WorkspaceDesignNode["clipBounds"];
+    clipPath?: WorkspaceDesignNode["clipPath"];
+  }
+): WorkspaceDesignNode[] {
+  if (!layer || typeof layer !== "object" || context.depth > 30) {
+    return [];
+  }
+
+  const layerObject = applySketchSharedStyleToLayer(layer as Record<string, unknown>, context.sharedStyleMaps);
+  const frame = readSketchFrame(layerObject);
+  const layerClass = getStringProp(layerObject, "_class");
+  const nodeType = mapSketchLayerType(layerClass, getStringProp(layerObject, "name"));
+  const nodeX = Math.round(context.parentX + frame.x * context.scaleX);
+  const nodeY = Math.round(context.parentY + frame.y * context.scaleY);
+  const nodeWidth = Math.max(1, Math.round(frame.width * context.scaleX));
+  const nodeHeight = Math.max(1, Math.round(frame.height * context.scaleY));
+  const node = createDesignNode(nodeType, {
+    id: createDesignId("import-node"),
+    name: getStringProp(layerObject, "name") || defaultDesignNodeName(nodeType),
+    x: nodeX,
+    y: nodeY,
+    width: nodeWidth,
+    height: nodeHeight,
+    fill: readSketchFill(layerObject, nodeType, context.assetByRef),
+    stroke: readSketchStroke(layerObject),
+    strokeWidth: readSketchStrokeWidth(layerObject),
+    radius: readSketchRadius(layerObject, nodeType),
+    text: readSketchText(layerObject, nodeType),
+    textColor: readSketchTextColor(layerObject, nodeType),
+    fontSize: readSketchFontSize(layerObject, nodeType),
+    lineHeight: readSketchLineHeight(layerObject),
+    textAlign: readSketchTextAlign(layerObject),
+    fontFamily: readSketchFontFamily(layerObject),
+    fontWeight: readSketchFontWeight(layerObject),
+    letterSpacing: readSketchLetterSpacing(layerObject),
+    visible: layerObject.isVisible !== false,
+    locked: layerObject.isLocked === true,
+    sourceLayerClass: layerClass,
+    opacity: readSketchOpacity(layerObject),
+    rotation: toNumber(layerObject.rotation, 0),
+    blendMode: readSketchBlendMode(layerObject),
+    blurRadius: readSketchBlurRadius(layerObject),
+    flippedHorizontal: layerObject.isFlippedHorizontal === true,
+    flippedVertical: layerObject.isFlippedVertical === true,
+    shadow: readSketchShadow(layerObject),
+    zIndex: context.depth * 1000 + context.index,
+    clipBounds: context.clipBounds,
+    clipPath: context.clipPath,
+    ...readSketchVectorMeta(layerObject, nodeWidth, nodeHeight),
+    ...readSketchFillImageMeta(layerObject, context.assetByRef),
+    ...readSketchImageMeta(layerObject, context.assetByRef)
+  });
+
+  const symbolChildren = layerClass === "symbolInstance"
+    ? convertSketchSymbolInstance(layerObject, {
+        ...context,
+        nodeX,
+        nodeY,
+        nodeWidth,
+        nodeHeight
+      })
+    : [];
+  const children = convertSketchChildLayers(layerObject, {
+    ...context,
+    parentX: nodeX,
+    parentY: nodeY,
+    depth: context.depth + 1
+  });
+
+  return [node, ...symbolChildren, ...children];
+}
+
+function convertSketchChildLayers(
+  parentLayer: Record<string, unknown>,
+  context: {
+    depth: number;
+    parentX: number;
+    parentY: number;
+    scaleX: number;
+    scaleY: number;
+    assetByRef?: Map<string | undefined, WorkspaceDesignAsset>;
+    symbolById?: Map<string, unknown>;
+    sharedStyleMaps?: SketchSharedStyleMaps;
+    clipBounds?: WorkspaceDesignNode["clipBounds"];
+    clipPath?: WorkspaceDesignNode["clipPath"];
+  }
+) {
+  let activeClipBounds = context.clipBounds;
+  let activeClipPath = context.clipPath;
+  return getSketchLayers(parentLayer).flatMap((child, index) => {
+    const childObject = safeObject(child);
+    if (childObject.shouldBreakMaskChain === true) {
+      activeClipBounds = context.clipBounds;
+      activeClipPath = context.clipPath;
+    }
+
+    if (childObject.hasClippingMask === true) {
+      const clip = readSketchLayerClip(childObject, context);
+      activeClipBounds = intersectDesignRects(activeClipBounds, clip.bounds);
+      activeClipPath = clip.path ?? activeClipPath;
+      return [];
+    }
+
+    return convertSketchLayer(child, {
+      depth: context.depth,
+      index,
+      parentX: context.parentX,
+      parentY: context.parentY,
+      scaleX: context.scaleX,
+      scaleY: context.scaleY,
+      assetByRef: context.assetByRef,
+      symbolById: context.symbolById,
+      sharedStyleMaps: context.sharedStyleMaps,
+      clipBounds: activeClipBounds,
+      clipPath: activeClipPath
+    });
+  });
+}
+
+function readSketchLayerClip(
+  layer: Record<string, unknown>,
+  context: {
+    parentX: number;
+    parentY: number;
+    scaleX: number;
+    scaleY: number;
+  }
+): {
+  bounds: NonNullable<WorkspaceDesignNode["clipBounds"]>;
+  path?: WorkspaceDesignNode["clipPath"];
+} {
+  const frame = readSketchFrame(layer);
+  const width = Math.max(1, Math.round(frame.width * context.scaleX));
+  const height = Math.max(1, Math.round(frame.height * context.scaleY));
+  const bounds = {
+    x: Math.round(context.parentX + frame.x * context.scaleX),
+    y: Math.round(context.parentY + frame.y * context.scaleY),
+    width,
+    height
+  };
+  const vector = readSketchVectorMeta(layer, width, height);
+  return {
+    bounds,
+    path: vector.svgPath ? {
+      ...bounds,
+      svgPath: vector.svgPath,
+      fillRule: vector.svgFillRule
+    } : undefined
+  };
+}
+
+function intersectDesignRects(
+  first: WorkspaceDesignNode["clipBounds"] | undefined,
+  second: NonNullable<WorkspaceDesignNode["clipBounds"]>
+): WorkspaceDesignNode["clipBounds"] {
+  if (!first) {
+    return second;
+  }
+  const x = Math.max(first.x, second.x);
+  const y = Math.max(first.y, second.y);
+  const right = Math.min(first.x + first.width, second.x + second.width);
+  const bottom = Math.min(first.y + first.height, second.y + second.height);
+  return {
+    x,
+    y,
+    width: Math.max(0, right - x),
+    height: Math.max(0, bottom - y)
+  };
+}
+
+function createDesignNode(type: WorkspaceDesignNodeType, overrides: Partial<WorkspaceDesignNode> = {}): WorkspaceDesignNode {
+  const base: WorkspaceDesignNode = {
+    id: createDesignId("node"),
+    type,
+    name: defaultDesignNodeName(type),
+    x: 420,
+    y: 320,
+    width: type === "text" ? 220 : type === "table" ? 520 : type === "input" ? 260 : 180,
+    height: type === "text" ? 64 : type === "table" ? 270 : type === "button" ? 64 : 120,
+    fill: type === "button" ? "#246bfe" : type === "text" ? "transparent" : "#ffffff",
+    stroke: type === "text" ? "transparent" : "#d8d8dd",
+    radius: type === "button" || type === "input" ? 14 : 8,
+    text: type === "text" ? "Text" : type === "button" ? "Button" : "",
+    textColor: type === "button" ? "#ffffff" : "#171717",
+    fontSize: type === "text" ? 22 : 14,
+    visible: true,
+    locked: false
+  };
+  return { ...base, ...overrides };
+}
+
+function getResourceValues(resourceManager: unknown) {
+  if (!resourceManager || typeof resourceManager !== "object") {
+    return [];
+  }
+
+  const manager = resourceManager as {
+    resource?: unknown;
+    keys?: unknown;
+    getSync?: (key: string) => unknown;
+  };
+  const resourceValues = toArray(manager.resource);
+  if (resourceValues.length > 0) {
+    return resourceValues;
+  }
+
+  return toArray(manager.keys)
+    .map((key) => typeof key === "string" ? manager.getSync?.(key) : undefined)
+    .filter(Boolean);
+}
+
+function getChildShapes(shape: unknown) {
+  if (!shape || typeof shape !== "object") {
+    return [];
+  }
+  return toArray((shape as { childs?: unknown }).childs);
+}
+
+function getSketchLayers(layer: unknown) {
+  if (!layer || typeof layer !== "object") {
+    return [];
+  }
+  return toArray((layer as { layers?: unknown }).layers);
+}
+
+function getSketchRenderableLayers(layer: unknown) {
+  return [...getSketchLayers(layer)].reverse();
+}
+
+function getSketchTopLevelPageCandidates(pageLike: unknown) {
+  return getSketchRenderableLayers(pageLike).filter(isSketchTopLevelPageCandidate);
+}
+
+function isSketchTopLevelPageCandidate(layer: unknown) {
+  const layerObject = safeObject(layer);
+  const layerClass = getStringProp(layerObject, "_class");
+  const frame = readSketchFrame(layerObject);
+  const isCanvasContainer = ["artboard", "group", "symbolMaster"].includes(layerClass);
+  const isLargeEnough = frame.width >= 300 && frame.height >= 300;
+  return isCanvasContainer && isLargeEnough;
+}
+
+function normalizeDesignNodesToLocalCanvas(nodes: WorkspaceDesignNode[]) {
+  if (nodes.length === 0) {
+    return nodes;
+  }
+
+  const bounds = nodes.reduce(
+    (next, node) => ({
+      minX: Math.min(next.minX, node.x),
+      minY: Math.min(next.minY, node.y)
+    }),
+    { minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY }
+  );
+
+  const offsetX = Number.isFinite(bounds.minX) ? bounds.minX : 0;
+  const offsetY = Number.isFinite(bounds.minY) ? bounds.minY : 0;
+  if (offsetX === 0 && offsetY === 0) {
+    return nodes;
+  }
+
+  return nodes.map((node) => ({
+    ...node,
+    x: node.x - offsetX,
+    y: node.y - offsetY,
+    clipBounds: node.clipBounds ? {
+      ...node.clipBounds,
+      x: node.clipBounds.x - offsetX,
+      y: node.clipBounds.y - offsetY
+    } : undefined,
+    clipPath: node.clipPath ? {
+      ...node.clipPath,
+      x: node.clipPath.x - offsetX,
+      y: node.clipPath.y - offsetY
+    } : undefined
+  }));
+}
+
+function collectSketchSymbolMasters(layers: unknown[]): unknown[] {
+  return layers.flatMap((layer) => {
+    const layerObject = safeObject(layer);
+    const current = getStringProp(layerObject, "_class") === "symbolMaster" ? [layer] : [];
+    return [...current, ...collectSketchSymbolMasters(getSketchLayers(layerObject))];
+  });
+}
+
+function isSketchComponentCandidate(layer: unknown) {
+  const layerClass = getStringProp(layer, "_class");
+  return ["artboard", "group", "shapeGroup", "symbolInstance"].includes(layerClass);
+}
+
+function buildSketchSymbolMap(pages: unknown[], document: Record<string, unknown>) {
+  const symbols = [
+    ...pages.flatMap((pageLike) => collectSketchSymbolMasters(getSketchLayers(pageLike))),
+    ...toArray(document.foreignSymbols).flatMap((foreignSymbol) => {
+      const symbol = safeObject(foreignSymbol).symbolMaster ?? safeObject(foreignSymbol).originalMaster;
+      return symbol ? [symbol] : [];
+    })
+  ];
+  const symbolById = new Map<string, unknown>();
+  symbols.forEach((symbol) => {
+    const symbolId = getStringProp(symbol, "symbolID");
+    if (symbolId) {
+      symbolById.set(symbolId, symbol);
+    }
+  });
+  return symbolById;
+}
+
+function buildSketchSharedStyleMaps(document: Record<string, unknown>): SketchSharedStyleMaps {
+  return {
+    layerStyleById: buildSketchSharedStyleMap([
+      ...getSketchSharedStyles(document.layerStyles),
+      ...toArray(document.foreignLayerStyles).map(normalizeSketchForeignSharedStyle)
+    ]),
+    textStyleById: buildSketchSharedStyleMap([
+      ...getSketchSharedStyles(document.layerTextStyles),
+      ...toArray(document.foreignTextStyles).map(normalizeSketchForeignSharedStyle)
+    ])
+  };
+}
+
+function buildSketchSharedStyleMap(sharedStyles: unknown[]) {
+  const styleById = new Map<string, Record<string, unknown>>();
+  sharedStyles.map(safeObject).forEach((sharedStyle) => {
+    const styleValue = safeObject(sharedStyle.value);
+    if (Object.keys(styleValue).length === 0) {
+      return;
+    }
+    [
+      getStringProp(sharedStyle, "do_objectID"),
+      getStringProp(sharedStyle, "remoteStyleID"),
+      getStringProp(styleValue, "do_objectID")
+    ].filter(Boolean).forEach((styleId) => {
+      styleById.set(styleId, styleValue);
+      const bracketId = extractSketchBracketId(styleId);
+      if (bracketId) {
+        styleById.set(bracketId, styleValue);
+      }
+    });
+  });
+  return styleById;
+}
+
+function normalizeSketchForeignSharedStyle(style: unknown) {
+  const styleObject = safeObject(style);
+  const localSharedStyle = safeObject(styleObject.localSharedStyle);
+  return {
+    ...localSharedStyle,
+    remoteStyleID: getStringProp(styleObject, "remoteStyleID") || getStringProp(localSharedStyle, "remoteStyleID")
+  };
+}
+
+function getSketchSharedStyles(value: unknown) {
+  const valueObject = safeObject(value);
+  return toArray(valueObject.objects).length > 0 ? toArray(valueObject.objects) : toArray(value);
+}
+
+function applySketchSharedStyleToLayer(layer: Record<string, unknown>, sharedStyleMaps?: SketchSharedStyleMaps) {
+  if (!sharedStyleMaps) {
+    return layer;
+  }
+
+  const layerClass = getStringProp(layer, "_class");
+  const sharedStyleId = getStringProp(layer, "sharedStyleID") || getStringProp(safeObject(layer.style), "sharedObjectID");
+  if (!sharedStyleId) {
+    return layer;
+  }
+
+  const sharedStyle = resolveSketchSharedStyle(
+    sharedStyleId,
+    layerClass === "text" ? sharedStyleMaps.textStyleById : sharedStyleMaps.layerStyleById
+  );
+  if (!sharedStyle) {
+    return layer;
+  }
+
+  const mergedStyle = mergeSketchStyles(sharedStyle, safeObject(layer.style));
+  return {
+    ...layer,
+    style: mergedStyle,
+    attributedString: layerClass === "text"
+      ? applySketchAttributedStringStyleOverride(safeObject(layer.attributedString), mergedStyle)
+      : layer.attributedString
+  };
+}
+
+function resolveSketchSharedStyle(styleId: string, styleById?: Map<string, Record<string, unknown>>) {
+  if (!styleById || !styleId) {
+    return undefined;
+  }
+  const candidates = [
+    styleId,
+    extractSketchBracketId(styleId),
+    styleId.split("[")[0]
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  return candidates.map((candidate) => styleById.get(candidate)).find(Boolean);
+}
+
+function extractSketchBracketId(value: string) {
+  return /\[(?<id>[^\]]+)\]/.exec(value)?.groups?.id;
+}
+
+function convertSketchSymbolInstance(
+  instance: Record<string, unknown>,
+  context: {
+    depth: number;
+    nodeX: number;
+    nodeY: number;
+    nodeWidth: number;
+    nodeHeight: number;
+    assetByRef?: Map<string | undefined, WorkspaceDesignAsset>;
+    symbolById?: Map<string, unknown>;
+    sharedStyleMaps?: SketchSharedStyleMaps;
+    clipBounds?: WorkspaceDesignNode["clipBounds"];
+    clipPath?: WorkspaceDesignNode["clipPath"];
+  }
+) {
+  const overrideValues = toArray(instance.overrideValues);
+  const directSymbolOverride = overrideValues
+    .map(safeObject)
+    .find((override) => getStringProp(override, "overrideName") === "_symbolID");
+  const directSymbolId = typeof directSymbolOverride?.value === "string" ? directSymbolOverride.value : "";
+  const symbolId = directSymbolId || getStringProp(instance, "symbolID");
+  if (directSymbolOverride && !symbolId) {
+    return [];
+  }
+
+  const symbol = context.symbolById?.get(symbolId);
+  if (!symbol) {
+    return [];
+  }
+  const symbolObject = safeObject(symbol);
+  const symbolFrame = readSketchFrame(symbolObject);
+  const scaleX = symbolFrame.width > 0 ? context.nodeWidth / symbolFrame.width : 1;
+  const scaleY = symbolFrame.height > 0 ? context.nodeHeight / symbolFrame.height : 1;
+  const layers = applySketchSymbolOverrides(getSketchRenderableLayers(symbolObject), overrideValues, context.sharedStyleMaps);
+  return layers.flatMap((layer, index) => (
+    convertSketchLayer(layer, {
+      depth: context.depth + 1,
+      index,
+      parentX: context.nodeX - symbolFrame.x * scaleX,
+      parentY: context.nodeY - symbolFrame.y * scaleY,
+      scaleX,
+      scaleY,
+      assetByRef: context.assetByRef,
+      symbolById: context.symbolById,
+      sharedStyleMaps: context.sharedStyleMaps,
+      clipBounds: context.clipBounds,
+      clipPath: context.clipPath
+    })
+  ));
+}
+
+function applySketchSymbolOverrides(layers: unknown[], overrideValues: unknown[], sharedStyleMaps?: SketchSharedStyleMaps) {
+  if (overrideValues.length === 0) {
+    return layers;
+  }
+  const textOverrideByLayerId = new Map<string, string>();
+  const textColorOverrideByLayerId = new Map<string, unknown>();
+  const symbolOverrideByLayerId = new Map<string, string>();
+  const fillColorOverrideByLayerId = new Map<string, Map<number, unknown>>();
+  const imageOverrideByLayerId = new Map<string, unknown>();
+  const layerStyleOverrideByLayerId = new Map<string, Record<string, unknown>>();
+  const textStyleOverrideByLayerId = new Map<string, Record<string, unknown>>();
+  overrideValues.forEach((override) => {
+    const overrideObject = safeObject(override);
+    const overrideName = getStringProp(overrideObject, "overrideName");
+    const value = overrideObject.value;
+    if (typeof value === "string" && overrideName.includes("_stringValue")) {
+      const layerId = overrideName.split("_stringValue")[0];
+      if (layerId) {
+        textOverrideByLayerId.set(layerId, value);
+      }
+    }
+    if (overrideName.includes("_textColor")) {
+      const layerId = overrideName.split("_textColor")[0];
+      if (layerId) {
+        textColorOverrideByLayerId.set(layerId, value);
+      }
+    }
+    if (typeof value === "string" && overrideName.includes("_symbolID") && overrideName !== "_symbolID") {
+      const layerId = overrideName.split("_symbolID")[0];
+      if (layerId) {
+        symbolOverrideByLayerId.set(layerId, value);
+      }
+    }
+    const fillMatch = /^(?<layerId>.+)_color:fill-(?<index>\d+)$/.exec(overrideName);
+    if (fillMatch?.groups) {
+      const layerId = fillMatch.groups.layerId;
+      const fillIndex = Number(fillMatch.groups.index);
+      const current = fillColorOverrideByLayerId.get(layerId) ?? new Map<number, unknown>();
+      current.set(Number.isFinite(fillIndex) ? fillIndex : 0, value);
+      fillColorOverrideByLayerId.set(layerId, current);
+    }
+    if (overrideName.includes("_image")) {
+      const layerId = overrideName.split("_image")[0];
+      if (layerId) {
+        imageOverrideByLayerId.set(layerId, value);
+      }
+    }
+    if (typeof value === "string" && overrideName.includes("_layerStyle")) {
+      const layerId = overrideName.split("_layerStyle")[0];
+      const style = resolveSketchSharedStyle(value, sharedStyleMaps?.layerStyleById);
+      if (layerId && style) {
+        layerStyleOverrideByLayerId.set(layerId, style);
+      }
+    }
+    if (typeof value === "string" && overrideName.includes("_textStyle")) {
+      const layerId = overrideName.split("_textStyle")[0];
+      const style = resolveSketchSharedStyle(value, sharedStyleMaps?.textStyleById);
+      if (layerId && style) {
+        textStyleOverrideByLayerId.set(layerId, style);
+      }
+    }
+  });
+
+  const cloneWithOverrides = (layer: unknown): unknown => {
+    const layerObject = safeObject(layer);
+    const layerId = getStringProp(layerObject, "do_objectID");
+    const textOverride = textOverrideByLayerId.get(layerId);
+    const nextLayer: Record<string, unknown> = {
+      ...layerObject,
+      layers: getSketchLayers(layerObject).map(cloneWithOverrides)
+    };
+    const symbolOverride = symbolOverrideByLayerId.get(layerId);
+    if (symbolOverride !== undefined) {
+      if (!symbolOverride) {
+        nextLayer.isVisible = false;
+      } else {
+        nextLayer.symbolID = symbolOverride;
+      }
+    }
+    if (textOverride !== undefined) {
+      nextLayer.attributedString = {
+        ...safeObject(layerObject.attributedString),
+        string: textOverride
+      };
+    }
+    const layerStyleOverride = layerStyleOverrideByLayerId.get(layerId);
+    if (layerStyleOverride) {
+      nextLayer.style = mergeSketchStyles(safeObject(nextLayer.style), layerStyleOverride);
+      nextLayer.sharedStyleID = getStringProp(layerStyleOverride, "do_objectID") || nextLayer.sharedStyleID;
+    }
+    const textStyleOverride = textStyleOverrideByLayerId.get(layerId);
+    if (textStyleOverride) {
+      nextLayer.style = mergeSketchStyles(safeObject(nextLayer.style), textStyleOverride);
+      nextLayer.attributedString = applySketchAttributedStringStyleOverride(safeObject(nextLayer.attributedString), textStyleOverride);
+      nextLayer.sharedStyleID = getStringProp(textStyleOverride, "do_objectID") || nextLayer.sharedStyleID;
+    }
+    const textColorOverride = textColorOverrideByLayerId.get(layerId);
+    if (textColorOverride) {
+      nextLayer.style = applySketchTextColorOverride(safeObject(nextLayer.style), textColorOverride);
+      nextLayer.attributedString = applySketchAttributedStringTextColorOverride(safeObject(nextLayer.attributedString), textColorOverride);
+    }
+    const fillColorOverride = fillColorOverrideByLayerId.get(layerId);
+    if (fillColorOverride) {
+      nextLayer.style = applySketchFillColorOverride(safeObject(nextLayer.style), fillColorOverride);
+    }
+    const imageOverride = imageOverrideByLayerId.get(layerId);
+    if (imageOverride) {
+      nextLayer.image = imageOverride;
+    }
+    return nextLayer;
+  };
+
+  return layers.map(cloneWithOverrides);
+}
+
+function applySketchFillColorOverride(style: Record<string, unknown>, overrideByIndex: Map<number, unknown>) {
+  const fills = toArray(style.fills).map((fill, index) => {
+    const overrideColor = overrideByIndex.get(index);
+    return overrideColor ? {
+      ...safeObject(fill),
+      color: overrideColor,
+      isEnabled: safeObject(fill).isEnabled !== false
+    } : fill;
+  });
+  return {
+    ...style,
+    fills
+  };
+}
+
+function mergeSketchStyles(baseStyle: Record<string, unknown>, overrideStyle: Record<string, unknown>) {
+  const baseTextStyle = safeObject(baseStyle.textStyle);
+  const overrideTextStyle = safeObject(overrideStyle.textStyle);
+  const baseEncodedAttributes = safeObject(baseTextStyle.encodedAttributes);
+  const overrideEncodedAttributes = safeObject(overrideTextStyle.encodedAttributes);
+  return {
+    ...baseStyle,
+    ...overrideStyle,
+    fills: toArray(overrideStyle.fills).length > 0 ? overrideStyle.fills : baseStyle.fills,
+    borders: toArray(overrideStyle.borders).length > 0 ? overrideStyle.borders : baseStyle.borders,
+    shadows: toArray(overrideStyle.shadows).length > 0 ? overrideStyle.shadows : baseStyle.shadows,
+    innerShadows: toArray(overrideStyle.innerShadows).length > 0 ? overrideStyle.innerShadows : baseStyle.innerShadows,
+    blurs: toArray(overrideStyle.blurs).length > 0 ? overrideStyle.blurs : baseStyle.blurs,
+    blur: Object.keys(safeObject(overrideStyle.blur)).length > 0 ? overrideStyle.blur : baseStyle.blur,
+    contextSettings: {
+      ...safeObject(baseStyle.contextSettings),
+      ...safeObject(overrideStyle.contextSettings)
+    },
+    borderOptions: {
+      ...safeObject(baseStyle.borderOptions),
+      ...safeObject(overrideStyle.borderOptions)
+    },
+    textStyle: {
+      ...baseTextStyle,
+      ...overrideTextStyle,
+      encodedAttributes: {
+        ...baseEncodedAttributes,
+        ...overrideEncodedAttributes,
+        paragraphStyle: {
+          ...safeObject(baseEncodedAttributes.paragraphStyle),
+          ...safeObject(overrideEncodedAttributes.paragraphStyle)
+        }
+      }
+    }
+  };
+}
+
+function applySketchTextColorOverride(style: Record<string, unknown>, color: unknown) {
+  const textStyle = safeObject(style.textStyle);
+  const encodedAttributes = safeObject(textStyle.encodedAttributes);
+  return {
+    ...style,
+    textStyle: {
+      ...textStyle,
+      encodedAttributes: {
+        ...encodedAttributes,
+        MSAttributedStringColorAttribute: color
+      }
+    }
+  };
+}
+
+function applySketchAttributedStringStyleOverride(attributedString: Record<string, unknown>, style: Record<string, unknown>) {
+  const encodedAttributes = safeObject(safeObject(style.textStyle).encodedAttributes);
+  if (Object.keys(encodedAttributes).length === 0) {
+    return attributedString;
+  }
+  const attributes = toArray(attributedString.attributes);
+  return {
+    ...attributedString,
+    attributes: (attributes.length > 0 ? attributes : [{ location: 0, length: getStringProp(attributedString, "string").length, attributes: {} }]).map((attribute) => {
+      const attributeObject = safeObject(attribute);
+      const currentAttributes = safeObject(attributeObject.attributes);
+      return {
+        ...attributeObject,
+        attributes: {
+          ...currentAttributes,
+          ...encodedAttributes,
+          paragraphStyle: {
+            ...safeObject(currentAttributes.paragraphStyle),
+            ...safeObject(encodedAttributes.paragraphStyle)
+          }
+        }
+      };
+    })
+  };
+}
+
+function applySketchAttributedStringTextColorOverride(attributedString: Record<string, unknown>, color: unknown) {
+  const attributes = toArray(attributedString.attributes).map((attribute) => {
+    const attributeObject = safeObject(attribute);
+    const nestedAttributes = safeObject(attributeObject.attributes);
+    return {
+      ...attributeObject,
+      attributes: {
+        ...nestedAttributes,
+        MSAttributedStringColorAttribute: color
+      }
+    };
+  });
+  return {
+    ...attributedString,
+    attributes
+  };
+}
+
+async function extractSketchImageAssets(
+  sketchFilePath: string,
+  document: Record<string, unknown>,
+  pages: unknown[],
+  sourceFileName: string
+): Promise<WorkspaceDesignAsset[]> {
+  const imageRefs = [
+    ...collectSketchAssetImageRefs(document),
+    ...pages.flatMap((page) => collectSketchLayerImageRefs(getSketchLayers(page)))
+  ];
+  const uniqueRefs = new Map<string, unknown>();
+  imageRefs.forEach((refLike) => {
+    const ref = normalizeSketchImageRef(refLike);
+    if (ref) {
+      uniqueRefs.set(ref, refLike);
+    }
+  });
+
+  if (uniqueRefs.size === 0) {
+    return [];
+  }
+
+  // @ts-ignore adm-zip has CommonJS typings and is only used by the Node import pipeline.
+  const admZipModule = await import("adm-zip") as unknown as {
+    default?: new (filePath: string) => {
+      readFile(path: string): Buffer | null;
+      getEntries(): Array<{ entryName: string }>;
+    };
+  };
+  const AdmZip = (admZipModule.default ?? admZipModule) as unknown as new (filePath: string) => {
+    readFile(path: string): Buffer | null;
+    getEntries(): Array<{ entryName: string }>;
+  };
+  const zip = new AdmZip(sketchFilePath);
+  const zipEntries = zip.getEntries();
+
+  return Array.from(uniqueRefs.entries()).map<WorkspaceDesignAsset | undefined>(([ref, refLike]) => {
+    const refObject = safeObject(refLike);
+    const inlineData = safeObject(safeObject(refObject.data)._data ? refObject.data : undefined);
+    const rawBase64 = getStringProp(inlineData, "_data");
+    const fallbackEntry = zipEntries.find((entry) => entry.entryName === ref || entry.entryName.startsWith(`${ref}.`));
+    const buffer = rawBase64 ? Buffer.from(rawBase64, "base64") : zip.readFile(ref) ?? (fallbackEntry ? zip.readFile(fallbackEntry.entryName) : null);
+    if (!buffer) {
+      return undefined;
+    }
+    const mimeType = mimeTypeFromSketchImageRef(ref);
+    const url = `data:${mimeType};base64,${buffer.toString("base64")}`;
+    return {
+      id: createDesignId("import-asset"),
+      name: basename(ref),
+      sourceFileName,
+      type: "image",
+      mimeType,
+      url,
+      sourceRef: ref
+    } satisfies WorkspaceDesignAsset;
+  }).filter((asset): asset is WorkspaceDesignAsset => Boolean(asset));
+}
+
+function collectSketchAssetImageRefs(document: Record<string, unknown>) {
+  const assets = safeObject(document.assets);
+  const imageCollection = safeObject(assets.imageCollection);
+  const collectionImages = Object.values(safeObject(imageCollection.images));
+  return [
+    ...toArray(assets.images),
+    ...collectionImages
+  ];
+}
+
+function collectSketchLayerImageRefs(layers: unknown[]): unknown[] {
+  return layers.flatMap((layer) => {
+    const layerObject = safeObject(layer);
+    const fillImages = toArray(safeObject(layerObject.style).fills)
+      .map((fill) => safeObject(fill).image)
+      .filter(Boolean);
+    const current = [
+      ...(layerObject.image ? [layerObject.image] : []),
+      ...fillImages
+    ];
+    return [...current, ...collectSketchLayerImageRefs(getSketchLayers(layerObject))];
+  });
+}
+
+function normalizeSketchImageRef(refLike: unknown) {
+  const refObject = safeObject(refLike);
+  const ref = getStringProp(refObject, "_ref");
+  if (ref) {
+    return ref;
+  }
+  const sha = getStringProp(safeObject(refObject.sha1), "_data");
+  return sha ? `images/${sha}` : "";
+}
+
+function readSketchImageMeta(layer: Record<string, unknown>, assetByRef?: Map<string | undefined, WorkspaceDesignAsset>) {
+  if (getStringProp(layer, "_class") !== "bitmap") {
+    return {};
+  }
+  const ref = normalizeSketchImageRef(layer.image);
+  const asset = assetByRef?.get(ref);
+  return {
+    imageUrl: asset?.url,
+    sourceRef: ref
+  };
+}
+
+function readSketchFillImageMeta(layer: Record<string, unknown>, assetByRef?: Map<string | undefined, WorkspaceDesignAsset>): Partial<WorkspaceDesignNode> {
+  const enabledFills = toArray(safeObject(layer.style).fills).map(safeObject).filter((fill) => fill.isEnabled !== false);
+  const imageFill = enabledFills.find((fill) => normalizeSketchImageRef(fill.image));
+  const ref = imageFill ? normalizeSketchImageRef(safeObject(imageFill).image) : "";
+  const asset = ref ? assetByRef?.get(ref) : undefined;
+  return asset?.url ? {
+    fillImageUrl: asset.url
+  } : {};
+}
+
+function readSketchVectorMeta(layer: Record<string, unknown>, width: number, height: number): Partial<WorkspaceDesignNode> {
+  const layerClass = getStringProp(layer, "_class");
+  if (!["shapePath", "oval", "polygon", "star", "triangle"].includes(layerClass)) {
+    return {};
+  }
+
+  const svgPath = readSketchSvgPath(layer, width, height);
+  if (!svgPath) {
+    return {};
+  }
+
+  const windingRule = toNumber(safeObject(layer.style).windingRule, 0);
+  return {
+    svgPath,
+    svgFillRule: windingRule === 1 ? "evenodd" : "nonzero"
+  };
+}
+
+function readSketchSvgPath(layer: Record<string, unknown>, width: number, height: number) {
+  const points = toArray(layer.points).map(safeObject);
+  if (points.length === 0 || width <= 0 || height <= 0) {
+    return "";
+  }
+
+  const normalizedPoints = points.map((point) => ({
+    point: sketchNormalizedPointToCanvas(point.point, width, height),
+    curveFrom: sketchNormalizedPointToCanvas(point.curveFrom, width, height),
+    curveTo: sketchNormalizedPointToCanvas(point.curveTo, width, height),
+    hasCurveFrom: point.hasCurveFrom === true,
+    hasCurveTo: point.hasCurveTo === true
+  }));
+
+  const [first, ...rest] = normalizedPoints;
+  if (!first) {
+    return "";
+  }
+
+  const commands = [`M ${formatPathNumber(first.point.x)} ${formatPathNumber(first.point.y)}`];
+  rest.forEach((current, index) => {
+    const previous = normalizedPoints[index];
+    if (!previous) {
+      return;
+    }
+    if (previous.hasCurveTo || current.hasCurveFrom) {
+      commands.push(`C ${formatPathNumber(previous.curveTo.x)} ${formatPathNumber(previous.curveTo.y)} ${formatPathNumber(current.curveFrom.x)} ${formatPathNumber(current.curveFrom.y)} ${formatPathNumber(current.point.x)} ${formatPathNumber(current.point.y)}`);
+    } else {
+      commands.push(`L ${formatPathNumber(current.point.x)} ${formatPathNumber(current.point.y)}`);
+    }
+  });
+
+  if (layer.isClosed !== false && normalizedPoints.length > 1) {
+    const last = normalizedPoints[normalizedPoints.length - 1];
+    if (last.hasCurveTo || first.hasCurveFrom) {
+      commands.push(`C ${formatPathNumber(last.curveTo.x)} ${formatPathNumber(last.curveTo.y)} ${formatPathNumber(first.curveFrom.x)} ${formatPathNumber(first.curveFrom.y)} ${formatPathNumber(first.point.x)} ${formatPathNumber(first.point.y)}`);
+    }
+    commands.push("Z");
+  }
+
+  return commands.join(" ");
+}
+
+function sketchNormalizedPointToCanvas(value: unknown, width: number, height: number) {
+  const point = parseSketchPoint(typeof value === "string" ? value : "");
+  return {
+    x: point.x * width,
+    y: point.y * height
+  };
+}
+
+function formatPathNumber(value: number) {
+  return Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
+}
+
+function mimeTypeFromSketchImageRef(ref: string) {
+  const extension = extname(ref).toLowerCase();
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".gif") return "image/gif";
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".svg") return "image/svg+xml";
+  return "image/png";
+}
+
+function decodeDataUrl(url: string) {
+  const match = /^data:[^;]+;base64,(?<data>.+)$/s.exec(url);
+  const data = match?.groups?.data;
+  return data ? Buffer.from(data, "base64") : undefined;
+}
+
+function toArray(value: unknown): unknown[] {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === "object" && Symbol.iterator in value) {
+    return Array.from(value as Iterable<unknown>);
+  }
+  if (typeof value === "object" && "length" in value && typeof (value as { length?: unknown }).length === "number") {
+    return Array.from({ length: (value as { length: number }).length }, (_, index) => (value as Record<number, unknown>)[index]).filter(Boolean);
+  }
+  return [];
+}
+
+function readShapeFrame(shape: Record<string, unknown>) {
+  const frame = safeObject(shape.frame);
+  const size = safeObject(shape.size);
+  const transform = safeObject(shape.transform);
+  return {
+    x: toNumber(shape.x, toNumber(frame.x, toNumber(transform.m02, 0))),
+    y: toNumber(shape.y, toNumber(frame.y, toNumber(transform.m12, 0))),
+    width: toNumber(frame.width, toNumber(size.width, 180)),
+    height: toNumber(frame.height, toNumber(size.height, 120))
+  };
+}
+
+function readSketchFrame(layer: Record<string, unknown>) {
+  const frame = safeObject(layer.frame);
+  return {
+    x: toNumber(frame.x, 0),
+    y: toNumber(frame.y, 0),
+    width: toNumber(frame.width, 180),
+    height: toNumber(frame.height, 120)
+  };
+}
+
+function readShapeFill(shape: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  const fills = tryCallArray(shape, "getFills");
+  const firstFill = fills.find((fill) => safeObject(fill).isEnabled !== false);
+  const color = safeObject(firstFill).color;
+  if (color) {
+    return colorToHex(color);
+  }
+  if (nodeType === "text") {
+    return "transparent";
+  }
+  return nodeType === "button" ? "#246bfe" : "#ffffff";
+}
+
+function readSketchFill(
+  layer: Record<string, unknown>,
+  nodeType: WorkspaceDesignNodeType,
+  assetByRef?: Map<string | undefined, WorkspaceDesignAsset>
+) {
+  const layerClass = getStringProp(layer, "_class");
+  if (nodeType === "text") {
+    return "transparent";
+  }
+  if (layerClass === "artboard" && layer.hasBackgroundColor === true) {
+    return colorToHex(layer.backgroundColor);
+  }
+  const style = safeObject(layer.style);
+  const enabledFills = toArray(style.fills).map(safeObject).filter((fill) => fill.isEnabled !== false);
+  const fillLayers = enabledFills.map((fill) => sketchFillToCss(fill, assetByRef)).filter(Boolean);
+  if (fillLayers.length > 0) {
+    return fillLayers.reverse().join(", ");
+  }
+  if (nodeType === "button") {
+    return "#246bfe";
+  }
+  if (layerClass === "artboard") {
+    return "#ffffff";
+  }
+  if (["group", "shapeGroup", "symbolMaster", "symbolInstance"].includes(layerClass)) {
+    return "transparent";
+  }
+  return "#f8f8fa";
+}
+
+function sketchFillToCss(fill: Record<string, unknown>, assetByRef?: Map<string | undefined, WorkspaceDesignAsset>) {
+  const imageRef = normalizeSketchImageRef(fill.image);
+  const imageAsset = assetByRef?.get(imageRef);
+  if (imageAsset?.url) {
+    return `url("${imageAsset.url}") center / 100% 100% no-repeat`;
+  }
+  const gradient = safeObject(fill.gradient);
+  if (Object.keys(gradient).length > 0) {
+    return sketchGradientToCss(gradient);
+  }
+  if (fill.color) {
+    return colorToRgba(fill.color);
+  }
+  return "";
+}
+
+function sketchGradientToCss(gradient: Record<string, unknown>) {
+  const stops = toArray(gradient.stops).map((stop) => {
+    const stopObject = safeObject(stop);
+    return `${colorToRgba(stopObject.color)} ${Math.round(toNumber(stopObject.position, 0) * 100)}%`;
+  });
+  if (stops.length === 0) {
+    return "";
+  }
+  const gradientType = toNumber(gradient.gradientType, 0);
+  if (gradientType === 1) {
+    return `radial-gradient(circle, ${stops.join(", ")})`;
+  }
+  const from = parseSketchPoint(getStringProp(gradient, "from"));
+  const to = parseSketchPoint(getStringProp(gradient, "to"));
+  const angle = Math.round(Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI + 90);
+  return `linear-gradient(${angle}deg, ${stops.join(", ")})`;
+}
+
+function readShapeStroke(shape: Record<string, unknown>) {
+  const border = safeObject(tryCall(shape, "getBorders") ?? safeObject(shape.style).borders);
+  const strokePaint = toArray(border.strokePaints)[0];
+  const color = safeObject(strokePaint).color;
+  return color ? colorToHex(color) : "#d8d8dd";
+}
+
+function readSketchStroke(layer: Record<string, unknown>) {
+  const style = safeObject(layer.style);
+  const border = toArray(style.borders).find((item) => safeObject(item).isEnabled !== false);
+  const color = safeObject(border).color;
+  return color ? colorToHex(color) : "transparent";
+}
+
+function readSketchStrokeWidth(layer: Record<string, unknown>) {
+  const style = safeObject(layer.style);
+  const border = safeObject(toArray(style.borders).find((item) => safeObject(item).isEnabled !== false));
+  return Math.max(0, toNumber(border.thickness, border.color ? 1 : 0));
+}
+
+function readShapeRadius(shape: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  return Math.max(0, toNumber(shape.fixedRadius, nodeType === "button" || nodeType === "input" ? 14 : 8));
+}
+
+function readSketchRadius(layer: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  if (getStringProp(layer, "_class") === "oval") {
+    return 9999;
+  }
+  const fixedRadius = toNumber(layer.fixedRadius, Number.NaN);
+  if (Number.isFinite(fixedRadius)) {
+    return Math.max(0, fixedRadius);
+  }
+  return nodeType === "button" || nodeType === "input" ? 14 : nodeType === "frame" ? 0 : 8;
+}
+
+function readSketchOpacity(layer: Record<string, unknown>) {
+  const contextSettings = safeObject(safeObject(layer.style).contextSettings);
+  const opacity = toNumber(contextSettings.opacity, 1);
+  return Math.max(0, Math.min(1, opacity));
+}
+
+function readSketchBlendMode(layer: Record<string, unknown>) {
+  const blendMode = toNumber(safeObject(safeObject(layer.style).contextSettings).blendMode, 0);
+  return sketchBlendModeToCanvas(blendMode);
+}
+
+function readSketchBlurRadius(layer: Record<string, unknown>) {
+  const blur = safeObject(safeObject(layer.style).blur);
+  if (blur.isEnabled !== true) {
+    return undefined;
+  }
+  const radius = toNumber(blur.radius, 0);
+  return radius > 0 ? radius : undefined;
+}
+
+function readSketchShadow(layer: Record<string, unknown>) {
+  const style = safeObject(layer.style);
+  const shadows = toArray(style.shadows)
+    .map(safeObject)
+    .filter((shadow) => shadow.isEnabled !== false)
+    .map((shadow) => {
+      const offsetX = toNumber(shadow.offsetX, 0);
+      const offsetY = toNumber(shadow.offsetY, 0);
+      const blur = toNumber(shadow.blurRadius, 0);
+      const spread = toNumber(shadow.spread, 0);
+      return `${offsetX}px ${offsetY}px ${blur}px ${spread}px ${colorToRgba(shadow.color)}`;
+    });
+  return shadows.join(", ");
+}
+
+function readShapeText(shape: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  const text = safeObject(shape.text);
+  const paras = toArray(text.paras);
+  const content = paras.map((para) => getStringProp(para, "text")).filter(Boolean).join("\n").trim();
+  if (content) {
+    return content;
+  }
+  if (nodeType === "text") {
+    return getStringProp(shape, "name") || "Text";
+  }
+  return nodeType === "button" ? "Button" : "";
+}
+
+function readSketchText(layer: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  const text = getStringProp(safeObject(layer.attributedString), "string").trim();
+  if (text) {
+    return text;
+  }
+  if (nodeType === "text") {
+    return getStringProp(layer, "name") || "Text";
+  }
+  if (nodeType === "button") {
+    return getStringProp(layer, "name") || "Button";
+  }
+  return "";
+}
+
+function readTextColor(shape: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  if (nodeType === "button") {
+    return "#ffffff";
+  }
+  const text = safeObject(shape.text);
+  const para = safeObject(toArray(text.paras)[0]);
+  const attr = safeObject(para.attr);
+  return attr.color ? colorToHex(attr.color) : "#171717";
+}
+
+function readSketchTextColor(layer: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  if (nodeType === "button") {
+    return "#ffffff";
+  }
+  const style = safeObject(layer.style);
+  const textStyle = safeObject(style.textStyle);
+  const encodedAttributes = safeObject(textStyle.encodedAttributes);
+  const color = encodedAttributes.MSAttributedStringColorAttribute;
+  if (color) {
+    return colorToHex(color);
+  }
+  const firstAttribute = safeObject(toArray(safeObject(layer.attributedString).attributes)[0]);
+  const attributeColor = safeObject(firstAttribute.attributes).MSAttributedStringColorAttribute;
+  return attributeColor ? colorToHex(attributeColor) : "#171717";
+}
+
+function readSketchFontFamily(layer: Record<string, unknown>) {
+  const font = readSketchFontDescriptor(layer);
+  return getStringProp(safeObject(font.attributes), "name") || getStringProp(font, "name") || undefined;
+}
+
+function readSketchFontWeight(layer: Record<string, unknown>) {
+  const fontName = (readSketchFontFamily(layer) ?? "").toLowerCase();
+  if (fontName.includes("thin")) return 100;
+  if (fontName.includes("ultralight")) return 200;
+  if (fontName.includes("light")) return 300;
+  if (fontName.includes("regular")) return 400;
+  if (fontName.includes("medium")) return 500;
+  if (fontName.includes("semibold") || fontName.includes("semi-bold")) return 600;
+  if (fontName.includes("bold")) return 700;
+  if (fontName.includes("heavy")) return 800;
+  return undefined;
+}
+
+function readSketchLetterSpacing(layer: Record<string, unknown>) {
+  const attrs = readSketchTextEncodedAttributes(layer);
+  const kern = toNumber(attrs.kerning, toNumber(attrs.NSKern, Number.NaN));
+  return Number.isFinite(kern) ? kern : undefined;
+}
+
+function readSketchFontSize(layer: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  if (nodeType !== "text") {
+    return 14;
+  }
+  const font = readSketchFontDescriptor(layer);
+  const fontAttributes = safeObject(font.attributes);
+  return Math.max(10, Math.round(toNumber(fontAttributes.size, toNumber(font.size, 18))));
+}
+
+function readSketchLineHeight(layer: Record<string, unknown>) {
+  const paragraphStyle = readSketchParagraphStyle(layer);
+  const lineHeight = toNumber(paragraphStyle.minimumLineHeight, toNumber(paragraphStyle.maximumLineHeight, 0));
+  return lineHeight > 0 ? Math.round(lineHeight) : undefined;
+}
+
+function readSketchTextAlign(layer: Record<string, unknown>): WorkspaceDesignNode["textAlign"] {
+  const alignment = toNumber(readSketchParagraphStyle(layer).alignment, 0);
+  if (alignment === 1) return "right";
+  if (alignment === 2) return "center";
+  if (alignment === 3) return "justify";
+  return "left";
+}
+
+function readSketchParagraphStyle(layer: Record<string, unknown>) {
+  const style = safeObject(layer.style);
+  const textStyle = safeObject(style.textStyle);
+  const encodedAttributes = safeObject(textStyle.encodedAttributes);
+  const paragraphStyle = safeObject(encodedAttributes.paragraphStyle);
+  if (Object.keys(paragraphStyle).length > 0) {
+    return paragraphStyle;
+  }
+  const firstAttribute = safeObject(toArray(safeObject(layer.attributedString).attributes)[0]);
+  return safeObject(safeObject(firstAttribute.attributes).paragraphStyle);
+}
+
+function readSketchFontDescriptor(layer: Record<string, unknown>) {
+  const encodedAttributes = readSketchTextEncodedAttributes(layer);
+  const font = safeObject(encodedAttributes.MSAttributedStringFontAttribute);
+  if (Object.keys(font).length > 0) {
+    return font;
+  }
+  const firstAttribute = safeObject(toArray(safeObject(layer.attributedString).attributes)[0]);
+  return safeObject(safeObject(firstAttribute.attributes).MSAttributedStringFontAttribute);
+}
+
+function readSketchTextEncodedAttributes(layer: Record<string, unknown>) {
+  const style = safeObject(layer.style);
+  const textStyle = safeObject(style.textStyle);
+  return safeObject(textStyle.encodedAttributes);
+}
+
+function mapVextraShapeType(shapeType: string, name: string): WorkspaceDesignNodeType {
+  const normalizedName = name.toLowerCase();
+  if (shapeType.includes("text")) return "text";
+  if (shapeType.includes("table")) return "table";
+  if (shapeType.includes("symbol") || normalizedName.includes("button")) return "button";
+  if (normalizedName.includes("input") || normalizedName.includes("输入")) return "input";
+  if (shapeType.includes("artboard") || shapeType.includes("frame") || shapeType.includes("page")) return "frame";
+  if (shapeType.includes("group")) return "card";
+  if (normalizedName.includes("image") || normalizedName.includes("图片")) return "image";
+  return "container";
+}
+
+function mapSketchLayerType(layerClass: string, name: string): WorkspaceDesignNodeType {
+  const normalizedName = name.toLowerCase();
+  if (layerClass === "text") return "text";
+  if (normalizedName.includes("table") || normalizedName.includes("表格")) return "table";
+  if (layerClass === "bitmap" || normalizedName.includes("image") || normalizedName.includes("图片")) return "image";
+  if (layerClass === "artboard") return "frame";
+  if (layerClass === "symbolMaster" || layerClass === "symbolInstance") return "card";
+  if (layerClass === "group" || layerClass === "shapeGroup") return "card";
+  return "container";
+}
+
+function tryCall(target: Record<string, unknown>, method: string) {
+  const candidate = target[method];
+  if (typeof candidate !== "function") {
+    return undefined;
+  }
+  try {
+    return candidate.call(target);
+  } catch {
+    return undefined;
+  }
+}
+
+function tryCallArray(target: Record<string, unknown>, method: string) {
+  return toArray(tryCall(target, method));
+}
+
+function safeObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function getStringProp(value: unknown, key: string) {
+  const prop = safeObject(value)[key];
+  return typeof prop === "string" ? prop : "";
+}
+
+function toNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function colorToHex(colorValue: unknown) {
+  const color = safeObject(colorValue);
+  const red = colorChannelToByte(color.red);
+  const green = colorChannelToByte(color.green);
+  const blue = colorChannelToByte(color.blue);
+  return `#${[red, green, blue].map((item) => item.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function colorToRgba(colorValue: unknown) {
+  const color = safeObject(colorValue);
+  const red = colorChannelToByte(color.red);
+  const green = colorChannelToByte(color.green);
+  const blue = colorChannelToByte(color.blue);
+  const alpha = Math.max(0, Math.min(1, toNumber(color.alpha, 1)));
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function parseSketchPoint(value: string) {
+  const numbers = value.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  return {
+    x: Number.isFinite(numbers[0]) ? numbers[0] : 0,
+    y: Number.isFinite(numbers[1]) ? numbers[1] : 0
+  };
+}
+
+function sketchBlendModeToCanvas(blendMode: number) {
+  const blendModes: Record<number, string | undefined> = {
+    0: undefined,
+    1: "multiply",
+    2: "screen",
+    3: "overlay",
+    4: "darken",
+    5: "lighten",
+    6: "color-dodge",
+    7: "color-burn",
+    8: "soft-light",
+    9: "hard-light",
+    10: "difference",
+    11: "exclusion",
+    12: "hue",
+    13: "saturation",
+    14: "color",
+    15: "luminosity"
+  };
+  return blendModes[blendMode];
+}
+
+function colorChannelToByte(value: unknown) {
+  const numeric = toNumber(value, 255);
+  const scaled = numeric <= 1 ? numeric * 255 : numeric;
+  return Math.max(0, Math.min(255, Math.round(scaled)));
+}
+
+function defaultDesignNodeName(type: WorkspaceDesignNodeType) {
+  return {
+    frame: "Frame",
+    container: "Container",
+    text: "Text",
+    button: "Button",
+    input: "Input",
+    table: "Table",
+    card: "Card",
+    image: "Image"
+  }[type];
+}
+
+function createDesignId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function escapeHtml(input: string) {

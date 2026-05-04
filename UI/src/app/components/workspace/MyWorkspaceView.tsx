@@ -20,11 +20,13 @@ import type {
   WorkspaceBusinessModelNode,
   WorkspaceCustomColumn,
   WorkspaceRequirementDocument,
+  WorkspaceRequirementDocumentVersion,
   WorkspaceSavedView,
   WorkspaceRequirementItem,
   WorkspaceViewMode
 } from "../../types";
-import { saveWorkspaceBusinessModelGraph, saveWorkspaceRequirementDocuments, saveWorkspaceRequirementItems, getWorkspaceBusinessModelGraph, getWorkspaceRequirementDocuments, getWorkspaceRequirementItems, generateId, getWorkspaceViewConfig, saveWorkspaceViewConfig } from "../../utils/storage";
+import { createDocumentRepository, type DocumentRepository } from "../../repositories/document-repository";
+import { saveWorkspaceBusinessModelGraph, saveWorkspaceRequirementItems, getWorkspaceBusinessModelGraph, getWorkspaceRequirementItems, generateId, getProject, getStages, getWorkspaceViewConfig, saveWorkspaceViewConfig } from "../../utils/storage";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -76,11 +78,11 @@ import {
 import { toast } from "sonner";
 
 interface MyWorkspaceDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  projectName: string;
-  currentStage: StageType;
-  stages: Stage[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  projectName?: string;
+  currentStage?: StageType;
+  stages?: Stage[];
 }
 type SortKey = "order" | "title" | "status" | "priority" | "module" | "updatedAt";
 
@@ -115,19 +117,30 @@ const BUSINESS_SCENE_HEIGHT = 3600;
 
 export function MyWorkspaceView({
   open,
-  onOpenChange,
   projectName,
   currentStage,
   stages
 }: MyWorkspaceDialogProps) {
-  const  { projectId } = useParams()
-  console.log(projectId, 'projectId')
+  const { projectId = "" } = useParams();
+  const documentRepository = useMemo(() => createDocumentRepository(), []);
+  const routeProject = useMemo(() => projectId ? getProject(projectId) : null, [projectId]);
+  const workspaceOpen = open ?? true;
+  const workspaceProjectName = projectName ?? routeProject?.name ?? "我的工作空间";
+  const workspaceCurrentStage = currentStage ?? routeProject?.currentStage ?? "requirement-collection";
+  const workspaceStages = useMemo(() => stages ?? (projectId ? getStages(projectId) : []), [projectId, stages]);
   const [viewMode, setViewMode] = useState<WorkspaceViewMode>("table");
   const [items, setItems] = useState<WorkspaceRequirementItem[]>([]);
   const [documents, setDocuments] = useState<WorkspaceRequirementDocument[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [documentVersions, setDocumentVersions] = useState<WorkspaceRequirementDocumentVersion[]>([]);
+  const [documentVersionsLoading, setDocumentVersionsLoading] = useState(false);
+  const [documentHistoryOpen, setDocumentHistoryOpen] = useState(false);
+  const [selectedDocumentVersionId, setSelectedDocumentVersionId] = useState<string | null>(null);
+  const [documentVersionPreview, setDocumentVersionPreview] = useState<WorkspaceRequirementDocument | null>(null);
+  const [documentSaving, setDocumentSaving] = useState(false);
   const [showDocumentList, setShowDocumentList] = useState(true);
   const [documentSearchQuery, setDocumentSearchQuery] = useState("");
+  const [documentSortMode, setDocumentSortMode] = useState<"manual" | "updatedAt" | "title">("manual");
   const [draggedDocumentId, setDraggedDocumentId] = useState<string | null>(null);
   const [documentFontFamily, setDocumentFontFamily] = useState<"Inter" | "Georgia" | "JetBrains Mono">("Inter");
   const [documentSelectionContext, setDocumentSelectionContext] = useState<"text" | "table">("text");
@@ -246,69 +259,92 @@ export function MyWorkspaceView({
   } | null>(null);
   const businessFlashTimeoutRef = useRef<number | null>(null);
   const documentFileInputRef = useRef<HTMLInputElement | null>(null);
+  const documentsRef = useRef<WorkspaceRequirementDocument[]>([]);
+  const documentSaveTimerRef = useRef<number | null>(null);
 
   const requirementCollection = useMemo(() => {
-    const artifact = stages
+    const artifact = workspaceStages
       ?.find((stage) => stage.type === "requirement-collection")
       ?.artifacts.find((item) => item.type === "requirement-input");
     return (artifact?.content as RequirementCollectionArtifactContent | undefined) ?? null;
-  }, [stages]);
+  }, [workspaceStages]);
 
   useEffect(() => {
-    if (!open) {
+    if (!workspaceOpen || !projectId) {
       return;
     }
 
-    const existing = getWorkspaceRequirementItems(projectId);
-    const nextItems = mergeWorkspaceItems(existing, requirementCollection);
-    setItems(nextItems);
-    saveWorkspaceRequirementItems(projectId, nextItems);
-    const savedViewConfig = getWorkspaceViewConfig(projectId);
-    if (savedViewConfig) {
-      const normalizedViews = normalizeSavedViews(savedViewConfig.savedViews);
-      const nextDefaultViewId = savedViewConfig.defaultViewId || normalizedViews[0]?.id || "default";
-      const nextActiveViewId = savedViewConfig.activeViewId || nextDefaultViewId;
-      setSavedViews(normalizedViews);
-      setDefaultViewId(nextDefaultViewId);
-      setActiveViewId(nextActiveViewId);
-      const activeView = normalizedViews.find((view) => view.id === nextActiveViewId) ?? normalizedViews[0]!;
-      applySavedView(activeView);
-      setCustomColumns(savedViewConfig.customColumns ?? []);
-    } else {
-      const defaultViews = createDefaultSavedViews();
-      setSavedViews(defaultViews);
-      setDefaultViewId(defaultViews[0]!.id);
-      setActiveViewId(defaultViews[0]!.id);
-      applySavedView(defaultViews[0]!);
-    }
-    const visibleNextItems = nextItems.filter((item) => !item.deleted);
-    setSelectedItemId((current) => current && visibleNextItems.some((item) => item.id === current) ? current : visibleNextItems[0]?.id ?? null);
-    setSelectedRowIds([]);
+    let cancelled = false;
 
-    const existingDocuments = getWorkspaceRequirementDocuments(projectId);
-    const nextDocuments = existingDocuments.length > 0
-      ? existingDocuments
-      : createInitialRequirementDocuments(projectName, requirementCollection);
-    setDocuments(nextDocuments);
-    saveWorkspaceRequirementDocuments(projectId, nextDocuments);
-    setSelectedDocumentId((current) => current && nextDocuments.some((document) => document.id === current) ? current : nextDocuments[0]?.id ?? null);
+    const loadWorkspace = async () => {
+      const existing = getWorkspaceRequirementItems(projectId);
+      const nextItems = mergeWorkspaceItems(existing, requirementCollection);
+      if (cancelled) {
+        return;
+      }
 
-    const storedBusinessGraph = getWorkspaceBusinessModelGraph(projectId);
-    if (storedBusinessGraph) {
-      setBusinessModelGraph(storedBusinessGraph);
-      setSelectedBusinessNodeId(storedBusinessGraph.nodes[0]?.id ?? null);
-      setSelectedBusinessEdgeId(null);
-    } else {
-      const seededGraph = createInitialBusinessModelGraph(nextItems.filter((item) => !item.deleted));
-      setBusinessModelGraph(seededGraph);
-      saveWorkspaceBusinessModelGraph(projectId, seededGraph);
-      setSelectedBusinessNodeId(seededGraph.nodes[0]?.id ?? null);
-      setSelectedBusinessEdgeId(null);
-    }
-  }, [open, projectId, requirementCollection]);
+      setItems(nextItems);
+      saveWorkspaceRequirementItems(projectId, nextItems);
+
+      const savedViewConfig = getWorkspaceViewConfig(projectId);
+      if (savedViewConfig) {
+        const normalizedViews = normalizeSavedViews(savedViewConfig.savedViews);
+        const nextDefaultViewId = savedViewConfig.defaultViewId || normalizedViews[0]?.id || "default";
+        const nextActiveViewId = savedViewConfig.activeViewId || nextDefaultViewId;
+        setSavedViews(normalizedViews);
+        setDefaultViewId(nextDefaultViewId);
+        setActiveViewId(nextActiveViewId);
+        const activeView = normalizedViews.find((view) => view.id === nextActiveViewId) ?? normalizedViews[0]!;
+        applySavedView(activeView);
+        setCustomColumns(savedViewConfig.customColumns ?? []);
+      } else {
+        const defaultViews = createDefaultSavedViews();
+        setSavedViews(defaultViews);
+        setDefaultViewId(defaultViews[0]!.id);
+        setActiveViewId(defaultViews[0]!.id);
+        applySavedView(defaultViews[0]!);
+      }
+
+      const visibleNextItems = nextItems.filter((item) => !item.deleted);
+      setSelectedItemId((current) => current && visibleNextItems.some((item) => item.id === current) ? current : visibleNextItems[0]?.id ?? null);
+      setSelectedRowIds([]);
+
+      const existingDocuments = await documentRepository.list(projectId);
+      if (cancelled) {
+        return;
+      }
+      const nextDocuments = existingDocuments.length > 0
+        ? existingDocuments
+        : await seedInitialWorkspaceDocuments(projectId, workspaceProjectName, requirementCollection, documentRepository);
+      if (cancelled) {
+        return;
+      }
+      setDocuments(nextDocuments);
+      setSelectedDocumentId((current) => current && nextDocuments.some((document) => document.id === current) ? current : nextDocuments[0]?.id ?? null);
+
+      const storedBusinessGraph = getWorkspaceBusinessModelGraph(projectId);
+      if (storedBusinessGraph) {
+        setBusinessModelGraph(storedBusinessGraph);
+        setSelectedBusinessNodeId(storedBusinessGraph.nodes[0]?.id ?? null);
+        setSelectedBusinessEdgeId(null);
+      } else {
+        const seededGraph = createInitialBusinessModelGraph(nextItems.filter((item) => !item.deleted));
+        setBusinessModelGraph(seededGraph);
+        saveWorkspaceBusinessModelGraph(projectId, seededGraph);
+        setSelectedBusinessNodeId(seededGraph.nodes[0]?.id ?? null);
+        setSelectedBusinessEdgeId(null);
+      }
+    };
+
+    void loadWorkspace();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documentRepository, projectId, requirementCollection, workspaceOpen, workspaceProjectName]);
 
   useEffect(() => {
-    if (!open) {
+    if (!workspaceOpen || !projectId) {
       return;
     }
     saveWorkspaceViewConfig(projectId, {
@@ -317,14 +353,18 @@ export function MyWorkspaceView({
       savedViews,
       customColumns
     });
-  }, [activeViewId, customColumns, defaultViewId, open, projectId, savedViews]);
+  }, [activeViewId, customColumns, defaultViewId, projectId, savedViews, workspaceOpen]);
 
   useEffect(() => {
-    if (!open) {
+    if (!workspaceOpen || !projectId) {
       return;
     }
     saveWorkspaceBusinessModelGraph(projectId, businessModelGraph);
-  }, [businessModelGraph, open, projectId]);
+  }, [businessModelGraph, projectId, workspaceOpen]);
+
+  useEffect(() => {
+    documentsRef.current = documents;
+  }, [documents]);
 
 
   useEffect(() => {
@@ -337,6 +377,9 @@ export function MyWorkspaceView({
     }
     if (businessFlashTimeoutRef.current !== null) {
       window.clearTimeout(businessFlashTimeoutRef.current);
+    }
+    if (documentSaveTimerRef.current !== null) {
+      window.clearTimeout(documentSaveTimerRef.current);
     }
   }, []);
 
@@ -361,6 +404,65 @@ export function MyWorkspaceView({
       row.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
     }
   }, [selectedItemId, viewMode]);
+
+  useEffect(() => {
+    if (!workspaceOpen || !selectedDocumentId || !projectId) {
+      setDocumentVersions([]);
+      setSelectedDocumentVersionId(null);
+      setDocumentVersionPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    setDocumentVersionsLoading(true);
+
+    void documentRepository.listVersions(projectId, selectedDocumentId)
+      .then((versions) => {
+        if (!cancelled) {
+          setDocumentVersions(versions);
+          setSelectedDocumentVersionId((current) => (
+            current && versions.some((version) => version.id === current)
+              ? current
+              : versions[0]?.id ?? null
+          ));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDocumentVersions([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDocumentVersionsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documentRepository, projectId, selectedDocumentId, workspaceOpen]);
+
+  useEffect(() => {
+    if (!documentHistoryOpen || !selectedDocumentId || !selectedDocumentVersionId) {
+      setDocumentVersionPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    setDocumentVersionPreview(null);
+    void documentRepository.getVersion(projectId, selectedDocumentId, selectedDocumentVersionId)
+      .then((versionDocument) => {
+        if (!cancelled) {
+          setDocumentVersionPreview(versionDocument);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documentHistoryOpen, documentRepository, projectId, selectedDocumentId, selectedDocumentVersionId]);
+
   const businessGraphNodesForRender = useMemo(() => (
     businessDragPreviewPositions
       ? businessModelGraph.nodes.map((node) => (
@@ -478,17 +580,29 @@ export function MyWorkspaceView({
 
   const selectedItem = visibleItems.find((item) => item.id === selectedItemId) ?? null;
   const selectedDocument = documents.find((document) => document.id === selectedDocumentId) ?? null;
+  const selectedDocumentVersion = documentVersions.find((version) => version.id === selectedDocumentVersionId) ?? null;
   const filteredDocuments = useMemo(() => {
     const keyword = documentSearchQuery.trim().toLowerCase();
-    if (!keyword) {
-      return documents;
+    const searched = !keyword
+      ? documents
+      : documents.filter((document) => (
+          `${document.title} ${document.contentText}`.toLowerCase().includes(keyword)
+        ));
+
+    const sorted = [...searched];
+    if (documentSortMode === "title") {
+      sorted.sort((left, right) => left.title.localeCompare(right.title, "zh-CN"));
+    } else if (documentSortMode === "updatedAt") {
+      sorted.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+    } else {
+      sorted.sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
     }
-    return documents.filter((document) => (
-      `${document.title} ${document.contentText}`.toLowerCase().includes(keyword)
-    ));
-  }, [documentSearchQuery, documents]);
+
+    return sorted;
+  }, [documentSearchQuery, documentSortMode, documents]);
   const selectedBusinessNode = businessModelGraph.nodes.find((node) => node.id === selectedBusinessNodeId) ?? null;
   const selectedBusinessEdge = businessModelGraph.edges.find((edge) => edge.id === selectedBusinessEdgeId) ?? null;
+  const canManualReorderDocuments = documentSortMode === "manual" && !documentSearchQuery.trim();
   const relatedBusinessNodeIds = useMemo(() => (
     selectedItemId
       ? businessGraphNodesForRender.filter((node) => node.relatedRequirementIds.includes(selectedItemId)).map((node) => node.id)
@@ -521,7 +635,24 @@ export function MyWorkspaceView({
 
   const persistDocuments = (nextDocuments: WorkspaceRequirementDocument[]) => {
     setDocuments(nextDocuments);
-    saveWorkspaceRequirementDocuments(projectId, nextDocuments);
+  };
+
+  const updateDocumentLocal = (documentId: string, updater: (document: WorkspaceRequirementDocument) => WorkspaceRequirementDocument) => {
+    setDocuments((current) => current.map((document) => (
+      document.id === documentId ? updater(document) : document
+    )));
+  };
+
+  const queueDocumentSave = (documentId = selectedDocumentId) => {
+    if (!documentId) {
+      return;
+    }
+    if (documentSaveTimerRef.current !== null) {
+      window.clearTimeout(documentSaveTimerRef.current);
+    }
+    documentSaveTimerRef.current = window.setTimeout(() => {
+      void saveSelectedDocumentFromEditor(documentId);
+    }, 700);
   };
 
   const documentEditor = useCreateBlockNote({}, [selectedDocumentId]);
@@ -567,32 +698,45 @@ export function MyWorkspaceView({
       window.clearTimeout(readyTimer);
       documentEditorViewReadyRef.current = false;
     };
-  }, [documentEditor, selectedDocument?.id, open]);
+  }, [documentEditor, selectedDocument?.id, workspaceOpen]);
 
   const saveSelectedDocumentFromEditor = async (documentId = selectedDocumentId) => {
     if (!documentId) {
       return;
     }
+    if (documentSaveTimerRef.current !== null) {
+      window.clearTimeout(documentSaveTimerRef.current);
+      documentSaveTimerRef.current = null;
+    }
 
+    const currentDocument = documentsRef.current.find((document) => document.id === documentId);
+    if (!currentDocument) {
+      return;
+    }
+
+    setDocumentSaving(true);
     const contentHtml = await documentEditor.blocksToFullHTML(documentEditor.document);
     const contentText = await documentEditor.blocksToMarkdownLossy(documentEditor.document);
     const contentBlocks = JSON.parse(JSON.stringify(documentEditor.document));
-    setDocuments((current) => {
-      const nextDocuments = current.map((document) => (
-        document.id === documentId
-          ? {
-              ...document,
-              contentHtml,
-              contentText,
-              contentBlocks,
-              updatedAt: new Date().toISOString()
-            }
-          : document
-      ));
-      saveWorkspaceRequirementDocuments(projectId, nextDocuments);
-      return nextDocuments;
-    });
-    return { contentHtml, contentText, contentBlocks };
+    const nextDocument: WorkspaceRequirementDocument = {
+      ...currentDocument,
+      contentHtml,
+      contentText,
+      contentBlocks,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      const saved = await documentRepository.save(projectId, nextDocument);
+      updateDocumentLocal(documentId, () => saved);
+      if (selectedDocumentId === documentId) {
+        const versions = await documentRepository.listVersions(projectId, documentId);
+        setDocumentVersions(versions);
+      }
+      return saved;
+    } finally {
+      setDocumentSaving(false);
+    }
   };
 
   useEffect(() => {
@@ -731,25 +875,19 @@ export function MyWorkspaceView({
     setActiveViewId(newView.id);
   };
 
-  const handleCreateDocument = () => {
-    const now = new Date().toISOString();
-    const nextDocument: WorkspaceRequirementDocument = {
-      id: generateId(),
-      title: `未命名文档 ${documents.length + 1}`,
-      contentHtml: "<p></p>",
-      contentText: "",
-      contentBlocks: [{ type: "paragraph", content: "" }],
-      createdAt: now,
-      updatedAt: now
-    };
-    const nextDocuments = [nextDocument, ...documents];
-    persistDocuments(nextDocuments);
-    setSelectedDocumentId(nextDocument.id);
+  const handleCreateDocument = async () => {
+    const created = await documentRepository.create(projectId, {
+      title: `未命名文档 ${documents.length + 1}`
+    });
+    const reordered = await documentRepository.reorder(projectId, [created.id, ...documents.map((document) => document.id)]);
+    persistDocuments(reordered);
+    setSelectedDocumentId(created.id);
     setViewMode("documents");
     toast.success("已新建需求文档");
   };
 
-  const handleDeleteDocument = (documentId: string) => {
+  const handleDeleteDocument = async (documentId: string) => {
+    await documentRepository.delete(projectId, documentId);
     const nextDocuments = documents.filter((document) => document.id !== documentId);
     persistDocuments(nextDocuments);
     setSelectedDocumentId((current) => {
@@ -758,42 +896,43 @@ export function MyWorkspaceView({
       }
       return nextDocuments[0]?.id ?? null;
     });
+    if (selectedDocumentId === documentId) {
+      setDocumentVersions([]);
+    }
     toast.success("文档已删除");
   };
 
-  const handleDuplicateDocument = (documentId: string) => {
+  const handleDuplicateDocument = async (documentId: string) => {
     const source = documents.find((document) => document.id === documentId);
     if (!source) {
       return;
     }
-    const now = new Date().toISOString();
-    const nextDocument: WorkspaceRequirementDocument = {
-      ...source,
-      id: generateId(),
+    const created = await documentRepository.create(projectId, {
+      title: `${source.title} 副本`
+    });
+    const nextDocument = await documentRepository.save(projectId, {
+      ...created,
       title: `${source.title} 副本`,
-      contentBlocks: source.contentBlocks ? JSON.parse(JSON.stringify(source.contentBlocks)) : source.contentBlocks,
-      createdAt: now,
-      updatedAt: now
-    };
-    const nextDocuments = [nextDocument, ...documents];
-    persistDocuments(nextDocuments);
+      contentHtml: source.contentHtml,
+      contentText: source.contentText,
+      contentBlocks: source.contentBlocks ? JSON.parse(JSON.stringify(source.contentBlocks)) : source.contentBlocks
+    });
+    const reordered = await documentRepository.reorder(projectId, [nextDocument.id, ...documents.map((document) => document.id)]);
+    persistDocuments(reordered);
     setSelectedDocumentId(nextDocument.id);
     toast.success("已复制文档");
   };
 
   const handleUpdateDocumentTitle = (documentId: string, title: string) => {
-    persistDocuments(documents.map((document) => (
-      document.id === documentId
-        ? {
-            ...document,
-            title,
-            updatedAt: new Date().toISOString()
-          }
-        : document
-    )));
+    updateDocumentLocal(documentId, (document) => ({
+      ...document,
+      title,
+      updatedAt: new Date().toISOString()
+    }));
+    queueDocumentSave(documentId);
   };
 
-  const handleDocumentDrop = (targetDocumentId: string) => {
+  const handleDocumentDrop = async (targetDocumentId: string) => {
     if (!draggedDocumentId || draggedDocumentId === targetDocumentId) {
       setDraggedDocumentId(null);
       return;
@@ -809,8 +948,46 @@ export function MyWorkspaceView({
 
     const [moved] = ordered.splice(sourceIndex, 1);
     ordered.splice(targetIndex, 0, moved);
-    persistDocuments(ordered);
+    const normalized = ordered.map((document, index) => ({
+      ...document,
+      sortOrder: index + 1
+    }));
+    persistDocuments(normalized);
+    await documentRepository.reorder(projectId, normalized.map((document) => document.id));
     setDraggedDocumentId(null);
+  };
+
+  const handleRestoreDocumentVersion = async (versionId: string) => {
+    if (!selectedDocumentId) {
+      return;
+    }
+    const restored = await documentRepository.restoreVersion(projectId, selectedDocumentId, versionId);
+    updateDocumentLocal(selectedDocumentId, () => restored);
+    const nextBlocks = Array.isArray(restored.contentBlocks) && restored.contentBlocks.length > 0
+      ? JSON.parse(JSON.stringify(restored.contentBlocks))
+      : restored.contentHtml?.trim()
+      ? await documentEditor.tryParseHTMLToBlocks(restored.contentHtml)
+      : [{ type: "paragraph", content: "" }];
+    const ready = await waitForDocumentEditorView();
+    if (ready) {
+      runWithDocumentEditorView(() => {
+        documentEditor.replaceBlocks(documentEditor.document, nextBlocks);
+      });
+      loadedDocumentIdRef.current = restored.id;
+    }
+    const versions = await documentRepository.listVersions(projectId, selectedDocumentId);
+    setDocumentVersions(versions);
+    setSelectedDocumentVersionId(versions[0]?.id ?? null);
+    setDocumentHistoryOpen(false);
+    toast.success("已回滚到所选版本");
+  };
+
+  const handleOpenDocumentHistory = () => {
+    if (!selectedDocumentId) {
+      return;
+    }
+    setSelectedDocumentVersionId((current) => current ?? documentVersions[0]?.id ?? null);
+    setDocumentHistoryOpen(true);
   };
 
   const handleExportDocumentPdf = async () => {
@@ -873,45 +1050,6 @@ export function MyWorkspaceView({
     const blob = await Packer.toBlob(doc);
     downloadBlob(blob, `${sanitizeFilename(selectedDocument.title)}.docx`);
     toast.success("已导出 DOCX");
-  };
-
-  const handleUploadDocumentFiles = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0 || !selectedDocumentId) {
-      return;
-    }
-
-    const files = Array.from(fileList);
-    for (const file of files) {
-      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-      try {
-        if (["html", "htm"].includes(extension)) {
-          const html = await file.text();
-          const blocks = await documentEditor.tryParseHTMLToBlocks(html);
-          appendBlocksToDocument(blocks);
-        } else if (["md", "markdown", "txt", "json", "csv"].includes(extension) || file.type.startsWith("text/")) {
-          const text = await file.text();
-          const blocks = await documentEditor.tryParseMarkdownToBlocks(text);
-          appendBlocksToDocument(blocks);
-        } else {
-          appendBlocksToDocument([
-            {
-              type: "paragraph",
-              content: `已上传文件：${file.name}`
-            }
-          ]);
-        }
-      } catch {
-        appendBlocksToDocument([
-          {
-            type: "paragraph",
-            content: `已上传文件：${file.name}`
-          }
-        ]);
-      }
-    }
-
-    await saveSelectedDocumentFromEditor(selectedDocumentId);
-    toast.success(`已导入 ${files.length} 个文件`);
   };
 
   const appendBlocksToDocument = (blocks: Parameters<typeof documentEditor.insertBlocks>[0]) => {
@@ -1346,7 +1484,7 @@ export function MyWorkspaceView({
   };
 
   useEffect(() => {
-    if (!open || viewMode !== "business-model") {
+    if (!workspaceOpen || viewMode !== "business-model") {
       return;
     }
 
@@ -1390,10 +1528,10 @@ export function MyWorkspaceView({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteBusinessEdge, open, selectedBusinessEdgeId, selectedBusinessNodeIds, viewMode]);
+  }, [deleteBusinessEdge, selectedBusinessEdgeId, selectedBusinessNodeIds, viewMode, workspaceOpen]);
 
   useEffect(() => {
-    if (!open || viewMode !== "business-model") {
+    if (!workspaceOpen || viewMode !== "business-model") {
       return;
     }
 
@@ -1420,7 +1558,7 @@ export function MyWorkspaceView({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [open, viewMode]);
+  }, [viewMode, workspaceOpen]);
 
   const createBusinessEdge = (source: string, target: string) => {
     if (source === target) {
@@ -2369,8 +2507,20 @@ export function MyWorkspaceView({
                 placeholder="搜索文档标题或内容"
               />
             </div>
+            <div className="mt-3">
+              <Select value={documentSortMode} onValueChange={(value) => setDocumentSortMode(value as typeof documentSortMode)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="排序方式" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">手动排序</SelectItem>
+                  <SelectItem value="updatedAt">最近更新</SelectItem>
+                  <SelectItem value="title">按标题排序</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <ScrollArea className="min-h-0 flex-1">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
             <div className="space-y-2 p-3">
               {filteredDocuments.length > 0 ? filteredDocuments.map((document) => {
                 const active = document.id === selectedDocumentId;
@@ -2378,11 +2528,26 @@ export function MyWorkspaceView({
                   <button
                     key={document.id}
                     type="button"
-                    draggable
+                    draggable={canManualReorderDocuments}
                     onClick={() => setSelectedDocumentId(document.id)}
-                    onDragStart={() => setDraggedDocumentId(document.id)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => handleDocumentDrop(document.id)}
+                    onDragStart={() => {
+                      if (!canManualReorderDocuments) {
+                        return;
+                      }
+                      setDraggedDocumentId(document.id);
+                    }}
+                    onDragOver={(event) => {
+                      if (!canManualReorderDocuments) {
+                        return;
+                      }
+                      event.preventDefault();
+                    }}
+                    onDrop={() => {
+                      if (!canManualReorderDocuments) {
+                        return;
+                      }
+                      void handleDocumentDrop(document.id);
+                    }}
                     onDragEnd={() => setDraggedDocumentId(null)}
                     className={`w-full rounded-2xl border px-4 py-3 text-left transition-colors ${
                       active
@@ -2390,11 +2555,11 @@ export function MyWorkspaceView({
                         : "border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-50"
                     } ${draggedDocumentId === document.id ? "opacity-50" : ""}`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       <GripVertical className="size-4 shrink-0 text-slate-300" />
                       <div className="min-w-0 flex-1 truncate text-sm font-medium">{document.title}</div>
                     </div>
-                    <div className="mt-2 text-[11px] text-[var(--color-text-secondary)]">
+                    <div className="mt-2 truncate text-[11px] text-[var(--color-text-secondary)]">
                       {new Date(document.updatedAt).toLocaleString()}
                     </div>
                   </button>
@@ -2405,7 +2570,7 @@ export function MyWorkspaceView({
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
         </div>
       ) : (
         <div className="flex shrink-0 items-start">
@@ -2432,7 +2597,7 @@ export function MyWorkspaceView({
                       <Ellipsis className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent style={{ width: 160 }} align="end">
                     <Button
                       type="button"
                       variant="ghost"
@@ -2451,48 +2616,30 @@ export function MyWorkspaceView({
                       <Trash2 className="mr-2 size-4" />
                       删除文档
                     </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="w-full justify-start"
+                      onClick={handleOpenDocumentHistory}
+                    >
+                      <RefreshCcw className="mr-2 size-4" />
+                      历史版本
+                    </Button>
+                    <Button type="button" variant="ghost" className="w-full justify-start" onClick={handleExportDocumentPdf}>
+                      <Printer className="mr-2 size-4" />
+                      导出 PDF
+                    </Button>
+                    <Button type="button" variant="ghost" className="w-full justify-start" onClick={handleExportDocumentDocx}>
+                      <Download className="mr-2 size-4" />
+                      导出 DOCX
+                    </Button>
+                    <Button type="button" variant="ghost" className="w-full justify-start" onClick={handleExportDocumentEmailHtml}>
+                      <Mail className="mr-2 size-4" />
+                      导出 HTML
+                    </Button>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" onClick={handleExportDocumentPdf}>
-                  <Printer className="mr-2 size-4" />
-                  导出 PDF
-                </Button>
-                <Button type="button" variant="outline" onClick={handleExportDocumentDocx}>
-                  <Download className="mr-2 size-4" />
-                  导出 DOCX
-                </Button>
-                <Button type="button" variant="outline" onClick={handleExportDocumentEmailHtml}>
-                  <Mail className="mr-2 size-4" />
-                  导出 Email HTML
-                </Button>
-                <input
-                  ref={documentFileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  accept=".md,.markdown,.txt,.html,.htm,.json,.csv,.pdf,.doc,.docx"
-                  onChange={(event) => {
-                    void handleUploadDocumentFiles(event.target.files);
-                    event.currentTarget.value = "";
-                  }}
-                />
-                <Button type="button" variant="outline" onClick={() => documentFileInputRef.current?.click()}>
-                  <Upload className="mr-2 size-4" />
-                  上传文件
-                </Button>
-              </div>
-            {/* <div className="mt-4 rounded-2xl border border-[var(--color-border)] bg-slate-50 px-4 py-3 text-xs text-[var(--color-text-secondary)]">
-              <div>
-                  选中文字会出现浮动格式工具栏；把鼠标移到块左侧会出现新增块、拖拽手柄和块菜单。
-              </div>
-              {documentSelectionContext === "table" ? (
-                <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">
-                    当前处于表格编辑状态。可以通过表格手柄添加/删除行列、移动行列，并使用表格菜单完成更多操作。
-                </div>
-              ) : null}
-            </div> */}
           </div>
             <div className="min-h-0 flex-1 overflow-auto px-1 pb-2" style={{ fontFamily: documentFontFamily }}>
               <BlockNoteView
@@ -2504,8 +2651,8 @@ export function MyWorkspaceView({
                 onSelectionChange={() => {
                   syncDocumentSelectionContext();
                 }}
-                onChange={async () => {
-                  await saveSelectedDocumentFromEditor();
+                onChange={() => {
+                  queueDocumentSave();
                 }}
               />
             </div>
@@ -3351,7 +3498,7 @@ export function MyWorkspaceView({
       const outlineText = buildMindMapOutlineText(
         filteredItems,
         scope === "selected" ? selectedItemId : undefined,
-        projectName
+        workspaceProjectName
       );
 
       if (!outlineText.trim()) {
@@ -3624,7 +3771,7 @@ export function MyWorkspaceView({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Badge variant="outline">当前阶段：{stageLabel(currentStage)}</Badge>
+              <Badge variant="outline">当前阶段：{stageLabel(workspaceCurrentStage)}</Badge>
               <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
                 <CheckCircle2 className="mr-1 size-3.5" />
                 Stage-1 工作区
@@ -3636,7 +3783,7 @@ export function MyWorkspaceView({
         <div className="flex h-[calc(100vh-78px)] min-h-0 min-w-0 bg-[#fbfbfd]">
           <aside className="flex w-[250px] shrink-0 flex-col border-r border-[var(--color-border)] bg-white">
             <div className="px-5 py-5">
-              <div className="text-sm font-semibold">{projectName}</div>
+              <div className="text-sm font-semibold">{workspaceProjectName}</div>
               <div className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
                 用 Notion 风格表格整理需求点，再用 XMind 风格导图理解结构。
               </div>
@@ -4091,7 +4238,7 @@ export function MyWorkspaceView({
                     <Button type="button" onClick={() => setViewMode("table")}>
                       在表格中定位
                     </Button>
-                    <Button type="button" variant="outline" onClick={() => void navigator.clipboard.writeText(buildMindMapOutlineText(filteredItems, selectedItem.id, projectName)).then(() => toast.success("当前分支已复制，可直接粘贴到 XMind")).catch((error) => toast.error(error instanceof Error ? error.message : "复制失败"))}>
+                    <Button type="button" variant="outline" onClick={() => void navigator.clipboard.writeText(buildMindMapOutlineText(filteredItems, selectedItem.id, workspaceProjectName)).then(() => toast.success("当前分支已复制，可直接粘贴到 XMind")).catch((error) => toast.error(error instanceof Error ? error.message : "复制失败"))}>
                       <Copy className="mr-1 size-4" />
                       复制当前分支
                     </Button>
@@ -4137,6 +4284,87 @@ export function MyWorkspaceView({
           ) : null}
         </div>
       </div>
+
+      <Dialog open={documentHistoryOpen} onOpenChange={setDocumentHistoryOpen}>
+        <DialogContent className="!h-[86vh] !w-[90vw] !max-w-[1400px] overflow-hidden rounded-2xl border-0 p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>文档历史版本</DialogTitle>
+            <DialogDescription>查看并恢复当前文档的历史版本。</DialogDescription>
+          </DialogHeader>
+          <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_300px] bg-white">
+            <section className="min-h-0 border-r border-[var(--color-border)]">
+              <ScrollArea className="h-full">
+                <div className="mx-auto max-w-[900px] px-14 py-12">
+                  <div className="mb-12 flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+                    <FileText className="size-4" />
+                    <span>{selectedDocument?.title ?? "需求文档"}</span>
+                  </div>
+                  <h1 className="mb-8 text-5xl font-semibold tracking-normal text-slate-950">
+                    {documentVersionPreview?.title ?? selectedDocument?.title ?? "需求文档"}
+                  </h1>
+                  {documentVersionPreview ? (
+                    <div
+                      className="workspace-document-history-content text-[17px] leading-8 text-slate-900"
+                      dangerouslySetInnerHTML={{ __html: documentVersionPreview.contentHtml || "<p></p>" }}
+                    />
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-slate-50 px-6 py-10 text-sm text-[var(--color-text-secondary)]">
+                      正在加载历史版本内容…
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </section>
+
+            <aside className="flex min-h-0 flex-col bg-white">
+              <div className="border-b border-[var(--color-border)] px-5 py-5">
+                <div className="text-xl font-semibold text-slate-950">版本历史</div>
+              </div>
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="space-y-1 p-4">
+                  {documentVersions.map((version) => {
+                    const active = version.id === selectedDocumentVersionId;
+                    return (
+                      <button
+                        key={version.id}
+                        type="button"
+                        onClick={() => setSelectedDocumentVersionId(version.id)}
+                        className={`w-full rounded-lg px-4 py-3 text-left transition-colors ${
+                          active ? "bg-slate-100 text-slate-950" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="text-sm font-semibold">{formatDocumentVersionDate(version.createdAt)}</div>
+                        <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                          V{version.versionNumber} · {sourceLabel(version.source)}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {!documentVersionsLoading && documentVersions.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
+                      还没有历史版本。
+                    </div>
+                  ) : null}
+                </div>
+              </ScrollArea>
+              <div className="border-t border-[var(--color-border)] px-5 py-4">
+                <div className="mb-3 min-h-5 text-xs text-[var(--color-text-secondary)]">
+                  {selectedDocumentVersion ? selectedDocumentVersion.summary : ""}
+                </div>
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={!selectedDocumentVersionId}
+                  onClick={() => selectedDocumentVersionId ? void handleRestoreDocumentVersion(selectedDocumentVersionId) : undefined}
+                >
+                  <RefreshCcw className="mr-2 size-4" />
+                  恢复
+                </Button>
+              </div>
+            </aside>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -4164,6 +4392,7 @@ function createInitialRequirementDocuments(
       {
         id: "requirement-doc-primary",
         title: `${projectName} 需求文档`,
+        sortOrder: 1,
         contentHtml: html,
         contentText: text,
         contentBlocks: undefined,
@@ -4177,6 +4406,7 @@ function createInitialRequirementDocuments(
     {
       id: "requirement-doc-primary",
       title: `${projectName} 需求文档`,
+      sortOrder: 1,
       contentHtml: "<p></p>",
       contentText: "",
       contentBlocks: [{ type: "paragraph", content: "" }],
@@ -4184,6 +4414,35 @@ function createInitialRequirementDocuments(
       updatedAt: now
     }
   ];
+}
+
+async function seedInitialWorkspaceDocuments(
+  projectId: string,
+  projectName: string,
+  collection: RequirementCollectionArtifactContent | null,
+  repository: DocumentRepository
+) {
+  const seeds = createInitialRequirementDocuments(projectName, collection);
+  const createdDocuments: WorkspaceRequirementDocument[] = [];
+
+  for (const [index, seed] of seeds.entries()) {
+    const created = await repository.create(projectId, { title: seed.title });
+    const saved = await repository.save(projectId, {
+      ...created,
+      title: seed.title,
+      sortOrder: index + 1,
+      contentHtml: seed.contentHtml,
+      contentText: seed.contentText,
+      contentBlocks: seed.contentBlocks
+    });
+    createdDocuments.push(saved);
+  }
+
+  if (createdDocuments.length > 1) {
+    return repository.reorder(projectId, createdDocuments.map((document) => document.id));
+  }
+
+  return createdDocuments;
 }
 
 function markdownToDocxParagraphs(markdown: string) {
@@ -4496,6 +4755,28 @@ function stageLabel(stage: StageType) {
     "ui-draft": "UI 稿",
     "review": "Review"
   }[stage];
+}
+
+function sourceLabel(source: WorkspaceRequirementDocumentVersion["source"]) {
+  return {
+    manual: "手动保存",
+    ai: "AI 生成",
+    import: "导入",
+    rollback: "回滚"
+  }[source];
+}
+
+function formatDocumentVersionDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return `${date.getMonth() + 1}月${date.getDate()}日 · ${date.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  })}`;
 }
 
 function StatusBadge({ status }: { status: WorkspaceRequirementItem["status"] }) {
