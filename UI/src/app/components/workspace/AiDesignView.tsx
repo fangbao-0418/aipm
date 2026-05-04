@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
@@ -7,6 +7,7 @@ import {
   Code2,
   Component,
   Copy,
+  Download,
   Eye,
   EyeOff,
   FileText,
@@ -88,6 +89,18 @@ interface DesignNode {
   fillImageScale?: number;
   svgPath?: string;
   svgFillRule?: "nonzero" | "evenodd";
+  svgPaths?: Array<{
+    d: string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    strokeDashPattern?: number[];
+    strokeLineCap?: "butt" | "round" | "square";
+    strokeLineJoin?: "miter" | "round" | "bevel";
+    fillRule?: "nonzero" | "evenodd";
+    opacity?: number;
+  }>;
+  svgTree?: DesignSvgNode;
   clipBounds?: {
     x: number;
     y: number;
@@ -121,6 +134,31 @@ interface DesignNode {
   innerShadow?: string;
   zIndex?: number;
 }
+
+type DesignSvgNode = {
+  type: "g";
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDashPattern?: number[];
+  strokeLineCap?: "butt" | "round" | "square";
+  strokeLineJoin?: "miter" | "round" | "bevel";
+  fillRule?: "nonzero" | "evenodd";
+  opacity?: number;
+  transform?: string;
+  children: DesignSvgNode[];
+} | {
+  type: "path";
+  d: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDashPattern?: number[];
+  strokeLineCap?: "butt" | "round" | "square";
+  strokeLineJoin?: "miter" | "round" | "bevel";
+  fillRule?: "nonzero" | "evenodd";
+  opacity?: number;
+};
 
 interface DesignPage {
   id: string;
@@ -547,6 +585,25 @@ export function AiDesignView() {
     setTool("select");
   };
 
+  const exportSvg = () => {
+    const exportNodes = (selectedNodes.length > 0 ? selectedNodes : visibleNodes)
+      .filter((node) => node.visible !== false);
+    if (exportNodes.length === 0) {
+      toast.error("当前没有可导出的图层");
+      return;
+    }
+
+    const exportedName = selectedNodes.length === 1
+      ? selectedNodes[0].name
+      : selectedNodes.length > 1
+        ? "selection"
+        : selectedPage.name;
+    const svg = buildDesignSvgDocument(exportNodes, exportedName);
+    const filename = `${sanitizeSvgFileName(file.name)}-${sanitizeSvgFileName(exportedName)}.svg`;
+    downloadTextFile(filename, svg, "image/svg+xml;charset=utf-8");
+    toast.success(selectedNodes.length > 0 ? "已导出选中图层 SVG" : "已导出当前页面 SVG");
+  };
+
   const deleteSelectedNode = () => {
     if (selectedNodeIds.length === 0) {
       return;
@@ -955,6 +1012,10 @@ export function AiDesignView() {
           <Button type="button" variant="outline" className="rounded-full gap-2" disabled>
             <Code2 className="size-4" />
             D2C
+          </Button>
+          <Button type="button" variant="outline" className="rounded-full gap-2" onClick={exportSvg}>
+            <Download className="size-4" />
+            导出 SVG
           </Button>
           <Button type="button" className="rounded-full bg-[#246bfe] px-5 hover:bg-[#1558dc]">
             <Share2 className="mr-2 size-4" />
@@ -1865,7 +1926,6 @@ function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; cla
 
 function DomSvgDesignRenderer({ nodes, pan, zoom }: { nodes: DesignNode[]; pan: { x: number; y: number }; zoom: number }) {
   const tree = useMemo(() => buildDesignRenderTree(nodes), [nodes]);
-
   if (nodes.length === 0) {
     return null;
   }
@@ -1896,10 +1956,10 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
     height: textNode ? "auto" : node.height,
     minHeight: textNode ? node.height : undefined,
     overflow: imageNode || node.clipPath || node.clipBounds ? "hidden" : "visible",
-    background: node.svgPath ? "transparent" : node.fill || "transparent",
+    background: node.svgTree || node.svgPath || node.svgPaths?.length ? "transparent" : node.fill || "transparent",
     borderColor: node.stroke,
-    borderStyle: node.stroke !== "transparent" && !node.svgPath ? "solid" : undefined,
-    borderWidth: node.svgPath || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
+    borderStyle: node.stroke !== "transparent" && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? "solid" : undefined,
+    borderWidth: node.svgTree || node.svgPath || node.svgPaths?.length || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
     borderRadius: node.radius,
     boxShadow: node.shadow || undefined,
     opacity: node.opacity ?? 1,
@@ -1920,16 +1980,16 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
     whiteSpace: "pre-wrap",
     wordBreak: "break-word"
   };
-
   return (
     <div style={style}>
-      {node.svgPath ? (
+      {(node.svgTree || node.svgPath || node.svgPaths?.length) ? (
         <DomSvgPathNode node={node} />
-      ) : node.type === "image" && node.imageUrl ? (
+      ) : null}
+      {node.type === "image" && node.imageUrl ? (
         <img src={node.imageUrl} alt={node.name} className="block h-full w-full rounded-[inherit] object-fill" draggable={false} loading="lazy" />
-      ) : textNode ? (
+      ) : textNode && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? (
         <DomSvgTextContent node={node} />
-      ) : node.text ? (
+      ) : node.text && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? (
         <div className="flex h-full w-full items-center justify-center px-1 text-center">
           {transformTextContent(node.text, node.textTransform)}
         </div>
@@ -1942,34 +2002,475 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
 }
 
 function DomSvgPathNode({ node }: { node: DesignNode }) {
-  const fill = getSvgPaintDescriptor(node, node.fill, "fill", "transparent");
-  const stroke = getSvgPaintDescriptor(node, node.stroke, "stroke", "none");
+  if (node.svgTree) {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="block h-full w-full overflow-visible"
+        viewBox={`0 0 ${Math.max(1, node.width)} ${Math.max(1, node.height)}`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        {renderDesignSvgTreeNode(node, node.svgTree, "root")}
+      </svg>
+    );
+  }
+
+  const paths = node.svgPaths?.length
+    ? node.svgPaths
+    : node.svgPath
+      ? [{
+          d: node.svgPath,
+          fill: node.fill,
+          stroke: node.stroke,
+          strokeWidth: node.strokeWidth,
+          strokeDashPattern: node.strokeDashPattern,
+          strokeLineCap: node.strokeLineCap,
+          strokeLineJoin: node.strokeLineJoin,
+          fillRule: node.svgFillRule
+        }]
+      : [];
+  const paints = paths.map((path, index) => ({
+    fill: getSvgPaintDescriptor(node, path.fill ?? node.fill, "fill", "transparent", `${index}`),
+    stroke: getSvgPaintDescriptor(node, path.stroke ?? node.stroke, "stroke", "none", `${index}`)
+  }));
   return (
     <svg
+      xmlns="http://www.w3.org/2000/svg"
       className="block h-full w-full overflow-visible"
       viewBox={`0 0 ${Math.max(1, node.width)} ${Math.max(1, node.height)}`}
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      {fill.definition || stroke.definition ? (
+      {paints.some((paint) => paint.fill.definition || paint.stroke.definition) ? (
         <defs>
-          {fill.definition}
-          {stroke.definition}
+          {paints.map((paint, index) => (
+            <Fragment key={`paint-${index}`}>
+              {paint.fill.definition}
+              {paint.stroke.definition}
+            </Fragment>
+          ))}
         </defs>
       ) : null}
-      <path
-        d={node.svgPath}
-        fill={fill.paint}
-        fillRule={node.svgFillRule ?? "nonzero"}
-        stroke={stroke.paint}
-        strokeWidth={node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1)}
-        strokeDasharray={node.strokeDashPattern?.join(" ")}
-        strokeLinecap={node.strokeLineCap ?? "butt"}
-        strokeLinejoin={node.strokeLineJoin ?? "miter"}
-        vectorEffect="non-scaling-stroke"
-      />
+      {paths.map((path, index) => (
+        <path
+          key={`${node.id}-path-${index}`}
+          d={path.d}
+          fill={paints[index]?.fill.paint ?? "transparent"}
+          fillRule={path.fillRule ?? node.svgFillRule ?? "nonzero"}
+          stroke={paints[index]?.stroke.paint ?? "none"}
+          strokeWidth={(path.stroke ?? node.stroke) === "transparent" ? 0 : Math.max(0, path.strokeWidth ?? node.strokeWidth ?? 1)}
+          strokeDasharray={path.strokeDashPattern?.join(" ")}
+          strokeLinecap={path.strokeLineCap ?? "butt"}
+          strokeLinejoin={path.strokeLineJoin ?? "miter"}
+          opacity={path.opacity}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
     </svg>
   );
+}
+
+function renderDesignSvgTreeNode(owner: DesignNode, svgNode: DesignSvgNode, keyPath: string): ReactNode {
+  const fill = svgNode.fill !== undefined
+    ? getSvgPaintDescriptor(owner, svgNode.fill, "fill", "none", keyPath)
+    : undefined;
+  const stroke = svgNode.stroke !== undefined
+    ? getSvgPaintDescriptor(owner, svgNode.stroke, "stroke", "none", keyPath)
+    : undefined;
+  const definitions = [fill?.definition, stroke?.definition].filter(Boolean);
+
+  if (svgNode.type === "g") {
+    if (isCompoundSvgPathGroup(svgNode)) {
+      return (
+        <Fragment key={keyPath}>
+          {definitions.length > 0 ? <defs>{definitions}</defs> : null}
+          <path
+            d={getCompoundSvgPathData(svgNode)}
+            fill={fill?.paint}
+            stroke={stroke?.paint}
+            strokeWidth={svgNode.strokeWidth}
+            strokeDasharray={svgNode.strokeDashPattern?.join(" ")}
+            strokeLinecap={svgNode.strokeLineCap}
+            strokeLinejoin={svgNode.strokeLineJoin}
+            fillRule={svgNode.fillRule}
+            opacity={svgNode.opacity}
+            transform={svgNode.transform}
+            vectorEffect="non-scaling-stroke"
+          />
+        </Fragment>
+      );
+    }
+
+    return (
+      <Fragment key={keyPath}>
+        {definitions.length > 0 ? <defs>{definitions}</defs> : null}
+        <g
+          fill={fill?.paint}
+          stroke={stroke?.paint}
+          strokeWidth={svgNode.strokeWidth}
+          strokeDasharray={svgNode.strokeDashPattern?.join(" ")}
+          strokeLinecap={svgNode.strokeLineCap}
+          strokeLinejoin={svgNode.strokeLineJoin}
+          fillRule={svgNode.fillRule}
+          opacity={svgNode.opacity}
+          transform={svgNode.transform}
+        >
+          {svgNode.children.map((child, index) => renderDesignSvgTreeNode(owner, child, `${keyPath}-${index}`))}
+        </g>
+      </Fragment>
+    );
+  }
+
+  return (
+    <Fragment key={keyPath}>
+      {definitions.length > 0 ? <defs>{definitions}</defs> : null}
+      <path
+        d={svgNode.d}
+        fill={fill?.paint}
+        stroke={stroke?.paint}
+        strokeWidth={svgNode.strokeWidth}
+        strokeDasharray={svgNode.strokeDashPattern?.join(" ")}
+        strokeLinecap={svgNode.strokeLineCap}
+        strokeLinejoin={svgNode.strokeLineJoin}
+        fillRule={svgNode.fillRule}
+        opacity={svgNode.opacity}
+        vectorEffect="non-scaling-stroke"
+      />
+    </Fragment>
+  );
+}
+
+function buildDesignSvgDocument(nodes: DesignNode[], name: string) {
+  const visibleNodes = nodes
+    .filter((node) => node.visible !== false && node.width > 0 && node.height > 0)
+    .sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0));
+  const bounds = getExactNodesBounds(visibleNodes);
+  const defs = new SvgExportDefinitions();
+  const content = visibleNodes
+    .map((node) => serializeDesignNodeForExport(node, bounds, defs))
+    .filter(Boolean)
+    .join("\n  ");
+  const definitions = defs.toString();
+
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${formatSvgNumber(bounds.width)}" height="${formatSvgNumber(bounds.height)}" viewBox="0 0 ${formatSvgNumber(bounds.width)} ${formatSvgNumber(bounds.height)}" fill="none">`,
+    `  <title>${escapeXml(name || "AIPM Design Export")}</title>`,
+    definitions ? `  <defs>\n${definitions}\n  </defs>` : "",
+    `  <g fill="none" stroke="none">`,
+    content ? `  ${content}` : "",
+    `  </g>`,
+    `</svg>`
+  ].filter(Boolean).join("\n");
+}
+
+function serializeDesignNodeForExport(node: DesignNode, bounds: RectBounds, defs: SvgExportDefinitions) {
+  const localContent = serializeDesignNodeLocalContent(node, defs);
+  if (!localContent) {
+    return "";
+  }
+
+  const transforms = [
+    `translate(${formatSvgNumber(node.x - bounds.x)} ${formatSvgNumber(node.y - bounds.y)})`,
+    node.rotation ? `rotate(${formatSvgNumber(node.rotation)} ${formatSvgNumber(node.width / 2)} ${formatSvgNumber(node.height / 2)})` : "",
+    node.flippedHorizontal ? `translate(${formatSvgNumber(node.width)} 0) scale(-1 1)` : "",
+    node.flippedVertical ? `translate(0 ${formatSvgNumber(node.height)}) scale(1 -1)` : ""
+  ].filter(Boolean);
+  const attrs = serializeSvgAttributes({
+    id: node.id,
+    "data-name": node.name,
+    transform: transforms.join(" "),
+    opacity: node.opacity !== undefined && node.opacity < 1 ? node.opacity : undefined
+  });
+
+  return `<g${attrs}>\n    ${localContent}\n  </g>`;
+}
+
+function serializeDesignNodeLocalContent(node: DesignNode, defs: SvgExportDefinitions) {
+  if (node.svgTree) {
+    return serializeDesignSvgTreeForExport(node, node.svgTree, defs);
+  }
+
+  const vectorPaths = node.svgPaths?.length
+    ? node.svgPaths
+    : node.svgPath
+      ? [{
+          d: node.svgPath,
+          fill: node.fill,
+          stroke: node.stroke,
+          strokeWidth: node.strokeWidth,
+          strokeDashPattern: node.strokeDashPattern,
+          strokeLineCap: node.strokeLineCap,
+          strokeLineJoin: node.strokeLineJoin,
+          fillRule: node.svgFillRule
+        }]
+      : [];
+  if (vectorPaths.length > 0) {
+    return vectorPaths.map((path, index) => {
+      const fill = defs.paint(node, path.fill ?? node.fill, "fill", "none", `${index}`);
+      const stroke = defs.paint(node, path.stroke ?? node.stroke, "stroke", "none", `${index}`);
+      return `<path${serializeSvgAttributes({
+        d: path.d,
+        fill,
+        "fill-rule": path.fillRule ?? node.svgFillRule,
+        stroke,
+        "stroke-width": path.stroke === "transparent" ? 0 : path.strokeWidth ?? node.strokeWidth,
+        "stroke-dasharray": path.strokeDashPattern?.join(" "),
+        "stroke-linecap": path.strokeLineCap,
+        "stroke-linejoin": path.strokeLineJoin,
+        opacity: path.opacity,
+        "vector-effect": "non-scaling-stroke"
+      })}/>`;
+    }).join("\n    ");
+  }
+
+  if (node.type === "image" && node.imageUrl) {
+    return `<image${serializeSvgAttributes({
+      href: node.imageUrl,
+      x: 0,
+      y: 0,
+      width: node.width,
+      height: node.height,
+      preserveAspectRatio: "none",
+      opacity: node.opacity
+    })}/>`;
+  }
+
+  if (node.text || node.textRuns?.length) {
+    return serializeTextNodeForExport(node);
+  }
+
+  const fill = defs.paint(node, node.fill, "fill", "none", "box");
+  const stroke = defs.paint(node, node.stroke, "stroke", "none", "box");
+  return `<rect${serializeSvgAttributes({
+    x: 0,
+    y: 0,
+    width: node.width,
+    height: node.height,
+    rx: node.radius,
+    fill,
+    stroke,
+    "stroke-width": node.stroke === "transparent" ? 0 : node.strokeWidth,
+    "stroke-dasharray": node.strokeDashPattern?.join(" "),
+    "stroke-linecap": node.strokeLineCap,
+    "stroke-linejoin": node.strokeLineJoin
+  })}/>`;
+}
+
+function serializeDesignSvgTreeForExport(owner: DesignNode, svgNode: DesignSvgNode, defs: SvgExportDefinitions): string {
+  if (svgNode.type === "g") {
+    if (isCompoundSvgPathGroup(svgNode)) {
+      return `<path${serializeSvgAttributes({
+        d: getCompoundSvgPathData(svgNode),
+        fill: svgNode.fill !== undefined ? defs.paint(owner, svgNode.fill, "fill", "none", "tree") : undefined,
+        stroke: svgNode.stroke !== undefined ? defs.paint(owner, svgNode.stroke, "stroke", "none", "tree") : undefined,
+        "stroke-width": svgNode.strokeWidth,
+        "stroke-dasharray": svgNode.strokeDashPattern?.join(" "),
+        "stroke-linecap": svgNode.strokeLineCap,
+        "stroke-linejoin": svgNode.strokeLineJoin,
+        "fill-rule": svgNode.fillRule,
+        opacity: svgNode.opacity,
+        transform: svgNode.transform,
+        "vector-effect": "non-scaling-stroke"
+      })}/>`;
+    }
+
+    const attrs = serializeSvgAttributes({
+      fill: svgNode.fill !== undefined ? defs.paint(owner, svgNode.fill, "fill", "none", "tree") : undefined,
+      stroke: svgNode.stroke !== undefined ? defs.paint(owner, svgNode.stroke, "stroke", "none", "tree") : undefined,
+      "stroke-width": svgNode.strokeWidth,
+      "stroke-dasharray": svgNode.strokeDashPattern?.join(" "),
+      "stroke-linecap": svgNode.strokeLineCap,
+      "stroke-linejoin": svgNode.strokeLineJoin,
+      "fill-rule": svgNode.fillRule,
+      opacity: svgNode.opacity,
+      transform: svgNode.transform
+    });
+    const children = svgNode.children.map((child) => serializeDesignSvgTreeForExport(owner, child, defs)).filter(Boolean);
+    return `<g${attrs}>${children.length > 0 ? `\n      ${children.join("\n      ")}\n    ` : ""}</g>`;
+  }
+
+  const attrs = serializeSvgAttributes({
+    d: svgNode.d,
+    fill: svgNode.fill !== undefined ? defs.paint(owner, svgNode.fill, "fill", "none", "tree") : undefined,
+    stroke: svgNode.stroke !== undefined ? defs.paint(owner, svgNode.stroke, "stroke", "none", "tree") : undefined,
+    "stroke-width": svgNode.strokeWidth,
+    "stroke-dasharray": svgNode.strokeDashPattern?.join(" "),
+    "stroke-linecap": svgNode.strokeLineCap,
+    "stroke-linejoin": svgNode.strokeLineJoin,
+    "fill-rule": svgNode.fillRule,
+    opacity: svgNode.opacity,
+    "vector-effect": "non-scaling-stroke"
+  });
+  return `<path${attrs}/>`;
+}
+
+function isCompoundSvgPathGroup(svgNode: DesignSvgNode): svgNode is Extract<DesignSvgNode, { type: "g" }> {
+  return svgNode.type === "g"
+    && svgNode.fill !== undefined
+    && svgNode.children.length > 1
+    && svgNode.children.every((child) => (
+      child.type === "path"
+      && child.fill === undefined
+      && child.stroke === undefined
+      && child.opacity === undefined
+    ));
+}
+
+function getCompoundSvgPathData(svgNode: Extract<DesignSvgNode, { type: "g" }>) {
+  return svgNode.children
+    .map((child) => child.type === "path" ? child.d : "")
+    .filter(Boolean)
+    .join(" ");
+}
+
+function serializeTextNodeForExport(node: DesignNode) {
+  const lineHeight = node.lineHeight ?? node.fontSize * 1.35;
+  const baseAttrs = serializeSvgAttributes({
+    x: node.textAlign === "center" ? node.width / 2 : node.textAlign === "right" ? node.width : 0,
+    y: Math.max(node.fontSize, lineHeight),
+    fill: getSvgPaint(node.textColor, "#171717"),
+    "font-family": node.fontFamily ?? "PingFang SC, Microsoft YaHei, sans-serif",
+    "font-size": node.fontSize,
+    "font-weight": node.fontWeight,
+    "letter-spacing": node.letterSpacing,
+    "text-anchor": node.textAlign === "center" ? "middle" : node.textAlign === "right" ? "end" : undefined,
+    "text-decoration": getNodeTextDecoration(node)
+  });
+
+  if (node.textRuns?.length) {
+    const runs = node.textRuns.map((run) => `<tspan${serializeSvgAttributes({
+      fill: run.color,
+      "font-family": run.fontFamily,
+      "font-size": run.fontSize,
+      "font-weight": run.fontWeight,
+      "letter-spacing": run.letterSpacing,
+      "text-decoration": [
+        run.underline || node.underline ? "underline" : "",
+        run.strikethrough || node.strikethrough ? "line-through" : ""
+      ].filter(Boolean).join(" ") || undefined
+    })}>${escapeXml(transformTextContent(run.text, node.textTransform))}</tspan>`);
+    return `<text${baseAttrs}>${runs.join("")}</text>`;
+  }
+
+  return `<text${baseAttrs}>${escapeXml(transformTextContent(node.text ?? "", node.textTransform))}</text>`;
+}
+
+class SvgExportDefinitions {
+  private readonly definitions = new Map<string, string>();
+  private counter = 0;
+
+  paint(node: DesignNode, value: string | undefined, kind: "fill" | "stroke", fallback: string, suffix: string) {
+    const paint = value?.trim();
+    if (!paint || paint === "transparent" || paint === "none") {
+      return fallback;
+    }
+    if (paint.startsWith("linear-gradient")) {
+      const id = this.nextId(node, kind, suffix);
+      this.definitions.set(id, buildSvgLinearGradientDefinition(id, paint));
+      return `url(#${id})`;
+    }
+    if (paint.startsWith("radial-gradient")) {
+      const id = this.nextId(node, kind, suffix);
+      this.definitions.set(id, buildSvgRadialGradientDefinition(id, paint));
+      return `url(#${id})`;
+    }
+    if (paint.startsWith("url(")) {
+      return fallback;
+    }
+    return getSvgPaint(paint, fallback);
+  }
+
+  toString() {
+    return Array.from(this.definitions.values()).map((definition) => `    ${definition}`).join("\n");
+  }
+
+  private nextId(node: DesignNode, kind: "fill" | "stroke", suffix: string) {
+    this.counter += 1;
+    return `aipm-${sanitizeSvgId(node.id)}-${kind}-${sanitizeSvgId(suffix)}-${this.counter}`;
+  }
+}
+
+function buildSvgLinearGradientDefinition(id: string, value: string) {
+  const args = extractCssFunctionArgs(value);
+  const firstArg = args[0] ?? "";
+  const angle = firstArg.endsWith("deg") ? Number(firstArg.replace("deg", "")) : 180;
+  const stops = (firstArg.endsWith("deg") ? args.slice(1) : args).map(parseCssColorStop);
+  const radians = (angle - 90) * Math.PI / 180;
+  const x = Math.cos(radians) / 2;
+  const y = Math.sin(radians) / 2;
+  return `<linearGradient${serializeSvgAttributes({ id, x1: 0.5 - x, y1: 0.5 - y, x2: 0.5 + x, y2: 0.5 + y })}>${stops.map((stop) => `<stop${serializeSvgAttributes({ offset: `${Math.round(stop.position * 100)}%`, "stop-color": stop.color })}/>`).join("")}</linearGradient>`;
+}
+
+function buildSvgRadialGradientDefinition(id: string, value: string) {
+  const stops = extractCssFunctionArgs(value).map(parseCssColorStop);
+  return `<radialGradient${serializeSvgAttributes({ id, cx: "50%", cy: "50%", r: "70%" })}>${stops.map((stop) => `<stop${serializeSvgAttributes({ offset: `${Math.round(stop.position * 100)}%`, "stop-color": stop.color })}/>`).join("")}</radialGradient>`;
+}
+
+function serializeSvgAttributes(attributes: Record<string, string | number | boolean | undefined | null>) {
+  return Object.entries(attributes)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => ` ${key}="${escapeSvgAttribute(formatSvgAttributeValue(value))}"`)
+    .join("");
+}
+
+function formatSvgAttributeValue(value: string | number | boolean) {
+  return typeof value === "number" ? formatSvgNumber(value) : String(value);
+}
+
+function formatSvgNumber(value: number) {
+  if (!Number.isFinite(value)) {
+    return "0";
+  }
+  return String(Number(value.toFixed(3)));
+}
+
+function getExactNodesBounds(nodes: DesignNode[]): RectBounds {
+  if (nodes.length === 0) {
+    return { x: 0, y: 0, width: 1, height: 1 };
+  }
+  const minX = Math.min(...nodes.map((node) => node.x));
+  const minY = Math.min(...nodes.map((node) => node.y));
+  const maxX = Math.max(...nodes.map((node) => node.x + node.width));
+  const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY)
+  };
+}
+
+function sanitizeSvgFileName(value: string) {
+  return (value || "design").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").slice(0, 80) || "design";
+}
+
+function sanitizeSvgId(value: string) {
+  return (value || "node").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "node";
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeSvgAttribute(value: string) {
+  return escapeXml(value).replace(/"/g, "&quot;");
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 function DomSvgTextContent({ node }: { node: DesignNode }) {
@@ -2715,20 +3216,20 @@ function getSvgPaint(value: string | undefined, fallback: string) {
   return fallback;
 }
 
-function getSvgPaintDescriptor(node: DesignNode, value: string | undefined, kind: "fill" | "stroke", fallback: string) {
+function getSvgPaintDescriptor(node: DesignNode, value: string | undefined, kind: "fill" | "stroke", fallback: string, idSuffix = "") {
   const paint = value?.trim();
   if (!paint || paint === "transparent" || paint.startsWith("url(")) {
     return { paint: fallback, definition: null as ReactNode };
   }
   if (paint.startsWith("linear-gradient")) {
-    const id = `paint-${node.id}-${kind}`;
+    const id = `paint-${node.id}-${kind}${idSuffix ? `-${idSuffix}` : ""}`;
     return {
       paint: `url(#${id})`,
       definition: renderSvgLinearGradient(id, paint)
     };
   }
   if (paint.startsWith("radial-gradient")) {
-    const id = `paint-${node.id}-${kind}`;
+    const id = `paint-${node.id}-${kind}${idSuffix ? `-${idSuffix}` : ""}`;
     return {
       paint: `url(#${id})`,
       definition: renderSvgRadialGradient(id, paint)

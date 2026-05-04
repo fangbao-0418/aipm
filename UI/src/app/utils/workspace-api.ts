@@ -79,6 +79,18 @@ export interface WorkspaceDesignNode {
   fillImageScale?: number;
   svgPath?: string;
   svgFillRule?: "nonzero" | "evenodd";
+  svgPaths?: Array<{
+    d: string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    strokeDashPattern?: number[];
+    strokeLineCap?: "butt" | "round" | "square";
+    strokeLineJoin?: "miter" | "round" | "bevel";
+    fillRule?: "nonzero" | "evenodd";
+    opacity?: number;
+  }>;
+  svgTree?: WorkspaceDesignSvgNode;
   clipBounds?: {
     x: number;
     y: number;
@@ -112,6 +124,31 @@ export interface WorkspaceDesignNode {
   innerShadow?: string;
   zIndex?: number;
 }
+
+export type WorkspaceDesignSvgNode = {
+  type: "g";
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDashPattern?: number[];
+  strokeLineCap?: "butt" | "round" | "square";
+  strokeLineJoin?: "miter" | "round" | "bevel";
+  fillRule?: "nonzero" | "evenodd";
+  opacity?: number;
+  transform?: string;
+  children: WorkspaceDesignSvgNode[];
+} | {
+  type: "path";
+  d: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDashPattern?: number[];
+  strokeLineCap?: "butt" | "round" | "square";
+  strokeLineJoin?: "miter" | "round" | "bevel";
+  fillRule?: "nonzero" | "evenodd";
+  opacity?: number;
+};
 
 export interface WorkspaceDesignPage {
   id: string;
