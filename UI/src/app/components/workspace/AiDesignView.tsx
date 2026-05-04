@@ -38,7 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../ui/textarea";
 import { getProject } from "../../utils/storage";
 import { toast } from "sonner";
-import { importAiDesignFile } from "../../utils/workspace-api";
+import { getAiDesignFile, importAiDesignFile, saveAiDesignFile, type WorkspaceDesignFile } from "../../utils/workspace-api";
 
 type DesignLeftTab = "layers" | "components" | "assets" | "prd";
 type DesignRightTab = "design" | "prototype" | "d2c";
@@ -48,6 +48,8 @@ type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 interface DesignNode {
   id: string;
+  parentId?: string;
+  depth?: number;
   type: DesignNodeType;
   name: string;
   x: number;
@@ -57,8 +59,22 @@ interface DesignNode {
   fill: string;
   stroke: string;
   strokeWidth?: number;
+  strokePosition?: "center" | "inside" | "outside";
+  strokeDashPattern?: number[];
+  strokeLineCap?: "butt" | "round" | "square";
+  strokeLineJoin?: "miter" | "round" | "bevel";
   radius: number;
   text?: string;
+  textRuns?: Array<{
+    text: string;
+    color?: string;
+    fontSize?: number;
+    fontFamily?: string;
+    fontWeight?: number;
+    letterSpacing?: number;
+    underline?: boolean;
+    strikethrough?: boolean;
+  }>;
   textColor: string;
   fontSize: number;
   lineHeight?: number;
@@ -67,6 +83,8 @@ interface DesignNode {
   locked: boolean;
   imageUrl?: string;
   fillImageUrl?: string;
+  fillImageMode?: "stretch" | "fill" | "fit" | "tile";
+  fillImageScale?: number;
   svgPath?: string;
   svgFillRule?: "nonzero" | "evenodd";
   clipBounds?: {
@@ -95,6 +113,7 @@ interface DesignNode {
   flippedHorizontal?: boolean;
   flippedVertical?: boolean;
   shadow?: string;
+  innerShadow?: string;
   zIndex?: number;
 }
 
@@ -124,15 +143,7 @@ interface ImportedDesignAsset {
   height?: number;
 }
 
-interface AiDesignFile {
-  id: string;
-  name: string;
-  prdText: string;
-  pages: DesignPage[];
-  importedComponents: ImportedDesignComponent[];
-  importedAssets: ImportedDesignAsset[];
-  updatedAt: string;
-}
+type AiDesignFile = WorkspaceDesignFile;
 
 interface RectBounds {
   x: number;
@@ -156,6 +167,12 @@ interface MinimapViewport {
   height: number;
 }
 
+interface DesignLayerTreeNode {
+  node: DesignNode;
+  children: DesignLayerTreeNode[];
+  depth: number;
+}
+
 const componentPresets: Array<{
   type: DesignNodeType;
   label: string;
@@ -175,8 +192,8 @@ export function AiDesignView() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
   const project = useMemo(() => projectId ? getProject(projectId) : null, [projectId]);
-  const storageKey = `aipm_ai_design_${projectId}`;
-  const [file, setFile] = useState<AiDesignFile>(() => loadDesignFile(storageKey, project?.name ?? "未命名设计"));
+  const [file, setFile] = useState<AiDesignFile>(() => createInitialDesignFile(project?.name ?? "未命名设计"));
+  const [designFileLoaded, setDesignFileLoaded] = useState(false);
   const [leftTab, setLeftTab] = useState<DesignLeftTab>("layers");
   const [rightTab, setRightTab] = useState<DesignRightTab>("design");
   const [tool, setTool] = useState<DesignTool>("select");
@@ -186,6 +203,7 @@ export function AiDesignView() {
   const [zoom, setZoom] = useState(0.64);
   const [pan, setPan] = useState({ x: 240, y: 64 });
   const [layerQuery, setLayerQuery] = useState("");
+  const [expandedLayerIds, setExpandedLayerIds] = useState<string[]>([]);
   const [importingDesignFile, setImportingDesignFile] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [viewportSize, setViewportSize] = useState({ width: 1200, height: 800 });
@@ -195,6 +213,8 @@ export function AiDesignView() {
   } | null>(null);
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const designImportInputRef = useRef<HTMLInputElement | null>(null);
+  const applyingRemoteDesignRef = useRef(false);
+  const saveDesignTimerRef = useRef<number | null>(null);
   const nodeDragRef = useRef<{
     nodeIds: string[];
     startX: number;
@@ -240,14 +260,57 @@ export function AiDesignView() {
 
     return visibleNodes.filter((node) => selectedNodeIds.includes(node.id) || rectsIntersect(sceneViewport, nodeToBounds(node)));
   }, [selectedNodeIds, visibleNodes, visibleSceneBounds, zoom]);
-  const filteredLayers = selectedPage.nodes.filter((node) => node.name.toLowerCase().includes(layerQuery.trim().toLowerCase()));
+  const layerTree = useMemo(() => buildDesignLayerTree(selectedPage.nodes, layerQuery), [layerQuery, selectedPage.nodes]);
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify({
-      ...file,
-      updatedAt: new Date().toISOString()
-    }));
-  }, [file, storageKey]);
+    let cancelled = false;
+    setDesignFileLoaded(false);
+    void getAiDesignFile(projectId)
+      .then((remoteFile) => {
+        if (cancelled) {
+          return;
+        }
+        applyingRemoteDesignRef.current = true;
+        setFile(normalizeDesignFile(remoteFile, project?.name ?? "未命名设计"));
+        setDesignFileLoaded(true);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setDesignFileLoaded(true);
+        toast.error(error instanceof Error ? error.message : "设计文件加载失败");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [project?.name, projectId]);
+
+  useEffect(() => {
+    if (!designFileLoaded) {
+      return;
+    }
+    if (applyingRemoteDesignRef.current) {
+      applyingRemoteDesignRef.current = false;
+      return;
+    }
+    if (saveDesignTimerRef.current) {
+      window.clearTimeout(saveDesignTimerRef.current);
+    }
+    saveDesignTimerRef.current = window.setTimeout(() => {
+      void saveAiDesignFile(projectId, {
+        ...file,
+        updatedAt: new Date().toISOString()
+      }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : "设计文件保存失败");
+      });
+    }, 1200);
+    return () => {
+      if (saveDesignTimerRef.current) {
+        window.clearTimeout(saveDesignTimerRef.current);
+      }
+    };
+  }, [designFileLoaded, file, projectId]);
 
   useEffect(() => {
     const viewport = canvasViewportRef.current;
@@ -267,6 +330,13 @@ export function AiDesignView() {
     observer.observe(viewport);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const initiallyExpanded = selectedPage.nodes
+      .filter((node) => (node.depth ?? 0) < 2 && selectedPage.nodes.some((candidate) => candidate.parentId === node.id))
+      .map((node) => node.id);
+    setExpandedLayerIds(initiallyExpanded);
+  }, [selectedPageId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -390,9 +460,7 @@ export function AiDesignView() {
     if (selectedNodes.length === 0) {
       return;
     }
-    const nextNodes = selectedNodes.map((node) => ({
-      ...node,
-      id: createId("node"),
+    const nextNodes = cloneDesignNodesWithNewIds(selectedNodes, (node) => ({
       name: `${node.name} Copy`,
       x: node.x + 28,
       y: node.y + 28,
@@ -408,9 +476,7 @@ export function AiDesignView() {
   const insertImportedComponent = (component: ImportedDesignComponent) => {
     const minX = Math.min(...component.nodes.map((node) => node.x), 0);
     const minY = Math.min(...component.nodes.map((node) => node.y), 0);
-    const nextNodes = component.nodes.map((node, index) => ({
-      ...node,
-      id: createId("node"),
+    const nextNodes = cloneDesignNodesWithNewIds(component.nodes, (node, index) => ({
       name: index === 0 ? component.name : node.name,
       x: node.x - minX + 360 + index * 4,
       y: node.y - minY + 260 + index * 4,
@@ -427,16 +493,15 @@ export function AiDesignView() {
   };
 
   const insertImportedPage = (page: DesignPage) => {
+    const clonedNodes = cloneDesignNodesWithNewIds(page.nodes, () => ({
+      locked: false,
+      visible: true
+    }));
     const nextPage: DesignPage = {
       ...page,
       id: createId("page"),
       name: `${page.name} Copy`,
-      nodes: page.nodes.map((node) => ({
-        ...node,
-        id: createId("node"),
-        locked: false,
-        visible: true
-      }))
+      nodes: clonedNodes
     };
     updateFile((current) => ({
       ...current,
@@ -503,19 +568,17 @@ export function AiDesignView() {
 
     setImportingDesignFile(true);
     try {
-      const imported = await importAiDesignFile(projectId, sourceFile);
-      updateFile((current) => ({
-        ...current,
-        pages: [...current.pages, ...imported.pages],
-        importedComponents: [...(current.importedComponents ?? []), ...imported.components],
-        importedAssets: [...(current.importedAssets ?? []), ...(imported.assets ?? [])]
-      }));
-      setLeftTab(imported.assets?.length ? "assets" : "components");
-      if (imported.pages[0]) {
-        setSelectedPageId(imported.pages[0].id);
-        selectNodes(imported.pages[0].nodes[0]?.id ? [imported.pages[0].nodes[0].id] : []);
+      const nextFile = normalizeDesignFile(await importAiDesignFile(projectId, sourceFile), project?.name ?? "未命名设计");
+      const previousPageIds = new Set(file.pages.map((page) => page.id));
+      const insertedPage = nextFile.pages.find((page) => !previousPageIds.has(page.id)) ?? nextFile.pages[nextFile.pages.length - 1];
+      applyingRemoteDesignRef.current = true;
+      setFile(nextFile);
+      setLeftTab(nextFile.importedAssets?.length ? "assets" : "components");
+      if (insertedPage) {
+        setSelectedPageId(insertedPage.id);
+        selectNodes(insertedPage.nodes[0]?.id ? [insertedPage.nodes[0].id] : []);
       }
-      toast.success(`已导入 ${sourceFile.name}：${imported.pages.length} 个页面，${imported.components.length} 个组件，${imported.assets?.length ?? 0} 张图片`);
+      toast.success(`已导入 ${sourceFile.name}，并保存到本地项目空间`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "导入失败，请确认文件格式是否为 Sketch/Figma");
     } finally {
@@ -825,7 +888,7 @@ export function AiDesignView() {
                   <Input value={layerQuery} onChange={(event) => setLayerQuery(event.target.value)} placeholder="搜索图层名称" className="h-9 border-0 bg-[#f5f5f7] pl-9" />
                 </div>
               </div>
-              <div className="border-b border-[#eeeeef] p-3">
+              <div className="border-b border-[#eeeeef] p-3" style={{ height: '50%', overflow: 'auto' }}>
                 <div className="mb-2 flex items-center justify-between text-sm font-semibold">
                   <span>页面</span>
                   <Button type="button" variant="ghost" size="icon" className="size-7" onClick={createPage}>
@@ -864,32 +927,29 @@ export function AiDesignView() {
                   ))}
                 </div>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div className="min-h-0 flex-1 overflow-y-auto p-3" style={{ height: '50%', overflow: 'auto' }}>
                 <div className="mb-2 flex items-center justify-between text-sm font-semibold">
                   <span>图层</span>
                   <Layers className="size-4 text-[#888]" />
                 </div>
                 <div className="space-y-1">
-                  {filteredLayers.map((node) => (
-                    <button
-                      key={node.id}
-                      type="button"
-                      onClick={(event) => {
-                        const append = event.shiftKey || event.metaKey || event.ctrlKey;
-                        selectNodes(append
-                          ? selectedNodeIds.includes(node.id)
-                            ? selectedNodeIds.filter((id) => id !== node.id)
-                            : [...selectedNodeIds, node.id]
-                          : [node.id], node.id);
-                      }}
-                      className={`group flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm ${selectedNodeIds.includes(node.id) ? "bg-[#ede7ff] text-[#6d35d8]" : "hover:bg-[#f7f7f8]"}`}
-                    >
-                      {nodeIcon(node.type)}
-                      <span className="min-w-0 flex-1 truncate">{node.name}</span>
-                      {node.locked ? <Lock className="size-3.5 text-[#999]" /> : null}
-                      {!node.visible ? <EyeOff className="size-3.5 text-[#999]" /> : null}
-                    </button>
-                  ))}
+                  <DesignLayerTree
+                    nodes={layerTree}
+                    expandedIds={expandedLayerIds}
+                    selectedIds={selectedNodeIds}
+                    onToggle={(nodeId) => {
+                      setExpandedLayerIds((current) => current.includes(nodeId)
+                        ? current.filter((id) => id !== nodeId)
+                        : [...current, nodeId]);
+                    }}
+                    onSelect={(node, append) => {
+                      selectNodes(append
+                        ? selectedNodeIds.includes(node.id)
+                          ? selectedNodeIds.filter((id) => id !== node.id)
+                          : [...selectedNodeIds, node.id]
+                        : [node.id], node.id);
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -1593,7 +1653,6 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
   context.globalAlpha = node.opacity ?? 1;
   context.globalCompositeOperation = (node.blendMode ?? "source-over") as GlobalCompositeOperation;
   context.filter = node.blurRadius ? `blur(${node.blurRadius}px)` : "none";
-  context.shadowColor = "transparent";
 
   if (node.svgPath) {
     drawSvgPathNode(context, node);
@@ -1602,7 +1661,11 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
   } else {
     drawBoxNode(context, node, requestRedraw);
     if (node.text) {
-      drawTextNode(context, node, node.text);
+      if (node.textRuns?.length) {
+        drawRichTextNode(context, node);
+      } else {
+        drawTextNode(context, node, node.text);
+      }
     }
   }
 
@@ -1633,13 +1696,14 @@ function drawSvgPathNode(context: CanvasRenderingContext2D, node: DesignNode) {
     const path = new Path2D(node.svgPath);
     const fill = getCanvasFillStyle(context, node, node.fill);
     const stroke = getCanvasPaint(node.stroke);
+    drawPathShadowLayers(context, path, node, fill || getCanvasPaint(node.fill) || "#ffffff");
     if (fill) {
       context.fillStyle = fill;
       context.fill(path, node.svgFillRule === "evenodd" ? "evenodd" : "nonzero");
     }
     if (stroke && (node.strokeWidth ?? 0) > 0) {
+      applyCanvasStrokeStyle(context, node);
       context.strokeStyle = stroke;
-      context.lineWidth = Math.max(0, node.strokeWidth ?? 1);
       context.stroke(path);
     }
   } catch {
@@ -1656,7 +1720,9 @@ function drawImageNode(context: CanvasRenderingContext2D, node: DesignNode, requ
 
   const cached = getCanvasImage(imageUrl, requestRedraw);
   if (cached.loaded) {
+    applyFirstCanvasShadow(context, node.shadow);
     context.drawImage(cached.image, 0, 0, node.width, node.height);
+    resetCanvasShadow(context);
   } else {
     drawImageFallback(context, node);
   }
@@ -1665,8 +1731,16 @@ function drawImageNode(context: CanvasRenderingContext2D, node: DesignNode, requ
 function drawBoxNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
   const fill = getCanvasFillStyle(context, node, node.fill);
   const stroke = getCanvasPaint(node.stroke);
-  const radius = Math.max(0, Math.min(node.radius, node.width / 2, node.height / 2));
-  const path = roundedRectPath(0, 0, node.width, node.height, radius);
+  const strokeWidth = Math.max(0, node.strokeWidth ?? 0);
+  const strokeOffset = node.strokePosition === "inside" ? strokeWidth / 2 : node.strokePosition === "outside" ? -strokeWidth / 2 : 0;
+  const path = roundedRectPath(
+    strokeOffset,
+    strokeOffset,
+    node.width - strokeOffset * 2,
+    node.height - strokeOffset * 2,
+    Math.max(0, node.radius - strokeOffset)
+  );
+  drawPathShadowLayers(context, path, node, fill || getCanvasPaint(node.fill) || "#ffffff");
   if (node.fillImageUrl) {
     drawFillImage(context, node, path, requestRedraw);
   }
@@ -1675,10 +1749,98 @@ function drawBoxNode(context: CanvasRenderingContext2D, node: DesignNode, reques
     context.fill(path);
   }
   if (stroke && (node.strokeWidth ?? 0) > 0) {
+    applyCanvasStrokeStyle(context, node);
     context.strokeStyle = stroke;
-    context.lineWidth = Math.max(0, node.strokeWidth ?? 1);
     context.stroke(path);
   }
+  drawInnerShadowLayers(context, path, node);
+}
+
+function applyCanvasStrokeStyle(context: CanvasRenderingContext2D, node: DesignNode) {
+  context.lineWidth = Math.max(0, node.strokeWidth ?? 1);
+  context.setLineDash(node.strokeDashPattern ?? []);
+  context.lineCap = node.strokeLineCap ?? "butt";
+  context.lineJoin = node.strokeLineJoin ?? "miter";
+}
+
+function drawPathShadowLayers(
+  context: CanvasRenderingContext2D,
+  path: Path2D,
+  node: DesignNode,
+  fallbackFill: string | CanvasGradient
+) {
+  const shadows = parseCanvasShadows(node.shadow);
+  if (shadows.length === 0) {
+    return;
+  }
+
+  shadows.forEach((shadow) => {
+    context.save();
+    context.shadowOffsetX = shadow.offsetX;
+    context.shadowOffsetY = shadow.offsetY;
+    context.shadowBlur = shadow.blur;
+    context.shadowColor = shadow.color;
+    context.fillStyle = fallbackFill;
+    context.fill(path, node.svgFillRule === "evenodd" ? "evenodd" : "nonzero");
+    context.restore();
+  });
+}
+
+function drawInnerShadowLayers(context: CanvasRenderingContext2D, path: Path2D, node: DesignNode) {
+  const shadows = parseCanvasShadows(node.innerShadow);
+  if (shadows.length === 0) {
+    return;
+  }
+
+  shadows.forEach((shadow) => {
+    context.save();
+    context.clip(path);
+    context.shadowOffsetX = shadow.offsetX;
+    context.shadowOffsetY = shadow.offsetY;
+    context.shadowBlur = shadow.blur;
+    context.shadowColor = shadow.color;
+    context.lineWidth = Math.max(node.width, node.height) * 2;
+    context.strokeStyle = "rgba(0,0,0,0.01)";
+    context.stroke(path);
+    context.restore();
+  });
+}
+
+function applyFirstCanvasShadow(context: CanvasRenderingContext2D, shadow: string | undefined) {
+  const [firstShadow] = parseCanvasShadows(shadow);
+  if (!firstShadow) {
+    resetCanvasShadow(context);
+    return;
+  }
+  context.shadowOffsetX = firstShadow.offsetX;
+  context.shadowOffsetY = firstShadow.offsetY;
+  context.shadowBlur = firstShadow.blur;
+  context.shadowColor = firstShadow.color;
+}
+
+function resetCanvasShadow(context: CanvasRenderingContext2D) {
+  context.shadowColor = "transparent";
+  context.shadowOffsetX = 0;
+  context.shadowOffsetY = 0;
+  context.shadowBlur = 0;
+}
+
+function parseCanvasShadows(shadow: string | undefined) {
+  return splitCssLayers(shadow)
+    .map((shadowLayer) => {
+      const shadowMatch = shadowLayer.match(/^(?<x>-?\d+(?:\.\d+)?)px\s+(?<y>-?\d+(?:\.\d+)?)px\s+(?<blur>-?\d+(?:\.\d+)?)px(?:\s+(?<spread>-?\d+(?:\.\d+)?)px)?\s+(?<color>.+)$/);
+      if (!shadowMatch?.groups) {
+        return undefined;
+      }
+      return {
+        offsetX: Number(shadowMatch.groups.x),
+        offsetY: Number(shadowMatch.groups.y),
+        blur: Math.max(0, Number(shadowMatch.groups.blur)),
+        spread: Number(shadowMatch.groups.spread ?? 0),
+        color: shadowMatch.groups.color.trim()
+      };
+    })
+    .filter((shadowLayer): shadowLayer is { offsetX: number; offsetY: number; blur: number; spread: number; color: string } => Boolean(shadowLayer));
 }
 
 function drawFillImage(context: CanvasRenderingContext2D, node: DesignNode, path: Path2D, requestRedraw: () => void) {
@@ -1692,8 +1854,43 @@ function drawFillImage(context: CanvasRenderingContext2D, node: DesignNode, path
   }
   context.save();
   context.clip(path);
-  context.drawImage(cached.image, 0, 0, node.width, node.height);
+  drawImageWithMode(context, cached.image, node.width, node.height, node.fillImageMode ?? "stretch", node.fillImageScale ?? 1);
   context.restore();
+}
+
+function drawImageWithMode(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  mode: NonNullable<DesignNode["fillImageMode"]>,
+  scale: number
+) {
+  if (mode === "tile") {
+    const pattern = context.createPattern(image, "repeat");
+    if (!pattern) {
+      return;
+    }
+    context.save();
+    context.scale(Math.max(0.01, scale), Math.max(0.01, scale));
+    context.fillStyle = pattern;
+    context.fillRect(0, 0, width / Math.max(0.01, scale), height / Math.max(0.01, scale));
+    context.restore();
+    return;
+  }
+
+  const imageRatio = image.width / Math.max(1, image.height);
+  const targetRatio = width / Math.max(1, height);
+  const useCover = mode === "fill";
+  const shouldMatchWidth = useCover ? imageRatio < targetRatio : imageRatio > targetRatio;
+  if (mode === "fit" || mode === "fill") {
+    const drawWidth = shouldMatchWidth ? width : height * imageRatio;
+    const drawHeight = shouldMatchWidth ? width / imageRatio : height;
+    context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    return;
+  }
+
+  context.drawImage(image, 0, 0, width, height);
 }
 
 function drawImageFallback(context: CanvasRenderingContext2D, node: DesignNode) {
@@ -1717,13 +1914,104 @@ function drawTextNode(context: CanvasRenderingContext2D, node: DesignNode, text:
     (context as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = node.letterSpacing ? `${node.letterSpacing}px` : "0px";
   }
   context.textAlign = node.textAlign === "right" ? "right" : node.textAlign === "center" ? "center" : "left";
-  context.textBaseline = "middle";
+  context.textBaseline = "top";
   const x = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 : 6;
   const totalHeight = lines.length * lineHeight;
-  const startY = Math.max(lineHeight / 2, node.height / 2 - totalHeight / 2 + lineHeight / 2);
+  const startY = Math.max(0, Math.min(node.height - lineHeight, node.height / 2 - totalHeight / 2));
   lines.slice(0, Math.max(1, Math.floor(node.height / lineHeight))).forEach((line, index) => {
     context.fillText(line, x, startY + index * lineHeight);
   });
+}
+
+function drawRichTextNode(context: CanvasRenderingContext2D, node: DesignNode) {
+  const runs = node.textRuns ?? [];
+  if (runs.length === 0) {
+    return;
+  }
+
+  context.save();
+  context.beginPath();
+  context.rect(0, 0, node.width, node.height);
+  context.clip();
+
+  const baseLineHeight = node.lineHeight ?? node.fontSize * 1.35;
+  let cursorX = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 : 6;
+  let cursorY = Math.max(0, node.height / 2 - baseLineHeight / 2);
+  const alignOffset = node.textAlign === "center" ? measureRichTextLine(context, node, getFirstRichTextLine(runs)) / 2 : 0;
+  if (node.textAlign === "center") {
+    cursorX -= alignOffset;
+  }
+
+  runs.forEach((run) => {
+    const segments = run.text.split("\n");
+    segments.forEach((segment, segmentIndex) => {
+      if (segmentIndex > 0) {
+        cursorX = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 - alignOffset : 6;
+        cursorY += baseLineHeight;
+      }
+      if (!segment) {
+        return;
+      }
+      const font = getCanvasFont({
+        ...node,
+        fontFamily: run.fontFamily ?? node.fontFamily,
+        fontSize: run.fontSize ?? node.fontSize,
+        fontWeight: run.fontWeight ?? node.fontWeight
+      });
+      context.font = font;
+      context.fillStyle = getCanvasPaint(run.color ?? node.textColor) || "#171717";
+      context.textAlign = "left";
+      context.textBaseline = "top";
+      if ("letterSpacing" in context) {
+        (context as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = run.letterSpacing ? `${run.letterSpacing}px` : "0px";
+      }
+      context.fillText(segment, cursorX, cursorY);
+      const textMetrics = context.measureText(segment);
+      const decorationY = cursorY + (run.underline ? (run.fontSize ?? node.fontSize) + 2 : (run.fontSize ?? node.fontSize) * 0.62);
+      if (run.underline || run.strikethrough) {
+        context.beginPath();
+        context.moveTo(cursorX, decorationY);
+        context.lineTo(cursorX + textMetrics.width, decorationY);
+        context.strokeStyle = context.fillStyle;
+        context.lineWidth = Math.max(1, (run.fontSize ?? node.fontSize) / 16);
+        context.setLineDash([]);
+        context.stroke();
+      }
+      cursorX += textMetrics.width;
+    });
+  });
+
+  context.restore();
+}
+
+function getFirstRichTextLine(runs: NonNullable<DesignNode["textRuns"]>) {
+  const firstLineRuns: NonNullable<DesignNode["textRuns"]> = [];
+  for (const run of runs) {
+    const [firstSegment] = run.text.split("\n");
+    if (firstSegment) {
+      firstLineRuns.push({ ...run, text: firstSegment });
+    }
+    if (run.text.includes("\n")) {
+      break;
+    }
+  }
+  return firstLineRuns;
+}
+
+function measureRichTextLine(
+  context: CanvasRenderingContext2D,
+  node: DesignNode,
+  lineRuns: NonNullable<DesignNode["textRuns"]>
+) {
+  return lineRuns.reduce((width, run) => {
+    context.font = getCanvasFont({
+      ...node,
+      fontFamily: run.fontFamily ?? node.fontFamily,
+      fontSize: run.fontSize ?? node.fontSize,
+      fontWeight: run.fontWeight ?? node.fontWeight
+    });
+    return width + context.measureText(run.text).width;
+  }, 0);
 }
 
 function getCanvasFont(node: DesignNode) {
@@ -1752,15 +2040,18 @@ function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidt
 
 function roundedRectPath(x: number, y: number, width: number, height: number, radius: number) {
   const path = new Path2D();
-  path.moveTo(x + radius, y);
-  path.lineTo(x + width - radius, y);
-  path.quadraticCurveTo(x + width, y, x + width, y + radius);
-  path.lineTo(x + width, y + height - radius);
-  path.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  path.lineTo(x + radius, y + height);
-  path.quadraticCurveTo(x, y + height, x, y + height - radius);
-  path.lineTo(x, y + radius);
-  path.quadraticCurveTo(x, y, x + radius, y);
+  const safeWidth = Math.max(0.01, width);
+  const safeHeight = Math.max(0.01, height);
+  const safeRadius = Math.max(0, Math.min(radius, safeWidth / 2, safeHeight / 2));
+  path.moveTo(x + safeRadius, y);
+  path.lineTo(x + safeWidth - safeRadius, y);
+  path.quadraticCurveTo(x + safeWidth, y, x + safeWidth, y + safeRadius);
+  path.lineTo(x + safeWidth, y + safeHeight - safeRadius);
+  path.quadraticCurveTo(x + safeWidth, y + safeHeight, x + safeWidth - safeRadius, y + safeHeight);
+  path.lineTo(x + safeRadius, y + safeHeight);
+  path.quadraticCurveTo(x, y + safeHeight, x, y + safeHeight - safeRadius);
+  path.lineTo(x, y + safeRadius);
+  path.quadraticCurveTo(x, y, x + safeRadius, y);
   path.closePath();
   return path;
 }
@@ -1884,6 +2175,29 @@ function extractCssFunctionArgs(value: string) {
     args.push(current.trim());
   }
   return args;
+}
+
+function splitCssLayers(value: string | undefined) {
+  if (!value) {
+    return [];
+  }
+  const layers: string[] = [];
+  let depth = 0;
+  let current = "";
+  Array.from(value).forEach((char) => {
+    if (char === "(") depth += 1;
+    if (char === ")") depth -= 1;
+    if (char === "," && depth === 0) {
+      layers.push(current.trim());
+      current = "";
+      return;
+    }
+    current += char;
+  });
+  if (current.trim()) {
+    layers.push(current.trim());
+  }
+  return layers;
 }
 
 function parseCssColorStop(value: string) {
@@ -2137,6 +2451,65 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
+function DesignLayerTree({
+  nodes,
+  expandedIds,
+  selectedIds,
+  onToggle,
+  onSelect
+}: {
+  nodes: DesignLayerTreeNode[];
+  expandedIds: string[];
+  selectedIds: string[];
+  onToggle: (nodeId: string) => void;
+  onSelect: (node: DesignNode, append: boolean) => void;
+}) {
+  if (nodes.length === 0) {
+    return <div className="rounded-xl px-3 py-4 text-xs text-[#888]">没有匹配到图层。</div>;
+  }
+
+  const renderNode = (treeNode: DesignLayerTreeNode): ReactNode => {
+    const node = treeNode.node;
+    const hasChildren = treeNode.children.length > 0;
+    const expanded = expandedIds.includes(node.id);
+    return (
+      <div key={node.id}>
+        <button
+          type="button"
+          onClick={(event) => {
+            const append = event.shiftKey || event.metaKey || event.ctrlKey;
+            onSelect(node, append);
+          }}
+          className={`group flex w-full items-center gap-1 rounded-xl py-2 pr-2 text-left text-sm ${selectedIds.includes(node.id) ? "bg-[#ede7ff] text-[#6d35d8]" : "hover:bg-[#f7f7f8]"}`}
+          style={{ paddingLeft: 8 + Math.min(treeNode.depth, 8) * 14 }}
+        >
+          <span
+            role="button"
+            tabIndex={-1}
+            aria-label={expanded ? "收起图层" : "展开图层"}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (hasChildren) {
+                onToggle(node.id);
+              }
+            }}
+            className={`flex size-5 shrink-0 items-center justify-center rounded-md ${hasChildren ? "text-[#777] hover:bg-white" : "text-transparent"}`}
+          >
+            <ChevronDown className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`} />
+          </span>
+          {nodeIcon(node.type)}
+          <span className="min-w-0 flex-1 truncate">{node.name}</span>
+          {node.locked ? <Lock className="size-3.5 text-[#999]" /> : null}
+          {!node.visible ? <EyeOff className="size-3.5 text-[#999]" /> : null}
+        </button>
+        {hasChildren && expanded ? <div>{treeNode.children.map(renderNode)}</div> : null}
+      </div>
+    );
+  };
+
+  return <>{nodes.map(renderNode)}</>;
+}
+
 function nodeIcon(type: DesignNodeType) {
   const className = "size-4 shrink-0";
   if (type === "text") return <Type className={className} />;
@@ -2147,14 +2520,54 @@ function nodeIcon(type: DesignNodeType) {
   return <Box className={className} />;
 }
 
-function loadDesignFile(storageKey: string, projectName: string): AiDesignFile {
-  const stored = window.localStorage.getItem(storageKey);
-  if (stored) {
-    try {
-      return normalizeDesignFile(JSON.parse(stored), projectName);
-    } catch {}
-  }
-  return createInitialDesignFile(projectName);
+function buildDesignLayerTree(nodes: DesignNode[], query: string): DesignLayerTreeNode[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const childrenByParentId = new Map<string, DesignNode[]>();
+  const roots: DesignNode[] = [];
+
+  nodes.forEach((node) => {
+    const parentId = node.parentId && nodeById.has(node.parentId) ? node.parentId : "";
+    if (!parentId) {
+      roots.push(node);
+      return;
+    }
+    const siblings = childrenByParentId.get(parentId) ?? [];
+    siblings.push(node);
+    childrenByParentId.set(parentId, siblings);
+  });
+
+  const buildNode = (node: DesignNode, depth: number): DesignLayerTreeNode | null => {
+    const children = (childrenByParentId.get(node.id) ?? [])
+      .map((child) => buildNode(child, depth + 1))
+      .filter((child): child is DesignLayerTreeNode => Boolean(child));
+    const matched = !normalizedQuery || node.name.toLowerCase().includes(normalizedQuery);
+    if (!matched && children.length === 0) {
+      return null;
+    }
+    return {
+      node,
+      children,
+      depth
+    };
+  };
+
+  return roots
+    .map((node) => buildNode(node, 0))
+    .filter((node): node is DesignLayerTreeNode => Boolean(node));
+}
+
+function cloneDesignNodesWithNewIds(
+  nodes: DesignNode[],
+  patch: (node: DesignNode, index: number) => Partial<DesignNode>
+) {
+  const idMap = new Map(nodes.map((node) => [node.id, createId("node")]));
+  return nodes.map((node, index) => ({
+    ...node,
+    ...patch(node, index),
+    id: idMap.get(node.id) ?? createId("node"),
+    parentId: node.parentId && idMap.has(node.parentId) ? idMap.get(node.parentId) : undefined
+  }));
 }
 
 function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile {

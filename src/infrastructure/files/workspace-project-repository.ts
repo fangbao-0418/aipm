@@ -5,6 +5,7 @@ import { IndexDatabase } from "../db/index-database.js";
 import { readJsonFile, writeJsonFile } from "../../shared/utils/json.js";
 import type {
   WorkspaceBundle,
+  WorkspaceDesignFile,
   WorkspaceProjectDocument,
   WorkspaceProjectDocumentMeta,
   WorkspaceProjectDocumentVersion,
@@ -136,6 +137,10 @@ export class WorkspaceProjectRepository {
     return this.context.path("workspace", "projects", projectId, "design", "assets");
   }
 
+  designFilePath(projectId: string) {
+    return this.context.path("workspace", "projects", projectId, "design", "file.json");
+  }
+
   projectSourceFilePath(projectId: string, storedFilename: string) {
     return this.context.path("workspace", "projects", projectId, "requirement-collection", "source-files", storedFilename);
   }
@@ -235,6 +240,15 @@ export class WorkspaceProjectRepository {
 
   async getProject(projectId: string) {
     return readJsonFile<WorkspaceProject>(this.projectPath(projectId));
+  }
+
+  async saveDesignFile(projectId: string, designFile: WorkspaceDesignFile) {
+    await this.ensureProjectStructure(projectId);
+    await writeJsonFile(this.designFilePath(projectId), designFile);
+  }
+
+  async getDesignFile(projectId: string) {
+    return readJsonFile<WorkspaceDesignFile>(this.designFilePath(projectId));
   }
 
   async saveStageState(projectId: string, states: WorkspaceStageStateRecord[]) {

@@ -54,6 +54,8 @@ export type WorkspaceDesignNodeType =
 
 export interface WorkspaceDesignNode {
   id: string;
+  parentId?: string;
+  depth?: number;
   type: WorkspaceDesignNodeType;
   name: string;
   x: number;
@@ -63,8 +65,22 @@ export interface WorkspaceDesignNode {
   fill: string;
   stroke: string;
   strokeWidth?: number;
+  strokePosition?: "center" | "inside" | "outside";
+  strokeDashPattern?: number[];
+  strokeLineCap?: "butt" | "round" | "square";
+  strokeLineJoin?: "miter" | "round" | "bevel";
   radius: number;
   text?: string;
+  textRuns?: Array<{
+    text: string;
+    color?: string;
+    fontSize?: number;
+    fontFamily?: string;
+    fontWeight?: number;
+    letterSpacing?: number;
+    underline?: boolean;
+    strikethrough?: boolean;
+  }>;
   textColor: string;
   fontSize: number;
   lineHeight?: number;
@@ -73,6 +89,8 @@ export interface WorkspaceDesignNode {
   locked: boolean;
   imageUrl?: string;
   fillImageUrl?: string;
+  fillImageMode?: "stretch" | "fill" | "fit" | "tile";
+  fillImageScale?: number;
   svgPath?: string;
   svgFillRule?: "nonzero" | "evenodd";
   clipBounds?: {
@@ -101,6 +119,7 @@ export interface WorkspaceDesignNode {
   flippedHorizontal?: boolean;
   flippedVertical?: boolean;
   shadow?: string;
+  innerShadow?: string;
   zIndex?: number;
 }
 
@@ -128,6 +147,16 @@ export interface WorkspaceDesignAsset {
   sourceRef?: string;
   width?: number;
   height?: number;
+}
+
+export interface WorkspaceDesignFile {
+  id: string;
+  name: string;
+  prdText: string;
+  pages: WorkspaceDesignPage[];
+  importedComponents: WorkspaceDesignComponent[];
+  importedAssets: WorkspaceDesignAsset[];
+  updatedAt: string;
 }
 
 export interface WorkspaceDesignImportResult {

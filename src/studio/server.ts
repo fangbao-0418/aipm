@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { createAppRuntime } from "../application/runtime.js";
 import type { PriorityLevel, RequirementStatus, SourceChannel, SourceType } from "../shared/types/models.js";
 import type { TaskStatus, TaskType } from "../shared/types/tasks.js";
+import type { WorkspaceDesignFile } from "../shared/types/workspace.js";
 import { ClarifyGateError } from "../application/clarify/clarify-service.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -509,6 +510,16 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
     }
 
     return workspaceProjectService.uploadRequirementFiles(params.id, buffers);
+  });
+
+  app.get("/api/workspace/projects/:id/design/file", async (request) => {
+    const params = request.params as { id: string };
+    return workspaceProjectService.getDesignFile(params.id);
+  });
+
+  app.put("/api/workspace/projects/:id/design/file", { bodyLimit: 512 * 1024 * 1024 }, async (request) => {
+    const params = request.params as { id: string };
+    return workspaceProjectService.saveDesignFile(params.id, request.body as WorkspaceDesignFile);
   });
 
   app.post("/api/workspace/projects/:id/design/import", async (request) => {
