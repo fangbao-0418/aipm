@@ -429,6 +429,11 @@ export class WorkspaceProjectService {
     return this.repository.getDesignFile(projectId).catch(() => createInitialWorkspaceDesignFile(project.name));
   }
 
+  async getDesignPage(projectId: string, pageId: string): Promise<WorkspaceDesignPage> {
+    await this.repository.getProject(projectId);
+    return this.repository.getDesignPage(projectId, pageId);
+  }
+
   async saveDesignFile(projectId: string, designFile: WorkspaceDesignFile): Promise<WorkspaceDesignFile> {
     await this.repository.getProject(projectId);
     const normalized: WorkspaceDesignFile = {
@@ -439,7 +444,7 @@ export class WorkspaceProjectService {
       pages: Array.isArray(designFile.pages) && designFile.pages.length > 0 ? designFile.pages : createInitialWorkspaceDesignFile(designFile.name).pages
     };
     await this.repository.saveDesignFile(projectId, normalized);
-    return normalized;
+    return this.repository.getDesignFile(projectId);
   }
 
   async importDesignFile(projectId: string, file: WorkspaceDesignImportFile): Promise<WorkspaceDesignFile> {
@@ -453,8 +458,8 @@ export class WorkspaceProjectService {
       importedAssets: [...current.importedAssets, ...persisted.assets],
       updatedAt: nowIso()
     };
-    await this.repository.saveDesignFile(projectId, nextFile);
-    return nextFile;
+    return await this.repository.saveDesignFile(projectId, nextFile);
+    // return this.repository.getDesignFile(projectId);
   }
 
   async getDesignAsset(projectId: string, assetId: string) {
@@ -2254,10 +2259,12 @@ async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<
       const pageLayers = pageCandidates.length > 0 ? pageCandidates : [pageLike];
 
       return pageLayers.map((layer, layerIndex) => {
+        const zIndexRef = { current: 0 };
         const rawNodes = (pageCandidates.length > 0 ? [layer] : getSketchRenderableLayers(layer)).flatMap((renderLayer, renderIndex) => (
           convertSketchLayer(renderLayer, {
             depth: 0,
             index: renderIndex,
+            zIndexRef,
             parentX: 0,
             parentY: 0,
             scaleX: 1,
@@ -2299,9 +2306,11 @@ async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<
       ? symbolMasters
       : sourcePages.flatMap((pageLike) => getSketchLayers(pageLike).filter((layer) => isSketchComponentCandidate(layer)))
     ).map((layer, index) => {
+      const zIndexRef = { current: 0 };
       const nodes = convertSketchLayer(layer, {
         depth: 0,
         index,
+        zIndexRef,
         parentX: 0,
         parentY: 0,
         scaleX: 1,
@@ -2410,6 +2419,7 @@ function convertVextraShape(
   context: {
     depth: number;
     index: number;
+    zIndexRef?: { current: number };
     parentX: number;
     parentY: number;
   }
@@ -2456,6 +2466,7 @@ function convertSketchLayer(
   context: {
     depth: number;
     index: number;
+    zIndexRef?: { current: number };
     parentX: number;
     parentY: number;
     scaleX: number;
@@ -2466,20 +2477,24 @@ function convertSketchLayer(
     clipBounds?: WorkspaceDesignNode["clipBounds"];
     clipPath?: WorkspaceDesignNode["clipPath"];
     parentNodeId?: string;
+    inheritedShapeStyle?: Record<string, unknown>;
+    parentShapeGroupBounds?: { x: number; y: number; width: number; height: number };
   }
 ): WorkspaceDesignNode[] {
   if (!layer || typeof layer !== "object" || context.depth > 30) {
     return [];
   }
 
-  const layerObject = applySketchSharedStyleToLayer(layer as Record<string, unknown>, context.sharedStyleMaps);
+  const sharedLayerObject = applySketchSharedStyleToLayer(layer as Record<string, unknown>, context.sharedStyleMaps);
+  const layerObject = applySketchInheritedShapeStyle(sharedLayerObject, context.inheritedShapeStyle);
   const frame = readSketchFrame(layerObject);
   const layerClass = getStringProp(layerObject, "_class");
   const nodeType = mapSketchLayerType(layerClass, getStringProp(layerObject, "name"));
-  const nodeX = Math.round(context.parentX + frame.x * context.scaleX);
-  const nodeY = Math.round(context.parentY + frame.y * context.scaleY);
-  const nodeWidth = Math.max(1, Math.round(frame.width * context.scaleX));
-  const nodeHeight = Math.max(1, Math.round(frame.height * context.scaleY));
+  const shouldUseParentShapeBounds = context.parentShapeGroupBounds && isSketchPathLayer(layerObject);
+  const nodeX = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.x : Math.round(context.parentX + frame.x * context.scaleX);
+  const nodeY = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.y : Math.round(context.parentY + frame.y * context.scaleY);
+  const nodeWidth = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.width : Math.max(1, Math.round(frame.width * context.scaleX));
+  const nodeHeight = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.height : Math.max(1, Math.round(frame.height * context.scaleY));
   const nodeId = createDesignId("import-node");
   const node = createDesignNode(nodeType, {
     id: nodeId,
@@ -2507,6 +2522,8 @@ function convertSketchLayer(
     fontFamily: readSketchFontFamily(layerObject),
     fontWeight: readSketchFontWeight(layerObject),
     letterSpacing: readSketchLetterSpacing(layerObject),
+    underline: readSketchTextUnderline(layerObject),
+    strikethrough: readSketchTextStrikethrough(layerObject),
     visible: layerObject.isVisible !== false,
     locked: layerObject.isLocked === true,
     sourceLayerClass: layerClass,
@@ -2518,7 +2535,7 @@ function convertSketchLayer(
     flippedVertical: layerObject.isFlippedVertical === true,
     shadow: readSketchShadow(layerObject),
     innerShadow: readSketchInnerShadow(layerObject),
-    zIndex: context.depth * 1000 + context.index,
+    zIndex: nextSketchRenderZIndex(context),
     clipBounds: context.clipBounds,
     clipPath: context.clipPath,
     ...readSketchVectorMeta(layerObject, nodeWidth, nodeHeight),
@@ -2526,6 +2543,7 @@ function convertSketchLayer(
     ...readSketchImageMeta(layerObject, context.assetByRef)
   });
   const renderNode = suppressSketchContainerPaint(layerObject, node);
+  const shouldRenderShapeGroupAsVector = layerClass === "shapeGroup" && Boolean(renderNode.svgPath);
 
   const symbolChildren = layerClass === "symbolInstance"
     ? convertSketchSymbolInstance(layerObject, {
@@ -2537,21 +2555,32 @@ function convertSketchLayer(
         parentNodeId: nodeId
       })
     : [];
-  const children = convertSketchChildLayers(layerObject, {
+  const children = shouldRenderShapeGroupAsVector ? [] : convertSketchChildLayers(layerObject, {
     ...context,
     parentX: nodeX,
     parentY: nodeY,
     depth: context.depth + 1,
-    parentNodeId: nodeId
+    parentNodeId: nodeId,
+    inheritedShapeStyle: getSketchChildInheritedShapeStyle(layerObject, context.inheritedShapeStyle)
   });
 
   return [renderNode, ...symbolChildren, ...children];
+}
+
+function nextSketchRenderZIndex(context: { depth: number; index: number; zIndexRef?: { current: number } }) {
+  if (!context.zIndexRef) {
+    return context.depth * 1000 + context.index;
+  }
+  const zIndex = context.zIndexRef.current;
+  context.zIndexRef.current += 1;
+  return zIndex;
 }
 
 function convertSketchChildLayers(
   parentLayer: Record<string, unknown>,
   context: {
     depth: number;
+    zIndexRef?: { current: number };
     parentX: number;
     parentY: number;
     scaleX: number;
@@ -2562,10 +2591,21 @@ function convertSketchChildLayers(
     clipBounds?: WorkspaceDesignNode["clipBounds"];
     clipPath?: WorkspaceDesignNode["clipPath"];
     parentNodeId?: string;
+    inheritedShapeStyle?: Record<string, unknown>;
+    parentShapeGroupBounds?: { x: number; y: number; width: number; height: number };
   }
 ) {
   let activeClipBounds = context.clipBounds;
   let activeClipPath = context.clipPath;
+  const parentFrame = readSketchFrame(parentLayer);
+  const parentShapeGroupBounds = getStringProp(parentLayer, "_class") === "shapeGroup"
+    ? {
+        x: context.parentX,
+        y: context.parentY,
+        width: Math.max(1, Math.round(parentFrame.width * context.scaleX)),
+        height: Math.max(1, Math.round(parentFrame.height * context.scaleY))
+      }
+    : context.parentShapeGroupBounds;
   return getSketchLayers(parentLayer).flatMap((child, index) => {
     const childObject = safeObject(child);
     if (childObject.shouldBreakMaskChain === true) {
@@ -2583,6 +2623,7 @@ function convertSketchChildLayers(
     return convertSketchLayer(child, {
       depth: context.depth,
       index,
+      zIndexRef: context.zIndexRef,
       parentX: context.parentX,
       parentY: context.parentY,
       scaleX: context.scaleX,
@@ -2592,7 +2633,9 @@ function convertSketchChildLayers(
       sharedStyleMaps: context.sharedStyleMaps,
       clipBounds: activeClipBounds,
       clipPath: activeClipPath,
-      parentNodeId: context.parentNodeId
+      parentNodeId: context.parentNodeId,
+      inheritedShapeStyle: context.inheritedShapeStyle,
+      parentShapeGroupBounds
     });
   });
 }
@@ -2700,6 +2743,9 @@ function suppressSketchContainerPaint(layer: Record<string, unknown>, node: Work
   if (!isStructuralContainer || childLayers.length === 0) {
     return node;
   }
+  if (node.svgPath) {
+    return node;
+  }
 
   // Sketch shapeGroup/style can describe the composed vector, but drawing the
   // group frame as a rectangle creates the black blocks seen in imported files.
@@ -2710,6 +2756,39 @@ function suppressSketchContainerPaint(layer: Record<string, unknown>, node: Work
     strokeWidth: 0,
     text: ""
   };
+}
+
+function getSketchChildInheritedShapeStyle(
+  parentLayer: Record<string, unknown>,
+  inheritedStyle?: Record<string, unknown>
+) {
+  const layerClass = getStringProp(parentLayer, "_class");
+  const parentStyle = safeObject(parentLayer.style);
+  if (layerClass !== "shapeGroup" || Object.keys(parentStyle).length === 0) {
+    return inheritedStyle;
+  }
+  return inheritedStyle ? mergeSketchStyles(inheritedStyle, parentStyle) : parentStyle;
+}
+
+function applySketchInheritedShapeStyle(
+  layer: Record<string, unknown>,
+  inheritedStyle?: Record<string, unknown>
+) {
+  if (!inheritedStyle || !isSketchShapePrimitive(layer)) {
+    return layer;
+  }
+  return {
+    ...layer,
+    style: mergeSketchStyles(inheritedStyle, safeObject(layer.style))
+  };
+}
+
+function isSketchShapePrimitive(layer: Record<string, unknown>) {
+  return ["shapePath", "rectangle", "oval", "polygon", "star", "triangle", "line"].includes(getStringProp(layer, "_class"));
+}
+
+function isSketchPathLayer(layer: Record<string, unknown>) {
+  return ["shapePath", "polygon", "star", "triangle"].includes(getStringProp(layer, "_class"));
 }
 
 function getResourceValues(resourceManager: unknown) {
@@ -2928,6 +3007,7 @@ function convertSketchSymbolInstance(
   instance: Record<string, unknown>,
   context: {
     depth: number;
+    zIndexRef?: { current: number };
     nodeX: number;
     nodeY: number;
     nodeWidth: number;
@@ -2963,6 +3043,7 @@ function convertSketchSymbolInstance(
     convertSketchLayer(layer, {
       depth: context.depth + 1,
       index,
+      zIndexRef: context.zIndexRef,
       parentX: context.nodeX - symbolFrame.x * scaleX,
       parentY: context.nodeY - symbolFrame.y * scaleY,
       scaleX,
@@ -3329,7 +3410,10 @@ function sketchPatternFillTypeToMode(patternFillType: number): WorkspaceDesignNo
 
 function readSketchVectorMeta(layer: Record<string, unknown>, width: number, height: number): Partial<WorkspaceDesignNode> {
   const layerClass = getStringProp(layer, "_class");
-  if (!["shapePath", "oval", "polygon", "star", "triangle", "line"].includes(layerClass)) {
+  if (layerClass === "shapeGroup") {
+    return readSketchShapeGroupVectorMeta(layer, width, height);
+  }
+  if (!["shapePath", "rectangle", "oval", "polygon", "star", "triangle", "line"].includes(layerClass)) {
     return {};
   }
 
@@ -3338,16 +3422,76 @@ function readSketchVectorMeta(layer: Record<string, unknown>, width: number, hei
     return {};
   }
 
+  const booleanOperation = toNumber(layer.booleanOperation, -1);
   const windingRule = toNumber(safeObject(layer.style).windingRule, 0);
   return {
     svgPath,
-    svgFillRule: windingRule === 1 ? "evenodd" : "nonzero"
+    svgFillRule: windingRule === 1 || booleanOperation === 1 || booleanOperation === 3 ? "evenodd" : "nonzero"
   };
 }
 
-function readSketchSvgPath(layer: Record<string, unknown>, width: number, height: number) {
-  if (getStringProp(layer, "_class") === "line") {
-    return `M 0 ${formatPathNumber(height / 2)} L ${formatPathNumber(width)} ${formatPathNumber(height / 2)}`;
+function readSketchShapeGroupVectorMeta(layer: Record<string, unknown>, width: number, height: number): Partial<WorkspaceDesignNode> {
+  if (!hasRenderableSketchStyle(safeObject(layer.style))) {
+    return {};
+  }
+
+  const children = getSketchLayers(layer).map(safeObject).filter((child) => child.isVisible !== false);
+  if (children.length === 0 || !children.every(isSketchShapePrimitive)) {
+    return {};
+  }
+  if (children.some((child) => hasRenderableSketchStyle(safeObject(child.style)))) {
+    return {};
+  }
+
+  const paths = children
+    .map((child) => {
+      const childClass = getStringProp(child, "_class");
+      if (["shapePath", "polygon", "star", "triangle"].includes(childClass)) {
+        return readSketchSvgPath(child, width, height);
+      }
+      const childFrame = readSketchFrame(child);
+      return readSketchSvgPath(
+        child,
+        Math.max(1, childFrame.width || width),
+        Math.max(1, childFrame.height || height),
+        childFrame.x,
+        childFrame.y
+      );
+    })
+    .filter(Boolean);
+  if (paths.length === 0) {
+    return {};
+  }
+
+  const hasBooleanPath = children.some((child) => {
+    const op = toNumber(child.booleanOperation, -1);
+    return op === 1 || op === 3;
+  });
+  const windingRule = toNumber(safeObject(layer.style).windingRule, 0);
+  return {
+    svgPath: paths.join(" "),
+    svgFillRule: windingRule === 1 || hasBooleanPath ? "evenodd" : "nonzero"
+  };
+}
+
+function hasRenderableSketchStyle(style: Record<string, unknown>) {
+  const hasFill = toArray(style.fills).some((fill) => safeObject(fill).isEnabled !== false);
+  const hasBorder = toArray(style.borders).some((border) => safeObject(border).isEnabled !== false);
+  const hasShadow = toArray(style.shadows).some((shadow) => safeObject(shadow).isEnabled !== false);
+  const hasInnerShadow = toArray(style.innerShadows).some((shadow) => safeObject(shadow).isEnabled !== false);
+  return hasFill || hasBorder || hasShadow || hasInnerShadow;
+}
+
+function readSketchSvgPath(layer: Record<string, unknown>, width: number, height: number, offsetX = 0, offsetY = 0) {
+  const layerClass = getStringProp(layer, "_class");
+  if (layerClass === "line") {
+    return `M ${formatPathNumber(offsetX)} ${formatPathNumber(offsetY + height / 2)} L ${formatPathNumber(offsetX + width)} ${formatPathNumber(offsetY + height / 2)}`;
+  }
+  if (layerClass === "rectangle") {
+    return rectSvgPath(offsetX, offsetY, width, height, readSketchRadius(layer, "container"));
+  }
+  if (layerClass === "oval") {
+    return ovalSvgPath(offsetX, offsetY, width, height);
   }
 
   const points = toArray(layer.points).map(safeObject);
@@ -3355,10 +3499,15 @@ function readSketchSvgPath(layer: Record<string, unknown>, width: number, height
     return "";
   }
 
+  const coordinateMode = resolveSketchPathCoordinateMode(points);
   const normalizedPoints = points.map((point) => ({
-    point: sketchNormalizedPointToCanvas(point.point, width, height),
-    curveFrom: sketchNormalizedPointToCanvas(point.curveFrom, width, height),
-    curveTo: sketchNormalizedPointToCanvas(point.curveTo, width, height),
+    point: sketchPathPointToCanvas(point.point, width, height, offsetX, offsetY, coordinateMode),
+    curveFrom: point.hasCurveFrom === true
+      ? sketchPathPointToCanvas(point.curveFrom, width, height, offsetX, offsetY, coordinateMode)
+      : sketchPathPointToCanvas(point.point, width, height, offsetX, offsetY, coordinateMode),
+    curveTo: point.hasCurveTo === true
+      ? sketchPathPointToCanvas(point.curveTo, width, height, offsetX, offsetY, coordinateMode)
+      : sketchPathPointToCanvas(point.point, width, height, offsetX, offsetY, coordinateMode),
     hasCurveFrom: point.hasCurveFrom === true,
     hasCurveTo: point.hasCurveTo === true
   }));
@@ -3374,8 +3523,11 @@ function readSketchSvgPath(layer: Record<string, unknown>, width: number, height
     if (!previous) {
       return;
     }
-    if (previous.hasCurveTo || current.hasCurveFrom) {
-      commands.push(`C ${formatPathNumber(previous.curveTo.x)} ${formatPathNumber(previous.curveTo.y)} ${formatPathNumber(current.curveFrom.x)} ${formatPathNumber(current.curveFrom.y)} ${formatPathNumber(current.point.x)} ${formatPathNumber(current.point.y)}`);
+    const canUseCurve = (previous.hasCurveFrom || current.hasCurveTo)
+      && isSketchPathPointReasonable(previous.curveFrom, width, height, offsetX, offsetY)
+      && isSketchPathPointReasonable(current.curveTo, width, height, offsetX, offsetY);
+    if (canUseCurve) {
+      commands.push(`C ${formatPathNumber(previous.curveFrom.x)} ${formatPathNumber(previous.curveFrom.y)} ${formatPathNumber(current.curveTo.x)} ${formatPathNumber(current.curveTo.y)} ${formatPathNumber(current.point.x)} ${formatPathNumber(current.point.y)}`);
     } else {
       commands.push(`L ${formatPathNumber(current.point.x)} ${formatPathNumber(current.point.y)}`);
     }
@@ -3383,8 +3535,11 @@ function readSketchSvgPath(layer: Record<string, unknown>, width: number, height
 
   if (layer.isClosed !== false && normalizedPoints.length > 1) {
     const last = normalizedPoints[normalizedPoints.length - 1];
-    if (last.hasCurveTo || first.hasCurveFrom) {
-      commands.push(`C ${formatPathNumber(last.curveTo.x)} ${formatPathNumber(last.curveTo.y)} ${formatPathNumber(first.curveFrom.x)} ${formatPathNumber(first.curveFrom.y)} ${formatPathNumber(first.point.x)} ${formatPathNumber(first.point.y)}`);
+    const canCloseWithCurve = (last.hasCurveFrom || first.hasCurveTo)
+      && isSketchPathPointReasonable(last.curveFrom, width, height, offsetX, offsetY)
+      && isSketchPathPointReasonable(first.curveTo, width, height, offsetX, offsetY);
+    if (canCloseWithCurve) {
+      commands.push(`C ${formatPathNumber(last.curveFrom.x)} ${formatPathNumber(last.curveFrom.y)} ${formatPathNumber(first.curveTo.x)} ${formatPathNumber(first.curveTo.y)} ${formatPathNumber(first.point.x)} ${formatPathNumber(first.point.y)}`);
     }
     commands.push("Z");
   }
@@ -3392,12 +3547,89 @@ function readSketchSvgPath(layer: Record<string, unknown>, width: number, height
   return commands.join(" ");
 }
 
-function sketchNormalizedPointToCanvas(value: unknown, width: number, height: number) {
+function isSketchPathPointReasonable(
+  point: { x: number; y: number },
+  width: number,
+  height: number,
+  offsetX = 0,
+  offsetY = 0
+) {
+  const toleranceX = Math.max(width * 4, 512);
+  const toleranceY = Math.max(height * 4, 512);
+  return point.x >= offsetX - toleranceX
+    && point.x <= offsetX + width + toleranceX
+    && point.y >= offsetY - toleranceY
+    && point.y <= offsetY + height + toleranceY;
+}
+
+type SketchPathCoordinateMode = "normalized" | "absolute";
+
+function resolveSketchPathCoordinateMode(points: Record<string, unknown>[]): SketchPathCoordinateMode {
+  const anchors = points.map((point) => parseSketchPoint(typeof point.point === "string" ? point.point : ""));
+  if (anchors.length === 0) {
+    return "normalized";
+  }
+
+  const normalizedLikeCount = anchors.filter((point) => (
+    Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1
+  )).length;
+  return normalizedLikeCount / anchors.length >= 0.8 ? "normalized" : "absolute";
+}
+
+function sketchPathPointToCanvas(
+  value: unknown,
+  width: number,
+  height: number,
+  offsetX = 0,
+  offsetY = 0,
+  coordinateMode: SketchPathCoordinateMode = "normalized"
+) {
   const point = parseSketchPoint(typeof value === "string" ? value : "");
+  if (coordinateMode === "absolute") {
+    return {
+      x: offsetX + point.x,
+      y: offsetY + point.y
+    };
+  }
+
   return {
-    x: point.x * width,
-    y: point.y * height
+    x: offsetX + point.x * width,
+    y: offsetY + point.y * height
   };
+}
+
+function rectSvgPath(x: number, y: number, width: number, height: number, radius = 0) {
+  const right = x + width;
+  const bottom = y + height;
+  const corner = Math.min(Math.max(0, radius), width / 2, height / 2);
+  if (corner <= 0) {
+    return `M ${formatPathNumber(x)} ${formatPathNumber(y)} H ${formatPathNumber(right)} V ${formatPathNumber(bottom)} H ${formatPathNumber(x)} Z`;
+  }
+  return [
+    `M ${formatPathNumber(x + corner)} ${formatPathNumber(y)}`,
+    `H ${formatPathNumber(right - corner)}`,
+    `Q ${formatPathNumber(right)} ${formatPathNumber(y)} ${formatPathNumber(right)} ${formatPathNumber(y + corner)}`,
+    `V ${formatPathNumber(bottom - corner)}`,
+    `Q ${formatPathNumber(right)} ${formatPathNumber(bottom)} ${formatPathNumber(right - corner)} ${formatPathNumber(bottom)}`,
+    `H ${formatPathNumber(x + corner)}`,
+    `Q ${formatPathNumber(x)} ${formatPathNumber(bottom)} ${formatPathNumber(x)} ${formatPathNumber(bottom - corner)}`,
+    `V ${formatPathNumber(y + corner)}`,
+    `Q ${formatPathNumber(x)} ${formatPathNumber(y)} ${formatPathNumber(x + corner)} ${formatPathNumber(y)}`,
+    "Z"
+  ].join(" ");
+}
+
+function ovalSvgPath(x: number, y: number, width: number, height: number) {
+  const rx = width / 2;
+  const ry = height / 2;
+  const cx = x + rx;
+  const cy = y + ry;
+  return [
+    `M ${formatPathNumber(cx - rx)} ${formatPathNumber(cy)}`,
+    `A ${formatPathNumber(rx)} ${formatPathNumber(ry)} 0 1 0 ${formatPathNumber(cx + rx)} ${formatPathNumber(cy)}`,
+    `A ${formatPathNumber(rx)} ${formatPathNumber(ry)} 0 1 0 ${formatPathNumber(cx - rx)} ${formatPathNumber(cy)}`,
+    "Z"
+  ].join(" ");
 }
 
 function formatPathNumber(value: number) {
@@ -3480,7 +3712,7 @@ function readSketchFill(
     return "transparent";
   }
   if (layerClass === "artboard" && layer.hasBackgroundColor === true) {
-    return colorToHex(layer.backgroundColor);
+    return colorToRgba(layer.backgroundColor);
   }
   const style = safeObject(layer.style);
   const enabledFills = toArray(style.fills).map(safeObject).filter((fill) => fill.isEnabled !== false);
@@ -3509,18 +3741,18 @@ function sketchFillToCss(fill: Record<string, unknown>, assetByRef?: Map<string 
   const fillType = toNumber(fill.fillType, 0);
   const gradient = safeObject(fill.gradient);
   if (fillType === 1 && Object.keys(gradient).length > 0) {
-    return sketchGradientToCss(gradient);
+    return sketchGradientToCss(gradient, readSketchContextOpacity(fill));
   }
   if (fill.color) {
-    return colorToRgba(fill.color);
+    return colorToRgba(fill.color, readSketchContextOpacity(fill));
   }
   return "";
 }
 
-function sketchGradientToCss(gradient: Record<string, unknown>) {
+function sketchGradientToCss(gradient: Record<string, unknown>, opacityMultiplier = 1) {
   const stops = toArray(gradient.stops).map((stop) => {
     const stopObject = safeObject(stop);
-    return `${colorToRgba(stopObject.color)} ${Math.round(toNumber(stopObject.position, 0) * 100)}%`;
+    return `${colorToRgba(stopObject.color, opacityMultiplier)} ${Math.round(toNumber(stopObject.position, 0) * 100)}%`;
   });
   if (stops.length === 0) {
     return "";
@@ -3535,6 +3767,10 @@ function sketchGradientToCss(gradient: Record<string, unknown>) {
   return `linear-gradient(${angle}deg, ${stops.join(", ")})`;
 }
 
+function readSketchContextOpacity(value: Record<string, unknown>) {
+  return Math.max(0, Math.min(1, toNumber(safeObject(value.contextSettings).opacity, 1)));
+}
+
 function readShapeStroke(shape: Record<string, unknown>) {
   const border = safeObject(tryCall(shape, "getBorders") ?? safeObject(shape.style).borders);
   const strokePaint = toArray(border.strokePaints)[0];
@@ -3545,8 +3781,13 @@ function readShapeStroke(shape: Record<string, unknown>) {
 function readSketchStroke(layer: Record<string, unknown>) {
   const style = safeObject(layer.style);
   const border = toArray(style.borders).find((item) => safeObject(item).isEnabled !== false);
-  const color = safeObject(border).color;
-  return color ? colorToRgba(color) : "transparent";
+  const borderObject = safeObject(border);
+  const gradient = safeObject(borderObject.gradient);
+  if (toNumber(borderObject.fillType, 0) === 1 && Object.keys(gradient).length > 0) {
+    return sketchGradientToCss(gradient, readSketchContextOpacity(borderObject));
+  }
+  const color = borderObject.color;
+  return color ? colorToRgba(color, readSketchContextOpacity(borderObject)) : "transparent";
 }
 
 function readSketchStrokeWidth(layer: Record<string, unknown>) {
@@ -3596,6 +3837,26 @@ function readSketchRadius(layer: Record<string, unknown>, nodeType: WorkspaceDes
   const fixedRadius = toNumber(layer.fixedRadius, Number.NaN);
   if (Number.isFinite(fixedRadius)) {
     return Math.max(0, fixedRadius);
+  }
+  const cornerRadius = toNumber(layer.cornerRadius, Number.NaN);
+  if (Number.isFinite(cornerRadius)) {
+    return Math.max(0, cornerRadius);
+  }
+  const styleCornerRadius = toNumber(safeObject(layer.style).cornerRadius, Number.NaN);
+  if (Number.isFinite(styleCornerRadius)) {
+    return Math.max(0, styleCornerRadius);
+  }
+  const cornerRadii = toArray(safeObject(safeObject(layer.style).corners).radii)
+    .map((value) => toNumber(value, Number.NaN))
+    .filter(Number.isFinite);
+  if (cornerRadii.length > 0) {
+    return Math.max(0, Math.max(...cornerRadii));
+  }
+  const pointRadii = toArray(layer.points)
+    .map((point) => toNumber(safeObject(point).cornerRadius, Number.NaN))
+    .filter(Number.isFinite);
+  if (pointRadii.length > 0) {
+    return Math.max(0, Math.max(...pointRadii));
   }
   return nodeType === "button" || nodeType === "input" ? 14 : nodeType === "frame" ? 0 : 8;
 }
@@ -3692,7 +3953,7 @@ function readSketchTextRuns(layer: Record<string, unknown>): WorkspaceDesignNode
         ? rawText.length - location
         : Math.max(0, Math.floor(toNumber(safeObject(attributes[index + 1]).location, rawText.length)) - location);
       const length = Math.max(0, Math.floor(toNumber(attribute.length, fallbackLength)));
-      const text = rawText.slice(location, location + length);
+      const text = safeTextSlice(rawText, location, location + length);
       const nestedAttributes = safeObject(attribute.attributes);
       const font = safeObject(nestedAttributes.MSAttributedStringFontAttribute);
       const fontAttributes = safeObject(font.attributes);
@@ -3701,7 +3962,7 @@ function readSketchTextRuns(layer: Record<string, unknown>): WorkspaceDesignNode
         text,
         color: nestedAttributes.MSAttributedStringColorAttribute ? colorToRgba(nestedAttributes.MSAttributedStringColorAttribute) : undefined,
         fontSize: Number.isFinite(fontSize) ? Math.max(1, Math.round(fontSize)) : undefined,
-        fontFamily: getStringProp(fontAttributes, "name") || getStringProp(font, "name") || undefined,
+        fontFamily: normalizeSketchFontFamily(getStringProp(fontAttributes, "name") || getStringProp(font, "name")),
         fontWeight: sketchFontNameToWeight(getStringProp(fontAttributes, "name") || getStringProp(font, "name")),
         letterSpacing: Number.isFinite(toNumber(nestedAttributes.kerning, Number.NaN)) ? toNumber(nestedAttributes.kerning, 0) : undefined,
         underline: safeObject(nestedAttributes.underlineStyle).style !== undefined || toNumber(nestedAttributes.NSUnderline, 0) > 0,
@@ -3741,7 +4002,7 @@ function readSketchTextColor(layer: Record<string, unknown>, nodeType: Workspace
 
 function readSketchFontFamily(layer: Record<string, unknown>) {
   const font = readSketchFontDescriptor(layer);
-  return getStringProp(safeObject(font.attributes), "name") || getStringProp(font, "name") || undefined;
+  return normalizeSketchFontFamily(getStringProp(safeObject(font.attributes), "name") || getStringProp(font, "name"));
 }
 
 function readSketchFontWeight(layer: Record<string, unknown>) {
@@ -3761,10 +4022,43 @@ function sketchFontNameToWeight(fontNameLike: string) {
   return undefined;
 }
 
+function normalizeSketchFontFamily(fontName: string) {
+  if (!fontName) {
+    return undefined;
+  }
+  if (fontName.startsWith("PingFangSC")) return "PingFang SC";
+  if (fontName.startsWith("Helvetica")) return "Helvetica Neue";
+  if (fontName.startsWith("Arial")) return "Arial";
+  if (fontName.toLowerCase().includes("iconfont")) return "iconfont";
+  return fontName.replace(/-(Regular|Medium|Semibold|SemiBold|Bold|Light|Thin|Heavy|Black)$/i, "");
+}
+
+function safeTextSlice(text: string, start: number, end: number) {
+  return Array.from(text).slice(start, end).join("");
+}
+
 function readSketchLetterSpacing(layer: Record<string, unknown>) {
   const attrs = readSketchTextEncodedAttributes(layer);
   const kern = toNumber(attrs.kerning, toNumber(attrs.NSKern, Number.NaN));
   return Number.isFinite(kern) ? kern : undefined;
+}
+
+function readSketchTextUnderline(layer: Record<string, unknown>) {
+  const attrs = readSketchTextEncodedAttributes(layer);
+  const firstAttributeAttrs = safeObject(safeObject(toArray(safeObject(layer.attributedString).attributes)[0]).attributes);
+  return safeObject(attrs.underlineStyle).style !== undefined
+    || toNumber(attrs.NSUnderline, 0) > 0
+    || safeObject(firstAttributeAttrs.underlineStyle).style !== undefined
+    || toNumber(firstAttributeAttrs.NSUnderline, 0) > 0;
+}
+
+function readSketchTextStrikethrough(layer: Record<string, unknown>) {
+  const attrs = readSketchTextEncodedAttributes(layer);
+  const firstAttributeAttrs = safeObject(safeObject(toArray(safeObject(layer.attributedString).attributes)[0]).attributes);
+  return safeObject(attrs.strikethroughStyle).style !== undefined
+    || toNumber(attrs.NSStrikethrough, 0) > 0
+    || safeObject(firstAttributeAttrs.strikethroughStyle).style !== undefined
+    || toNumber(firstAttributeAttrs.NSStrikethrough, 0) > 0;
 }
 
 function readSketchFontSize(layer: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
@@ -3878,12 +4172,12 @@ function colorToHex(colorValue: unknown) {
   return `#${[red, green, blue].map((item) => item.toString(16).padStart(2, "0")).join("")}`;
 }
 
-function colorToRgba(colorValue: unknown) {
+function colorToRgba(colorValue: unknown, opacityMultiplier = 1) {
   const color = safeObject(colorValue);
   const red = colorChannelToByte(color.red);
   const green = colorChannelToByte(color.green);
   const blue = colorChannelToByte(color.blue);
-  const alpha = Math.max(0, Math.min(1, toNumber(color.alpha, 1)));
+  const alpha = Math.max(0, Math.min(1, toNumber(color.alpha, 1) * opacityMultiplier));
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 

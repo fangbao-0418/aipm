@@ -6,6 +6,7 @@ import { readJsonFile, writeJsonFile } from "../../shared/utils/json.js";
 import type {
   WorkspaceBundle,
   WorkspaceDesignFile,
+  WorkspaceDesignPage,
   WorkspaceProjectDocument,
   WorkspaceProjectDocumentMeta,
   WorkspaceProjectDocumentVersion,
@@ -137,8 +138,16 @@ export class WorkspaceProjectRepository {
     return this.context.path("workspace", "projects", projectId, "design", "assets");
   }
 
+  designPagesDir(projectId: string) {
+    return this.context.path("workspace", "projects", projectId, "design", "pages");
+  }
+
   designFilePath(projectId: string) {
     return this.context.path("workspace", "projects", projectId, "design", "file.json");
+  }
+
+  designPagePath(projectId: string, pageId: string) {
+    return this.context.path("workspace", "projects", projectId, "design", "pages", `${safePathSegment(pageId)}.json`);
   }
 
   projectSourceFilePath(projectId: string, storedFilename: string) {
@@ -225,7 +234,8 @@ export class WorkspaceProjectRepository {
       mkdir(this.agentRunsDir(projectId), { recursive: true }),
       mkdir(this.llmLogsDir(projectId), { recursive: true }),
       mkdir(this.documentsDir(projectId), { recursive: true }),
-      mkdir(this.designAssetsDir(projectId), { recursive: true })
+      mkdir(this.designAssetsDir(projectId), { recursive: true }),
+      mkdir(this.designPagesDir(projectId), { recursive: true })
     ]);
   }
 
@@ -244,11 +254,60 @@ export class WorkspaceProjectRepository {
 
   async saveDesignFile(projectId: string, designFile: WorkspaceDesignFile) {
     await this.ensureProjectStructure(projectId);
-    await writeJsonFile(this.designFilePath(projectId), designFile);
+    const compactPages = await Promise.all(
+      designFile.pages.map(async (page) => {
+        const pagePath = this.designPagePath(projectId, page.id);
+        const existingPage = await readJsonFile<WorkspaceDesignPage>(pagePath).catch(() => null);
+        const hasInlineNodes = Array.isArray(page.nodes)
+          && (page.nodes.length > 0 || page.nodeCount === 0 || page.schemaLoaded === true || !existingPage);
+        const nodes = hasInlineNodes ? page.nodes : existingPage?.nodes ?? [];
+        if (hasInlineNodes || !existingPage) {
+          await writeJsonFile(pagePath, {
+            ...page,
+            nodes,
+            nodeCount: nodes.length,
+            schemaPath: `design/pages/${safePathSegment(page.id)}.json`
+          });
+        }
+        return {
+          id: page.id,
+          name: page.name,
+          nodes: [],
+          nodeCount: nodes.length,
+          schemaPath: `design/pages/${safePathSegment(page.id)}.json`
+        } satisfies WorkspaceDesignPage;
+      })
+    );
+    const data = {
+      ...designFile,
+      pages: compactPages
+    }
+    await writeJsonFile(this.designFilePath(projectId), data);
+    return data
   }
 
   async getDesignFile(projectId: string) {
-    return readJsonFile<WorkspaceDesignFile>(this.designFilePath(projectId));
+    const designFile = await readJsonFile<WorkspaceDesignFile>(this.designFilePath(projectId));
+    const hasInlinePageNodes = designFile.pages.some((page) => Array.isArray(page.nodes) && page.nodes.length > 0);
+    const hasMissingPageSchemas = designFile.pages.some((page) => !page.schemaPath);
+    if (hasInlinePageNodes || hasMissingPageSchemas) {
+      await this.saveDesignFile(projectId, designFile);
+      return readJsonFile<WorkspaceDesignFile>(this.designFilePath(projectId));
+    }
+    return designFile;
+  }
+
+  async saveDesignPage(projectId: string, page: WorkspaceDesignPage) {
+    await this.ensureProjectStructure(projectId);
+    await writeJsonFile(this.designPagePath(projectId, page.id), {
+      ...page,
+      nodeCount: page.nodes.length,
+      schemaPath: `design/pages/${safePathSegment(page.id)}.json`
+    });
+  }
+
+  async getDesignPage(projectId: string, pageId: string) {
+    return readJsonFile<WorkspaceDesignPage>(this.designPagePath(projectId, pageId));
   }
 
   async saveStageState(projectId: string, states: WorkspaceStageStateRecord[]) {
@@ -886,4 +945,8 @@ function buildWorkspaceDocumentSummary(document: WorkspaceProjectDocument) {
     return document.title;
   }
   return text.slice(0, 120);
+}
+
+function safePathSegment(value: string) {
+  return value.replace(/[^a-z0-9._-]/gi, "_").slice(0, 160) || "page";
 }

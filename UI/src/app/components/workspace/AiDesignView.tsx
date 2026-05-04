@@ -38,13 +38,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../ui/textarea";
 import { getProject } from "../../utils/storage";
 import { toast } from "sonner";
-import { getAiDesignFile, importAiDesignFile, saveAiDesignFile, type WorkspaceDesignFile } from "../../utils/workspace-api";
+import { getAiDesignFile, getAiDesignPage, importAiDesignFile, saveAiDesignFile, type WorkspaceDesignFile } from "../../utils/workspace-api";
 
 type DesignLeftTab = "layers" | "components" | "assets" | "prd";
 type DesignRightTab = "design" | "prototype" | "d2c";
 type DesignTool = "select" | "hand" | "frame" | "rect" | "text";
 type DesignNodeType = "frame" | "container" | "text" | "button" | "input" | "table" | "card" | "image";
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
+type DesignTextTransform = NonNullable<DesignNode["textTransform"]>;
 
 interface DesignNode {
   id: string;
@@ -110,6 +111,10 @@ interface DesignNode {
   fontFamily?: string;
   fontWeight?: number;
   letterSpacing?: number;
+  fontStretch?: string;
+  underline?: boolean;
+  strikethrough?: boolean;
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
   flippedHorizontal?: boolean;
   flippedVertical?: boolean;
   shadow?: string;
@@ -121,6 +126,9 @@ interface DesignPage {
   id: string;
   name: string;
   nodes: DesignNode[];
+  nodeCount?: number;
+  schemaPath?: string;
+  schemaLoaded?: boolean;
 }
 
 interface ImportedDesignComponent {
@@ -173,6 +181,11 @@ interface DesignLayerTreeNode {
   depth: number;
 }
 
+interface DesignRenderTreeNode {
+  node: DesignNode;
+  children: DesignRenderTreeNode[];
+}
+
 const componentPresets: Array<{
   type: DesignNodeType;
   label: string;
@@ -188,12 +201,42 @@ const componentPresets: Array<{
   { type: "image", label: "Image", description: "图片占位和素材", icon: Image }
 ];
 
+const designFontFamilies = [
+  "PingFang SC",
+  "Microsoft YaHei",
+  "Songti SC",
+  "SimSun",
+  "Helvetica Neue",
+  "Arial",
+  "Georgia",
+  "Times New Roman",
+  "Menlo",
+  "SF Mono"
+];
+
+const designFontWeights = [
+  { label: "Thin", value: 100 },
+  { label: "Light", value: 300 },
+  { label: "Regular", value: 400 },
+  { label: "Medium", value: 500 },
+  { label: "Semibold", value: 600 },
+  { label: "Bold", value: 700 },
+  { label: "Black", value: 900 }
+];
+
+const designFontStretches = [
+  { label: "窄", value: "condensed" },
+  { label: "正常", value: "normal" },
+  { label: "宽", value: "expanded" }
+];
+
 export function AiDesignView() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
   const project = useMemo(() => projectId ? getProject(projectId) : null, [projectId]);
   const [file, setFile] = useState<AiDesignFile>(() => createInitialDesignFile(project?.name ?? "未命名设计"));
   const [designFileLoaded, setDesignFileLoaded] = useState(false);
+  const [loadingPageId, setLoadingPageId] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<DesignLeftTab>("layers");
   const [rightTab, setRightTab] = useState<DesignRightTab>("design");
   const [tool, setTool] = useState<DesignTool>("select");
@@ -215,6 +258,7 @@ export function AiDesignView() {
   const designImportInputRef = useRef<HTMLInputElement | null>(null);
   const applyingRemoteDesignRef = useRef(false);
   const saveDesignTimerRef = useRef<number | null>(null);
+  const loadedPageIdsRef = useRef<Set<string>>(new Set(file.pages.filter((page) => page.nodes.length > 0).map((page) => page.id)));
   const nodeDragRef = useRef<{
     nodeIds: string[];
     startX: number;
@@ -260,6 +304,8 @@ export function AiDesignView() {
 
     return visibleNodes.filter((node) => selectedNodeIds.includes(node.id) || rectsIntersect(sceneViewport, nodeToBounds(node)));
   }, [selectedNodeIds, visibleNodes, visibleSceneBounds, zoom]);
+  const canvasRenderedNodes = useMemo(() => renderedNodes.filter((node) => !shouldRenderNodeWithDomSvg(node)), [renderedNodes]);
+  const domSvgRenderedNodes = useMemo(() => renderedNodes.filter(shouldRenderNodeWithDomSvg), [renderedNodes]);
   const layerTree = useMemo(() => buildDesignLayerTree(selectedPage.nodes, layerQuery), [layerQuery, selectedPage.nodes]);
 
   useEffect(() => {
@@ -271,7 +317,11 @@ export function AiDesignView() {
           return;
         }
         applyingRemoteDesignRef.current = true;
-        setFile(normalizeDesignFile(remoteFile, project?.name ?? "未命名设计"));
+        const nextFile = normalizeDesignFile(remoteFile, project?.name ?? "未命名设计");
+        loadedPageIdsRef.current = new Set(nextFile.pages.filter((page) => page.nodes.length > 0).map((page) => page.id));
+        setFile(nextFile);
+        setSelectedPageId(nextFile.pages[0]?.id ?? "");
+        selectNodes([]);
         setDesignFileLoaded(true);
       })
       .catch((error) => {
@@ -285,6 +335,44 @@ export function AiDesignView() {
       cancelled = true;
     };
   }, [project?.name, projectId]);
+
+  useEffect(() => {
+    if (!designFileLoaded || !selectedPageId || loadedPageIdsRef.current.has(selectedPageId)) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingPageId(selectedPageId);
+    void getAiDesignPage(projectId, selectedPageId)
+      .then((page) => {
+        if (cancelled) {
+          return;
+        }
+        loadedPageIdsRef.current.add(page.id);
+        applyingRemoteDesignRef.current = true;
+        setFile((current) => ({
+          ...current,
+          pages: current.pages.map((candidate) => candidate.id === page.id ? { ...page, schemaLoaded: true } : candidate)
+        }));
+        if (page.id === selectedPageId) {
+          selectNodes(page.nodes[0]?.id ? [page.nodes[0].id] : []);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          toast.error(error instanceof Error ? error.message : "页面 schema 加载失败");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingPageId(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [designFileLoaded, projectId, selectedPageId]);
 
   useEffect(() => {
     if (!designFileLoaded) {
@@ -382,7 +470,18 @@ export function AiDesignView() {
   const updateSelectedPage = (updater: (page: DesignPage) => DesignPage) => {
     updateFile((current) => ({
       ...current,
-      pages: current.pages.map((page) => page.id === selectedPageId ? updater(page) : page)
+      pages: current.pages.map((page) => {
+        if (page.id !== selectedPageId) {
+          return page;
+        }
+        const nextPage = updater(page);
+        loadedPageIdsRef.current.add(nextPage.id);
+        return {
+          ...nextPage,
+          nodeCount: nextPage.nodes.length,
+          schemaLoaded: true
+        };
+      })
     }));
   };
 
@@ -403,8 +502,11 @@ export function AiDesignView() {
     const nextPage: DesignPage = {
       id: createId("page"),
       name: `页面 ${file.pages.length + 1}`,
-      nodes: []
+      nodes: [],
+      nodeCount: 0,
+      schemaLoaded: true
     };
+    loadedPageIdsRef.current.add(nextPage.id);
     updateFile((current) => ({
       ...current,
       pages: [...current.pages, nextPage]
@@ -492,17 +594,29 @@ export function AiDesignView() {
     toast.success(`已插入组件：${component.name}`);
   };
 
-  const insertImportedPage = (page: DesignPage) => {
-    const clonedNodes = cloneDesignNodesWithNewIds(page.nodes, () => ({
+  const insertImportedPage = async (page: DesignPage) => {
+    let sourcePage = page;
+    try {
+      sourcePage = page.nodes.length > 0 || loadedPageIdsRef.current.has(page.id)
+        ? page
+        : await getAiDesignPage(projectId, page.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "页面 schema 加载失败，无法复制页面");
+      return;
+    }
+    const clonedNodes = cloneDesignNodesWithNewIds(sourcePage.nodes, () => ({
       locked: false,
       visible: true
     }));
     const nextPage: DesignPage = {
-      ...page,
+      ...sourcePage,
       id: createId("page"),
-      name: `${page.name} Copy`,
-      nodes: clonedNodes
+      name: `${sourcePage.name} Copy`,
+      nodes: clonedNodes,
+      nodeCount: clonedNodes.length,
+      schemaLoaded: true
     };
+    loadedPageIdsRef.current.add(nextPage.id);
     updateFile((current) => ({
       ...current,
       pages: [...current.pages, nextPage]
@@ -510,7 +624,7 @@ export function AiDesignView() {
     setSelectedPageId(nextPage.id);
     selectNodes(nextPage.nodes[0]?.id ? [nextPage.nodes[0].id] : []);
     setLeftTab("layers");
-    toast.success(`已插入页面：${page.name}`);
+    toast.success(`已插入页面：${sourcePage.name}`);
   };
 
   const insertImportedAsset = (asset: ImportedDesignAsset, position?: { x: number; y: number }) => {
@@ -572,11 +686,12 @@ export function AiDesignView() {
       const previousPageIds = new Set(file.pages.map((page) => page.id));
       const insertedPage = nextFile.pages.find((page) => !previousPageIds.has(page.id)) ?? nextFile.pages[nextFile.pages.length - 1];
       applyingRemoteDesignRef.current = true;
+      loadedPageIdsRef.current = new Set(nextFile.pages.filter((page) => page.nodes.length > 0).map((page) => page.id));
       setFile(nextFile);
       setLeftTab(nextFile.importedAssets?.length ? "assets" : "components");
       if (insertedPage) {
         setSelectedPageId(insertedPage.id);
-        selectNodes(insertedPage.nodes[0]?.id ? [insertedPage.nodes[0].id] : []);
+        selectNodes([]);
       }
       toast.success(`已导入 ${sourceFile.name}，并保存到本地项目空间`);
     } catch (error) {
@@ -1036,7 +1151,7 @@ export function AiDesignView() {
                     <button
                       key={page.id}
                       type="button"
-                      onClick={() => insertImportedPage(page)}
+                      onClick={() => void insertImportedPage(page)}
                       className="w-full rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
                     >
                       <DesignMiniPreview nodes={page.nodes} className="mb-3 h-[132px]" />
@@ -1044,7 +1159,7 @@ export function AiDesignView() {
                         <FileText className="size-4 text-[#246bfe]" />
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{page.name}</span>
                       </div>
-                      <div className="mt-1 text-xs text-[#777]">{page.nodes.length} 个节点，点击复制成新页面</div>
+                      <div className="mt-1 text-xs text-[#777]">{page.nodeCount ?? page.nodes.length} 个节点，点击复制成新页面</div>
                     </button>
                   ))}
                 </div>
@@ -1124,7 +1239,13 @@ export function AiDesignView() {
               }
             }}
           >
-            <CanvasDesignRenderer nodes={renderedNodes} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
+            <CanvasDesignRenderer nodes={canvasRenderedNodes} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
+            <DomSvgDesignRenderer nodes={domSvgRenderedNodes} pan={pan} zoom={zoom} />
+            {loadingPageId === selectedPageId ? (
+              <div className="pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 rounded-full border border-[#e4e4e7] bg-white/90 px-4 py-2 text-xs font-semibold text-[#555] shadow-sm">
+                正在加载当前页面 schema...
+              </div>
+            ) : null}
             <div
               className="pointer-events-none absolute origin-top-left"
               style={{
@@ -1222,8 +1343,98 @@ export function AiDesignView() {
                   </InspectorSection>
                   <InspectorSection title="文字">
                     <Textarea value={selectedNode.text ?? ""} onChange={(event) => updateNode(selectedNode.id, { text: event.target.value })} className="min-h-24 resize-none" />
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      <NumberField label="字号" value={selectedNode.fontSize} onChange={(value) => updateNode(selectedNode.id, { fontSize: value })} />
+                    <div className="mt-4 space-y-3">
+                      <div className="grid grid-cols-[1fr_112px] gap-3">
+                        <Select value={selectedNode.fontFamily ?? "PingFang SC"} onValueChange={(value) => updateNode(selectedNode.id, { fontFamily: value })}>
+                          <SelectTrigger className="h-10 rounded-xl border-[#e4e4e7] bg-[#f4f4f5]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(new Set([selectedNode.fontFamily ?? "PingFang SC", ...designFontFamilies])).map((fontFamily) => (
+                              <SelectItem key={fontFamily} value={fontFamily}>
+                                <span style={{ fontFamily }}>{fontFamily}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <NumberField compact label="字号" value={selectedNode.fontSize} onChange={(value) => updateNode(selectedNode.id, { fontSize: Math.max(1, value) })} />
+                      </div>
+
+                      <div className="grid grid-cols-[1fr_112px] gap-3">
+                        <Select value={`${selectedNode.fontWeight ?? 400}`} onValueChange={(value) => updateNode(selectedNode.id, { fontWeight: Number(value) })}>
+                          <SelectTrigger className="h-10 rounded-xl border-[#e4e4e7] bg-[#f4f4f5]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {designFontWeights.map((item) => (
+                              <SelectItem key={item.value} value={`${item.value}`}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={selectedNode.fontStretch ?? "normal"} onValueChange={(value) => updateNode(selectedNode.id, { fontStretch: value })}>
+                          <SelectTrigger className="h-10 rounded-xl border-[#e4e4e7] bg-[#f4f4f5]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {designFontStretches.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <NumberField compact label="行高" value={selectedNode.lineHeight ?? 0} onChange={(value) => updateNode(selectedNode.id, { lineHeight: value > 0 ? value : undefined })} />
+                        <NumberField compact label="字间距" value={selectedNode.letterSpacing ?? 0} onChange={(value) => updateNode(selectedNode.id, { letterSpacing: value })} />
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1 rounded-2xl bg-[#f1f1f2] p-1">
+                        {[
+                          { label: "左", value: "left" },
+                          { label: "中", value: "center" },
+                          { label: "右", value: "right" },
+                          { label: "齐", value: "justify" }
+                        ].map((item) => (
+                          <TextStyleButton
+                            key={item.value}
+                            active={(selectedNode.textAlign ?? "left") === item.value}
+                            onClick={() => updateNode(selectedNode.id, { textAlign: item.value as DesignNode["textAlign"] })}
+                          >
+                            {item.label}
+                          </TextStyleButton>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1 rounded-2xl bg-[#f1f1f2] p-1">
+                        {[
+                          { label: "文本", value: "none" },
+                          { label: "AA", value: "uppercase" },
+                          { label: "aa", value: "lowercase" },
+                          { label: "Aa", value: "capitalize" }
+                        ].map((item) => (
+                          <TextStyleButton
+                            key={item.value}
+                            active={(selectedNode.textTransform ?? "none") === item.value}
+                            onClick={() => updateNode(selectedNode.id, { textTransform: item.value as DesignTextTransform })}
+                          >
+                            {item.label}
+                          </TextStyleButton>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <TextStyleButton active={selectedNode.underline === true} onClick={() => updateNode(selectedNode.id, { underline: !selectedNode.underline })}>
+                          <span className="underline underline-offset-4">下划线</span>
+                        </TextStyleButton>
+                        <TextStyleButton active={selectedNode.strikethrough === true} onClick={() => updateNode(selectedNode.id, { strikethrough: !selectedNode.strikethrough })}>
+                          <span className="line-through">中划线</span>
+                        </TextStyleButton>
+                      </div>
+
                       <ColorField label="颜色" value={selectedNode.textColor} onChange={(value) => updateNode(selectedNode.id, { textColor: value })} />
                     </div>
                   </InspectorSection>
@@ -1485,6 +1696,8 @@ function DesignNodeView({
   selected: boolean;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
+  const importedSketchNode = Boolean(node.sourceLayerClass);
+  const importedSketchText = importedSketchNode && node.type === "text";
   const baseStyle: CSSProperties = {
     left: node.x,
     top: node.y,
@@ -1495,17 +1708,23 @@ function DesignNodeView({
     borderWidth: selected ? Math.max(1, node.strokeWidth ?? 1) : node.svgPath || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
     borderRadius: node.radius,
     color: node.textColor,
+    fontFamily: getCssFontFamily(node),
+    fontWeight: node.fontWeight ?? 400,
+    fontStretch: node.fontStretch,
     fontSize: node.fontSize,
     lineHeight: node.lineHeight ? `${node.lineHeight}px` : undefined,
+    letterSpacing: node.letterSpacing !== undefined ? `${node.letterSpacing}px` : undefined,
     textAlign: node.textAlign ?? "left",
+    textDecorationLine: getNodeTextDecoration(node),
+    textTransform: node.textTransform ?? "none",
     opacity: node.opacity ?? 1,
-    transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+    transform: getDesignNodeCssTransform(node),
     transformOrigin: "center center",
     boxShadow: node.shadow || undefined,
     zIndex: node.zIndex,
-    clipPath: getNodeClipPath(node)
+    clipPath: getNodeClipPath(node),
+    overflow: node.type === "text" && importedSketchNode ? "visible" : undefined
   };
-  const importedSketchNode = Boolean(node.sourceLayerClass);
 
   return (
     <div
@@ -1513,7 +1732,7 @@ function DesignNodeView({
       style={baseStyle}
       onPointerDown={onPointerDown}
     >
-      <div className={`pointer-events-none flex h-full w-full items-center justify-center overflow-hidden text-center font-medium ${node.type === "image" || importedSketchNode ? "p-0" : "p-3"}`}>
+      <div className={`pointer-events-none flex h-full w-full items-center justify-center text-center font-medium ${importedSketchText ? "overflow-visible" : "overflow-hidden"} ${node.type === "image" || importedSketchNode ? "p-0" : "p-3"}`}>
         {node.svgPath ? (
           <svg
             className="h-full w-full overflow-visible"
@@ -1556,7 +1775,7 @@ function DesignNodeView({
             <div className="flex h-full w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,#f0f4ff,#fff)] text-[#6b7280]">Image</div>
           )
         ) : (
-          <span className={`max-h-full w-full overflow-hidden whitespace-pre-wrap break-words ${importedSketchNode ? "px-0.5" : ""}`}>{node.text || (importedSketchNode ? "" : node.name)}</span>
+          <span className={`${importedSketchText ? "overflow-visible" : "max-h-full overflow-hidden"} w-full whitespace-pre-wrap break-words ${importedSketchNode ? "px-0.5" : ""}`}>{node.text || (importedSketchNode ? "" : node.name)}</span>
         )}
       </div>
       {selected ? (
@@ -1596,11 +1815,17 @@ function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; cla
               borderWidth: node.svgPath || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
               borderRadius: Math.max(2, node.radius),
               color: node.textColor,
+              fontFamily: getCssFontFamily(node),
+              fontWeight: node.fontWeight ?? 400,
+              fontStretch: node.fontStretch,
               fontSize: Math.max(10, node.fontSize),
               lineHeight: node.lineHeight ? `${node.lineHeight}px` : undefined,
+              letterSpacing: node.letterSpacing !== undefined ? `${node.letterSpacing}px` : undefined,
               textAlign: node.textAlign ?? "left",
+              textDecorationLine: getNodeTextDecoration(node),
+              textTransform: node.textTransform ?? "none",
               opacity: node.opacity ?? 1,
-              transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+              transform: getDesignNodeCssTransform(node),
               transformOrigin: "center center",
               boxShadow: node.shadow || undefined,
               zIndex: node.zIndex,
@@ -1620,6 +1845,9 @@ function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; cla
                   fillRule={node.svgFillRule ?? "nonzero"}
                   stroke={getSvgPaint(node.stroke, "none")}
                   strokeWidth={node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1)}
+                  strokeDasharray={node.strokeDashPattern?.join(" ")}
+                  strokeLinecap={node.strokeLineCap ?? "butt"}
+                  strokeLinejoin={node.strokeLineJoin ?? "miter"}
                   vectorEffect="non-scaling-stroke"
                 />
               </svg>
@@ -1633,6 +1861,195 @@ function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; cla
       </div>
     </div>
   );
+}
+
+function DomSvgDesignRenderer({ nodes, pan, zoom }: { nodes: DesignNode[]; pan: { x: number; y: number }; zoom: number }) {
+  const tree = useMemo(() => buildDesignRenderTree(nodes), [nodes]);
+
+  if (nodes.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className="pointer-events-none absolute origin-top-left"
+      style={{
+        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`
+      }}
+    >
+      {tree.map((treeNode) => (
+          <DomSvgDesignNode key={treeNode.node.id} treeNode={treeNode} />
+        ))}
+    </div>
+  );
+}
+
+function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTreeNode; parentNode?: DesignNode }) {
+  const { node, children } = treeNode;
+  const textNode = node.type === "text";
+  const imageNode = node.type === "image";
+  const style: CSSProperties = {
+    position: "absolute",
+    left: parentNode ? node.x - parentNode.x : node.x,
+    top: parentNode ? node.y - parentNode.y : node.y,
+    width: node.width,
+    height: textNode ? "auto" : node.height,
+    minHeight: textNode ? node.height : undefined,
+    overflow: imageNode || node.clipPath || node.clipBounds ? "hidden" : "visible",
+    background: node.svgPath ? "transparent" : node.fill || "transparent",
+    borderColor: node.stroke,
+    borderStyle: node.stroke !== "transparent" && !node.svgPath ? "solid" : undefined,
+    borderWidth: node.svgPath || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
+    borderRadius: node.radius,
+    boxShadow: node.shadow || undefined,
+    opacity: node.opacity ?? 1,
+    transform: getDesignNodeCssTransform(node),
+    transformOrigin: "center center",
+    zIndex: node.zIndex,
+    clipPath: getNodeClipPath(node),
+    color: node.textColor,
+    fontFamily: getCssFontFamily(node),
+    fontWeight: node.fontWeight ?? 400,
+    fontStretch: node.fontStretch,
+    fontSize: node.fontSize,
+    lineHeight: node.lineHeight ? `${node.lineHeight}px` : `${Math.round(node.fontSize * 1.35)}px`,
+    letterSpacing: node.letterSpacing !== undefined ? `${node.letterSpacing}px` : undefined,
+    textAlign: node.textAlign ?? "left",
+    textDecorationLine: getNodeTextDecoration(node),
+    textTransform: node.textTransform ?? "none",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word"
+  };
+
+  return (
+    <div style={style}>
+      {node.svgPath ? (
+        <DomSvgPathNode node={node} />
+      ) : node.type === "image" && node.imageUrl ? (
+        <img src={node.imageUrl} alt={node.name} className="block h-full w-full rounded-[inherit] object-fill" draggable={false} loading="lazy" />
+      ) : textNode ? (
+        <DomSvgTextContent node={node} />
+      ) : node.text ? (
+        <div className="flex h-full w-full items-center justify-center px-1 text-center">
+          {transformTextContent(node.text, node.textTransform)}
+        </div>
+      ) : null}
+      {children.map((child) => (
+        <DomSvgDesignNode key={child.node.id} treeNode={child} parentNode={node} />
+      ))}
+    </div>
+  );
+}
+
+function DomSvgPathNode({ node }: { node: DesignNode }) {
+  const fill = getSvgPaintDescriptor(node, node.fill, "fill", "transparent");
+  const stroke = getSvgPaintDescriptor(node, node.stroke, "stroke", "none");
+  return (
+    <svg
+      className="block h-full w-full overflow-visible"
+      viewBox={`0 0 ${Math.max(1, node.width)} ${Math.max(1, node.height)}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      {fill.definition || stroke.definition ? (
+        <defs>
+          {fill.definition}
+          {stroke.definition}
+        </defs>
+      ) : null}
+      <path
+        d={node.svgPath}
+        fill={fill.paint}
+        fillRule={node.svgFillRule ?? "nonzero"}
+        stroke={stroke.paint}
+        strokeWidth={node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1)}
+        strokeDasharray={node.strokeDashPattern?.join(" ")}
+        strokeLinecap={node.strokeLineCap ?? "butt"}
+        strokeLinejoin={node.strokeLineJoin ?? "miter"}
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+function DomSvgTextContent({ node }: { node: DesignNode }) {
+  if (node.textRuns?.length) {
+    return (
+      <>
+        {node.textRuns.map((run, index) => (
+          <span
+            key={`${index}-${run.text}`}
+            style={{
+              color: run.color ?? node.textColor,
+              fontFamily: run.fontFamily ? `"${run.fontFamily}", ${getCssFontFamily(node)}` : undefined,
+              fontSize: run.fontSize,
+              fontWeight: run.fontWeight,
+              letterSpacing: run.letterSpacing !== undefined ? `${run.letterSpacing}px` : undefined,
+              textDecorationLine: [
+                run.underline || node.underline ? "underline" : "",
+                run.strikethrough || node.strikethrough ? "line-through" : ""
+              ].filter(Boolean).join(" ") || undefined
+            }}
+          >
+            {transformTextContent(run.text, node.textTransform)}
+          </span>
+        ))}
+      </>
+    );
+  }
+
+  return <>{transformTextContent(node.text ?? "", node.textTransform)}</>;
+}
+
+function shouldRenderNodeWithDomSvg(node: DesignNode) {
+  return Boolean(node.sourceLayerClass);
+}
+
+function buildDesignRenderTree(nodes: DesignNode[]): DesignRenderTreeNode[] {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const childrenByParentId = new Map<string, DesignNode[]>();
+  const roots: DesignNode[] = [];
+
+  nodes.forEach((node) => {
+    const parentId = node.parentId && nodeById.has(node.parentId) ? node.parentId : "";
+    if (!parentId) {
+      roots.push(node);
+      return;
+    }
+    const siblings = childrenByParentId.get(parentId) ?? [];
+    siblings.push(node);
+    childrenByParentId.set(parentId, siblings);
+  });
+
+  const sortByPaintOrder = (items: DesignNode[]) => [...items].sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0));
+  const buildNode = (node: DesignNode): DesignRenderTreeNode => ({
+    node,
+    children: sortByPaintOrder(childrenByParentId.get(node.id) ?? []).map(buildNode)
+  });
+
+  return sortByPaintOrder(roots).map(buildNode);
+}
+
+function getDesignNodeCssTransform(node: DesignNode) {
+  const transforms = [
+    node.rotation ? `rotate(${node.rotation}deg)` : "",
+    node.flippedHorizontal ? "scaleX(-1)" : "",
+    node.flippedVertical ? "scaleY(-1)" : ""
+  ].filter(Boolean);
+  return transforms.length > 0 ? transforms.join(" ") : undefined;
+}
+
+function getCssFontFamily(node: DesignNode) {
+  return node.fontFamily
+    ? `"${node.fontFamily}", "PingFang SC", "Microsoft YaHei", sans-serif`
+    : `"PingFang SC", "Microsoft YaHei", sans-serif`;
+}
+
+function getNodeTextDecoration(node: DesignNode) {
+  return [
+    node.underline ? "underline" : "",
+    node.strikethrough ? "line-through" : ""
+  ].filter(Boolean).join(" ") || undefined;
 }
 
 function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
@@ -1695,7 +2112,7 @@ function drawSvgPathNode(context: CanvasRenderingContext2D, node: DesignNode) {
   try {
     const path = new Path2D(node.svgPath);
     const fill = getCanvasFillStyle(context, node, node.fill);
-    const stroke = getCanvasPaint(node.stroke);
+    const stroke = getCanvasStrokeStyle(context, node);
     drawPathShadowLayers(context, path, node, fill || getCanvasPaint(node.fill) || "#ffffff");
     if (fill) {
       context.fillStyle = fill;
@@ -1730,7 +2147,7 @@ function drawImageNode(context: CanvasRenderingContext2D, node: DesignNode, requ
 
 function drawBoxNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
   const fill = getCanvasFillStyle(context, node, node.fill);
-  const stroke = getCanvasPaint(node.stroke);
+  const stroke = getCanvasStrokeStyle(context, node);
   const strokeWidth = Math.max(0, node.strokeWidth ?? 0);
   const strokeOffset = node.strokePosition === "inside" ? strokeWidth / 2 : node.strokePosition === "outside" ? -strokeWidth / 2 : 0;
   const path = roundedRectPath(
@@ -1907,7 +2324,7 @@ function drawTextNode(context: CanvasRenderingContext2D, node: DesignNode, text:
   const fill = getCanvasPaint(node.textColor) || "#171717";
   const lineHeight = node.lineHeight ?? node.fontSize * 1.35;
   const font = getCanvasFont(node);
-  const lines = wrapCanvasText(context, text, Math.max(8, node.width - 12), font);
+  const lines = wrapCanvasText(context, transformTextContent(text, node.textTransform), Math.max(8, node.width - 12), font);
   context.fillStyle = fill;
   context.font = font;
   if ("letterSpacing" in context) {
@@ -1918,8 +2335,10 @@ function drawTextNode(context: CanvasRenderingContext2D, node: DesignNode, text:
   const x = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 : 6;
   const totalHeight = lines.length * lineHeight;
   const startY = Math.max(0, Math.min(node.height - lineHeight, node.height / 2 - totalHeight / 2));
-  lines.slice(0, Math.max(1, Math.floor(node.height / lineHeight))).forEach((line, index) => {
-    context.fillText(line, x, startY + index * lineHeight);
+  lines.forEach((line, index) => {
+    const y = startY + index * lineHeight;
+    context.fillText(line, x, y);
+    drawCanvasTextDecorations(context, node, line, x, y);
   });
 }
 
@@ -1930,10 +2349,6 @@ function drawRichTextNode(context: CanvasRenderingContext2D, node: DesignNode) {
   }
 
   context.save();
-  context.beginPath();
-  context.rect(0, 0, node.width, node.height);
-  context.clip();
-
   const baseLineHeight = node.lineHeight ?? node.fontSize * 1.35;
   let cursorX = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 : 6;
   let cursorY = Math.max(0, node.height / 2 - baseLineHeight / 2);
@@ -1965,17 +2380,18 @@ function drawRichTextNode(context: CanvasRenderingContext2D, node: DesignNode) {
       if ("letterSpacing" in context) {
         (context as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = run.letterSpacing ? `${run.letterSpacing}px` : "0px";
       }
-      context.fillText(segment, cursorX, cursorY);
-      const textMetrics = context.measureText(segment);
-      const decorationY = cursorY + (run.underline ? (run.fontSize ?? node.fontSize) + 2 : (run.fontSize ?? node.fontSize) * 0.62);
-      if (run.underline || run.strikethrough) {
-        context.beginPath();
-        context.moveTo(cursorX, decorationY);
-        context.lineTo(cursorX + textMetrics.width, decorationY);
-        context.strokeStyle = context.fillStyle;
-        context.lineWidth = Math.max(1, (run.fontSize ?? node.fontSize) / 16);
-        context.setLineDash([]);
-        context.stroke();
+      const renderedSegment = transformTextContent(segment, node.textTransform);
+      context.fillText(renderedSegment, cursorX, cursorY);
+      const textMetrics = context.measureText(renderedSegment);
+      if (run.underline || run.strikethrough || node.underline || node.strikethrough) {
+        drawCanvasTextSegmentDecorations(context, {
+          x: cursorX,
+          y: cursorY,
+          width: textMetrics.width,
+          fontSize: run.fontSize ?? node.fontSize,
+          underline: Boolean(run.underline || node.underline),
+          strikethrough: Boolean(run.strikethrough || node.strikethrough)
+        });
       }
       cursorX += textMetrics.width;
     });
@@ -2015,8 +2431,71 @@ function measureRichTextLine(
 }
 
 function getCanvasFont(node: DesignNode) {
-  const family = node.fontFamily ? `"${node.fontFamily}", "PingFang SC", "Microsoft YaHei", sans-serif` : `"PingFang SC", "Microsoft YaHei", sans-serif`;
+  const family = getCssFontFamily(node);
   return `${node.fontWeight ?? 400} ${node.fontSize}px ${family}`;
+}
+
+function drawCanvasTextDecorations(context: CanvasRenderingContext2D, node: DesignNode, line: string, x: number, y: number) {
+  if (!node.underline && !node.strikethrough) {
+    return;
+  }
+
+  const width = context.measureText(line).width;
+  const startX = node.textAlign === "center" ? x - width / 2 : node.textAlign === "right" ? x - width : x;
+  const lineWidth = Math.max(1, node.fontSize / 16);
+  context.save();
+  context.strokeStyle = getCanvasPaint(node.textColor) || "#171717";
+  context.lineWidth = lineWidth;
+  context.setLineDash([]);
+  if (node.underline) {
+    const underlineY = y + node.fontSize + 2;
+    context.beginPath();
+    context.moveTo(startX, underlineY);
+    context.lineTo(startX + width, underlineY);
+    context.stroke();
+  }
+  if (node.strikethrough) {
+    const strikeY = y + node.fontSize * 0.62;
+    context.beginPath();
+    context.moveTo(startX, strikeY);
+    context.lineTo(startX + width, strikeY);
+    context.stroke();
+  }
+  context.restore();
+}
+
+function drawCanvasTextSegmentDecorations(
+  context: CanvasRenderingContext2D,
+  options: { x: number; y: number; width: number; fontSize: number; underline: boolean; strikethrough: boolean }
+) {
+  context.save();
+  context.strokeStyle = context.fillStyle;
+  context.lineWidth = Math.max(1, options.fontSize / 16);
+  context.setLineDash([]);
+  if (options.underline) {
+    const underlineY = options.y + options.fontSize + 2;
+    context.beginPath();
+    context.moveTo(options.x, underlineY);
+    context.lineTo(options.x + options.width, underlineY);
+    context.stroke();
+  }
+  if (options.strikethrough) {
+    const strikeY = options.y + options.fontSize * 0.62;
+    context.beginPath();
+    context.moveTo(options.x, strikeY);
+    context.lineTo(options.x + options.width, strikeY);
+    context.stroke();
+  }
+  context.restore();
+}
+
+function transformTextContent(text: string, transform: DesignTextTransform = "none") {
+  if (transform === "uppercase") return text.toUpperCase();
+  if (transform === "lowercase") return text.toLowerCase();
+  if (transform === "capitalize") {
+    return text.replace(/\b\p{L}/gu, (char) => char.toUpperCase());
+  }
+  return text;
 }
 
 function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number, font: string) {
@@ -2083,6 +2562,20 @@ function getCanvasPaint(value: string | undefined) {
     return "";
   }
   return paint;
+}
+
+function getCanvasStrokeStyle(context: CanvasRenderingContext2D, node: DesignNode): string | CanvasGradient {
+  const stroke = node.stroke?.trim();
+  if (!stroke || stroke === "transparent" || stroke.startsWith("url(")) {
+    return "";
+  }
+  if (stroke.startsWith("linear-gradient")) {
+    return createCanvasLinearGradient(context, node, stroke) || "";
+  }
+  if (stroke.startsWith("radial-gradient")) {
+    return createCanvasRadialGradient(context, node, stroke) || "";
+  }
+  return stroke;
 }
 
 function getMinimapNodeColor(node: DesignNode) {
@@ -2220,6 +2713,60 @@ function getSvgPaint(value: string | undefined, fallback: string) {
     return paint;
   }
   return fallback;
+}
+
+function getSvgPaintDescriptor(node: DesignNode, value: string | undefined, kind: "fill" | "stroke", fallback: string) {
+  const paint = value?.trim();
+  if (!paint || paint === "transparent" || paint.startsWith("url(")) {
+    return { paint: fallback, definition: null as ReactNode };
+  }
+  if (paint.startsWith("linear-gradient")) {
+    const id = `paint-${node.id}-${kind}`;
+    return {
+      paint: `url(#${id})`,
+      definition: renderSvgLinearGradient(id, paint)
+    };
+  }
+  if (paint.startsWith("radial-gradient")) {
+    const id = `paint-${node.id}-${kind}`;
+    return {
+      paint: `url(#${id})`,
+      definition: renderSvgRadialGradient(id, paint)
+    };
+  }
+  return { paint: getSvgPaint(value, fallback), definition: null as ReactNode };
+}
+
+function renderSvgLinearGradient(id: string, value: string) {
+  const args = extractCssFunctionArgs(value);
+  const firstArg = args[0] ?? "";
+  const angle = firstArg.endsWith("deg") ? Number(firstArg.replace("deg", "")) : 180;
+  const stops = (firstArg.endsWith("deg") ? args.slice(1) : args)
+    .map(parseCssColorStop)
+    .filter(Boolean) as Array<{ color: string; position: number }>;
+  const radians = (angle - 90) * Math.PI / 180;
+  const x = Math.cos(radians) / 2;
+  const y = Math.sin(radians) / 2;
+  return (
+    <linearGradient key={id} id={id} x1={0.5 - x} y1={0.5 - y} x2={0.5 + x} y2={0.5 + y}>
+      {stops.map((stop, index) => (
+        <stop key={`${id}-${index}`} offset={`${Math.round(stop.position * 100)}%`} stopColor={stop.color} />
+      ))}
+    </linearGradient>
+  );
+}
+
+function renderSvgRadialGradient(id: string, value: string) {
+  const stops = extractCssFunctionArgs(value)
+    .map(parseCssColorStop)
+    .filter(Boolean) as Array<{ color: string; position: number }>;
+  return (
+    <radialGradient key={id} id={id} cx="50%" cy="50%" r="70%">
+      {stops.map((stop, index) => (
+        <stop key={`${id}-${index}`} offset={`${Math.round(stop.position * 100)}%`} stopColor={stop.color} />
+      ))}
+    </radialGradient>
+  );
 }
 
 function getNodeClipPath(node: DesignNode) {
@@ -2430,12 +2977,24 @@ function InspectorSection({ title, children }: { title: string; children: ReactN
   );
 }
 
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+function NumberField({ label, value, onChange, compact = false }: { label: string; value: number; onChange: (value: number) => void; compact?: boolean }) {
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-[#777]">{label}</span>
-      <Input type="number" value={value} onChange={(event) => onChange(Number(event.target.value) || 0)} />
+      <Input type="number" value={value} onChange={(event) => onChange(Number(event.target.value) || 0)} className={compact ? "h-10 rounded-xl border-[#e4e4e7] bg-[#f4f4f5]" : undefined} />
     </label>
+  );
+}
+
+function TextStyleButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`h-9 rounded-xl text-sm font-semibold transition ${active ? "bg-[#4b55ff] text-white shadow-[0_8px_18px_rgba(75,85,255,0.28)]" : "text-[#666] hover:bg-white"}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -2538,7 +3097,7 @@ function buildDesignLayerTree(nodes: DesignNode[], query: string): DesignLayerTr
   });
 
   const buildNode = (node: DesignNode, depth: number): DesignLayerTreeNode | null => {
-    const children = (childrenByParentId.get(node.id) ?? [])
+    const children = sortDesignLayerPanelNodes(childrenByParentId.get(node.id) ?? [])
       .map((child) => buildNode(child, depth + 1))
       .filter((child): child is DesignLayerTreeNode => Boolean(child));
     const matched = !normalizedQuery || node.name.toLowerCase().includes(normalizedQuery);
@@ -2552,9 +3111,13 @@ function buildDesignLayerTree(nodes: DesignNode[], query: string): DesignLayerTr
     };
   };
 
-  return roots
+  return sortDesignLayerPanelNodes(roots)
     .map((node) => buildNode(node, 0))
     .filter((node): node is DesignLayerTreeNode => Boolean(node));
+}
+
+function sortDesignLayerPanelNodes(nodes: DesignNode[]) {
+  return [...nodes].sort((first, second) => (second.zIndex ?? 0) - (first.zIndex ?? 0));
 }
 
 function cloneDesignNodesWithNewIds(
@@ -2633,6 +3196,13 @@ function createNode(type: DesignNodeType, overrides: Partial<DesignNode> = {}): 
     text: defaultNodeText(type),
     textColor: type === "button" ? "#ffffff" : "#171717",
     fontSize: type === "text" ? 22 : 14,
+    fontFamily: "PingFang SC",
+    fontWeight: type === "button" ? 600 : 400,
+    letterSpacing: 0,
+    fontStretch: "normal",
+    underline: false,
+    strikethrough: false,
+    textTransform: "none",
     visible: true,
     locked: false
   };

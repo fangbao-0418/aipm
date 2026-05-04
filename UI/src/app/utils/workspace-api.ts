@@ -102,6 +102,10 @@ export interface WorkspaceDesignNode {
   fontFamily?: string;
   fontWeight?: number;
   letterSpacing?: number;
+  fontStretch?: string;
+  underline?: boolean;
+  strikethrough?: boolean;
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
   flippedHorizontal?: boolean;
   flippedVertical?: boolean;
   shadow?: string;
@@ -113,6 +117,9 @@ export interface WorkspaceDesignPage {
   id: string;
   name: string;
   nodes: WorkspaceDesignNode[];
+  nodeCount?: number;
+  schemaPath?: string;
+  schemaLoaded?: boolean;
 }
 
 export interface WorkspaceDesignComponent {
@@ -582,6 +589,10 @@ export async function importAiDesignFile(projectId: string, file: File) {
 
 export async function getAiDesignFile(projectId: string) {
   return requestJson<WorkspaceDesignFile>(`/api/workspace/projects/${projectId}/design/file`);
+}
+
+export async function getAiDesignPage(projectId: string, pageId: string) {
+  return requestJson<WorkspaceDesignPage>(`/api/workspace/projects/${projectId}/design/pages/${pageId}`);
 }
 
 export async function saveAiDesignFile(projectId: string, file: WorkspaceDesignFile) {

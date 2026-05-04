@@ -116,6 +116,10 @@ export interface WorkspaceDesignNode {
   fontFamily?: string;
   fontWeight?: number;
   letterSpacing?: number;
+  fontStretch?: string;
+  underline?: boolean;
+  strikethrough?: boolean;
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
   flippedHorizontal?: boolean;
   flippedVertical?: boolean;
   shadow?: string;
@@ -127,6 +131,9 @@ export interface WorkspaceDesignPage {
   id: string;
   name: string;
   nodes: WorkspaceDesignNode[];
+  nodeCount?: number;
+  schemaPath?: string;
+  schemaLoaded?: boolean;
 }
 
 export interface WorkspaceDesignComponent {

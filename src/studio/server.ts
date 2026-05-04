@@ -517,6 +517,11 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
     return workspaceProjectService.getDesignFile(params.id);
   });
 
+  app.get("/api/workspace/projects/:id/design/pages/:pageId", async (request) => {
+    const params = request.params as { id: string; pageId: string };
+    return workspaceProjectService.getDesignPage(params.id, params.pageId);
+  });
+
   app.put("/api/workspace/projects/:id/design/file", { bodyLimit: 512 * 1024 * 1024 }, async (request) => {
     const params = request.params as { id: string };
     return workspaceProjectService.saveDesignFile(params.id, request.body as WorkspaceDesignFile);
