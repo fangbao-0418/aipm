@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
   Box,
@@ -272,6 +272,8 @@ const designFontStretches = [
 export function AiDesignView() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryPageId = searchParams.get("node-id") ?? searchParams.get("page-id") ?? "";
   useStopWhellHook();
   const project = useMemo(() => projectId ? getProject(projectId) : null, [projectId]);
   const [file, setFile] = useState<AiDesignFile>(() => createInitialDesignFile(project?.name ?? "未命名设计"));
@@ -348,6 +350,23 @@ export function AiDesignView() {
   const domSvgRenderedNodes = useMemo(() => renderedNodes.filter(shouldRenderNodeWithDomSvg), [renderedNodes]);
   const layerTree = useMemo(() => buildDesignLayerTree(selectedPage.nodes, layerQuery), [layerQuery, selectedPage.nodes]);
 
+  const syncSelectedPageToQuery = (pageId: string, replace = true) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (pageId) {
+      nextParams.set("node-id", pageId);
+    } else {
+      nextParams.delete("node-id");
+    }
+    nextParams.delete("page-id");
+    setSearchParams(nextParams, { replace });
+  };
+
+  const selectDesignPage = (pageId: string, pageNodes?: DesignNode[], options: { replace?: boolean } = {}) => {
+    setSelectedPageId(pageId);
+    selectNodes(pageNodes?.[0]?.id ? [pageNodes[0].id] : []);
+    syncSelectedPageToQuery(pageId, options.replace ?? true);
+  };
+
   useEffect(() => {
     let cancelled = false;
     setDesignFileLoaded(false);
@@ -359,9 +378,14 @@ export function AiDesignView() {
         applyingRemoteDesignRef.current = true;
         const nextFile = normalizeDesignFile(remoteFile, project?.name ?? "未命名设计");
         loadedPageIdsRef.current = new Set(nextFile.pages.filter((page) => page.nodes.length > 0).map((page) => page.id));
+        const queryPage = nextFile.pages.find((page) => page.id === queryPageId);
+        const nextSelectedPage = queryPage ?? nextFile.pages[0];
         setFile(nextFile);
-        setSelectedPageId(nextFile.pages[0]?.id ?? "");
-        selectNodes([]);
+        if (nextSelectedPage) {
+          selectDesignPage(nextSelectedPage.id, nextSelectedPage.nodes, { replace: true });
+        } else {
+          selectNodes([]);
+        }
         setDesignFileLoaded(true);
       })
       .catch((error) => {
@@ -551,8 +575,7 @@ export function AiDesignView() {
       ...current,
       pages: [...current.pages, nextPage]
     }));
-    setSelectedPageId(nextPage.id);
-    selectNodes([]);
+    selectDesignPage(nextPage.id, [], { replace: false });
   };
 
   const deletePage = (pageId: string) => {
@@ -568,8 +591,7 @@ export function AiDesignView() {
     }));
     if (selectedPageId === pageId) {
       const nextPage = nextPages[Math.max(0, pageIndex - 1)] ?? nextPages[0];
-      setSelectedPageId(nextPage.id);
-      selectNodes(nextPage.nodes[0]?.id ? [nextPage.nodes[0].id] : []);
+      selectDesignPage(nextPage.id, nextPage.nodes);
     }
     toast.success("页面已删除");
   };
@@ -680,8 +702,7 @@ export function AiDesignView() {
       ...current,
       pages: [...current.pages, nextPage]
     }));
-    setSelectedPageId(nextPage.id);
-    selectNodes(nextPage.nodes[0]?.id ? [nextPage.nodes[0].id] : []);
+    selectDesignPage(nextPage.id, nextPage.nodes, { replace: false });
     setLeftTab("layers");
     toast.success(`已插入页面：${sourcePage.name}`);
   };
@@ -749,8 +770,7 @@ export function AiDesignView() {
       setFile(nextFile);
       setLeftTab(nextFile.importedAssets?.length ? "assets" : "components");
       if (insertedPage) {
-        setSelectedPageId(insertedPage.id);
-        selectNodes([]);
+        selectDesignPage(insertedPage.id, insertedPage.nodes, { replace: false });
       }
       toast.success(`已导入 ${sourceFile.name}，并保存到本地项目空间`);
     } catch (error) {
@@ -974,11 +994,32 @@ export function AiDesignView() {
       y: anchorPoint.y - sceneAnchor.y * nextClampedZoom
     });
   };
+
+  const handleCanvasWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (event.metaKey || event.ctrlKey) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      handleZoom(zoom * (event.deltaY < 0 ? 1.08 : 0.92), {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      });
+      return;
+    }
+
+    const deltaScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewportSize.height : 1;
+    const deltaX = (event.deltaX || (event.shiftKey ? event.deltaY : 0)) * deltaScale;
+    const deltaY = (event.shiftKey ? 0 : event.deltaY) * deltaScale;
+    setPan((current) => ({
+      x: current.x - deltaX,
+      y: current.y - deltaY
+    }));
+  };
+
   const activeSelectionRect = selectionRect ? normalizeRect(selectionRect.start, selectionRect.current) : null;
   const showSelectionBounds = selectionBounds && selectedNodeIds.length > 0;
 
   return (
-    <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden bg-[#f5f5f6] text-[#171717]">
+    <div style={{ overscrollBehavior: 'none' }} className="flex h-screen min-h-0 w-screen flex-col overflow-hidden bg-[#f5f5f6] text-[#171717]">
       <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#e6e6e8] bg-white px-4">
         <div className="flex items-center gap-3">
           <Button type="button" variant="ghost" size="icon" onClick={() => navigate(`/project/${projectId}`)}>
@@ -1082,8 +1123,7 @@ export function AiDesignView() {
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedPageId(page.id);
-                          selectNodes(page.nodes[0]?.id ? [page.nodes[0].id] : []);
+                          selectDesignPage(page.id, page.nodes, { replace: false });
                         }}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
@@ -1291,15 +1331,7 @@ export function AiDesignView() {
             onPointerCancel={handleCanvasPointerEnd}
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleCanvasDrop}
-            onWheel={(event) => {
-              if (event.metaKey || event.ctrlKey) {
-                const rect = event.currentTarget.getBoundingClientRect();
-                handleZoom(zoom * (event.deltaY < 0 ? 1.08 : 0.92), {
-                  x: event.clientX - rect.left,
-                  y: event.clientY - rect.top
-                });
-              }
-            }}
+            onWheel={handleCanvasWheel}
           >
             <CanvasDesignRenderer nodes={canvasRenderedNodes} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
             <DomSvgDesignRenderer nodes={domSvgRenderedNodes} pan={pan} zoom={zoom} />
@@ -1949,25 +1981,32 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
   const { node, children } = treeNode;
   const textNode = node.type === "text";
   const imageNode = node.type === "image";
+  const imageClip = getImageVisualClip(node);
+  const visualX = imageClip ? imageClip.x : node.x;
+  const visualY = imageClip ? imageClip.y : node.y;
+  const visualWidth = imageClip ? imageClip.width : node.width;
+  const visualHeight = imageClip ? imageClip.height : node.height;
+  const visualRadius = imageClip?.rounded ? 9999 : node.radius;
+  const backgroundStyle = getDomSvgNodeBackgroundStyle(node, parentNode);
   const style: CSSProperties = {
     position: "absolute",
-    left: parentNode ? node.x - parentNode.x : node.x,
-    top: parentNode ? node.y - parentNode.y : node.y,
-    width: node.width,
-    height: textNode ? "auto" : node.height,
+    left: parentNode ? visualX - parentNode.x : visualX,
+    top: parentNode ? visualY - parentNode.y : visualY,
+    width: visualWidth,
+    height: textNode ? "auto" : visualHeight,
     minHeight: textNode ? node.height : undefined,
-    overflow: imageNode || node.clipPath || node.clipBounds ? "hidden" : "visible",
-    background: node.svgTree || node.svgPath || node.svgPaths?.length ? "transparent" : node.fill || "transparent",
+    overflow: imageNode || node.fillImageUrl || node.clipPath || node.clipBounds || visualRadius > 0 ? "hidden" : "visible",
+    ...backgroundStyle,
     borderColor: node.stroke,
     borderStyle: node.stroke !== "transparent" && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? "solid" : undefined,
     borderWidth: node.svgTree || node.svgPath || node.svgPaths?.length || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
-    borderRadius: node.radius,
+    borderRadius: visualRadius,
     boxShadow: node.shadow || undefined,
     opacity: node.opacity ?? 1,
     transform: getDesignNodeCssTransform(node),
     transformOrigin: "center center",
     zIndex: node.zIndex,
-    clipPath: getNodeClipPath(node),
+    clipPath: imageClip ? undefined : getNodeClipPath(node),
     color: node.textColor,
     fontFamily: getCssFontFamily(node),
     fontWeight: node.fontWeight ?? 400,
@@ -1987,7 +2026,24 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
         <DomSvgPathNode node={node} />
       ) : null}
       {node.type === "image" && node.imageUrl ? (
-        <img src={node.imageUrl} alt={node.name} className="block h-full w-full rounded-[inherit] object-fill" draggable={false} loading="lazy" />
+        <img
+          src={node.imageUrl}
+          alt={node.name}
+          className="block max-w-none rounded-[inherit] object-fill"
+          draggable={false}
+          loading="lazy"
+          style={imageClip ? {
+            position: "absolute",
+            left: node.x - imageClip.x,
+            top: node.y - imageClip.y,
+            width: node.width,
+            height: node.height,
+            borderRadius: 0
+          } : {
+            width: "100%",
+            height: "100%"
+          }}
+        />
       ) : textNode && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? (
         <DomSvgTextContent node={node} />
       ) : node.text && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? (
@@ -2000,6 +2056,88 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
       ))}
     </div>
   );
+}
+
+function getDomSvgNodeBackgroundStyle(node: DesignNode, parentNode?: DesignNode): CSSProperties {
+  const baseFill = node.svgTree || node.svgPath || node.svgPaths?.length
+    ? "transparent"
+    : isTransparentPaint(node.fill)
+      ? getImportedTransparentFallbackFill(node, parentNode) ?? "transparent"
+      : node.fill;
+  if (!node.fillImageUrl) {
+    return { background: baseFill || "transparent" };
+  }
+  return {
+    backgroundColor: baseFill && baseFill !== "transparent" ? baseFill : undefined,
+    backgroundImage: `url("${node.fillImageUrl}")`,
+    backgroundRepeat: node.fillImageMode === "tile" ? "repeat" : "no-repeat",
+    backgroundPosition: "center",
+    backgroundSize: getFillImageBackgroundSize(node)
+  };
+}
+
+function getImportedTransparentFallbackFill(node: DesignNode, parentNode?: DesignNode) {
+  if (!parentNode && node.depth === 0 && node.sourceLayerClass === "group") {
+    return "#f5f5f5";
+  }
+  if (isLikelySketchSidebarBackground(node, parentNode)) {
+    return "#f8f8fa";
+  }
+  return undefined;
+}
+
+function isLikelySketchSidebarBackground(node: DesignNode, parentNode?: DesignNode) {
+  return node.sourceLayerClass === "rectangle"
+    && isTransparentPaint(node.fill)
+    && node.width >= 160
+    && node.width <= 280
+    && node.height >= 360
+    && (!parentNode || Math.abs(node.x - parentNode.x) <= 1)
+    && node.zIndex !== undefined
+    && (node.depth ?? 0) <= 3;
+}
+
+function isTransparentPaint(value: string | undefined) {
+  const paint = value?.trim().toLowerCase();
+  return !paint
+    || paint === "transparent"
+    || paint === "none"
+    || paint === "rgba(0, 0, 0, 0)"
+    || paint === "rgba(255, 255, 255, 0)"
+    || /rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(paint);
+}
+
+function getFillImageBackgroundSize(node: DesignNode) {
+  if (node.fillImageMode === "tile") {
+    return `${Math.max(1, (node.fillImageScale ?? 1) * 100)}%`;
+  }
+  if (node.fillImageMode === "fit") {
+    return "contain";
+  }
+  if (node.fillImageMode === "fill") {
+    return "cover";
+  }
+  return "100% 100%";
+}
+
+function getImageVisualClip(node: DesignNode) {
+  if (node.type !== "image" || !node.imageUrl || !node.clipBounds) {
+    return undefined;
+  }
+  const clip = node.clipBounds;
+  if (!rectsIntersect(nodeToBounds(node), clip)) {
+    return undefined;
+  }
+  return {
+    ...clip,
+    rounded: Boolean(node.clipPath?.svgPath && isEllipseSvgPath(node.clipPath.svgPath, clip.width, clip.height))
+  };
+}
+
+function isEllipseSvgPath(path: string, width: number, height: number) {
+  return path.includes(" A ")
+    && path.includes(` ${formatSvgNumber(width)} `)
+    && path.includes(` ${formatSvgNumber(height / 2)} `);
 }
 
 function DomSvgPathNode({ node }: { node: DesignNode }) {
@@ -3219,6 +3357,9 @@ function getSvgPaint(value: string | undefined, fallback: string) {
 
 function getSvgPaintDescriptor(node: DesignNode, value: string | undefined, kind: "fill" | "stroke", fallback: string, idSuffix = "") {
   const paint = value?.trim();
+  if (kind === "fill" && isTransparentPaint(paint) && isLikelySketchSidebarBackground(node)) {
+    return { paint: "#f8f8fa", definition: null as ReactNode };
+  }
   if (!paint || paint === "transparent" || paint.startsWith("url(")) {
     return { paint: fallback, definition: null as ReactNode };
   }
@@ -3319,14 +3460,25 @@ function rectContainsPoint(rect: RectBounds, point: { x: number; y: number }) {
 }
 
 function translateSvgPath(path: string, offsetX: number, offsetY: number) {
-  const tokens = path.match(/[MLCZ]|-?\d+(?:\.\d+)?/g) ?? [];
-  const coordinateCounts: Record<string, number> = { M: 2, L: 2, C: 6, Z: 0 };
+  const tokens = path.match(/[AaCcHhLlMmQqSsTtVvZz]|[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?/g) ?? [];
+  const coordinateCounts: Record<string, number> = {
+    A: 7,
+    C: 6,
+    H: 1,
+    L: 2,
+    M: 2,
+    Q: 4,
+    S: 4,
+    T: 2,
+    V: 1,
+    Z: 0
+  };
   const output: string[] = [];
   let command = "";
   let numberIndex = 0;
 
   tokens.forEach((token) => {
-    if (/^[MLCZ]$/.test(token)) {
+    if (/^[AaCcHhLlMmQqSsTtVvZz]$/.test(token)) {
       command = token;
       numberIndex = 0;
       output.push(token);
@@ -3334,14 +3486,46 @@ function translateSvgPath(path: string, offsetX: number, offsetY: number) {
     }
 
     const numeric = Number(token);
-    const coordinateCount = coordinateCounts[command] ?? 0;
-    const isXCoordinate = coordinateCount > 0 && numberIndex % 2 === 0;
-    const translated = numeric + (isXCoordinate ? offsetX : offsetY);
-    output.push(String(Number(translated.toFixed(3))));
+    const upperCommand = command.toUpperCase();
+    const coordinateCount = coordinateCounts[upperCommand] ?? 0;
+    const isRelative = command !== upperCommand;
+    const commandIndex = coordinateCount > 0 ? numberIndex % coordinateCount : numberIndex;
+    const translated = isRelative
+      ? numeric
+      : numeric + getSvgPathCoordinateOffset(upperCommand, commandIndex, offsetX, offsetY);
+    output.push(formatSvgNumber(translated));
     numberIndex += 1;
   });
 
   return output.join(" ");
+}
+
+function getSvgPathCoordinateOffset(command: string, index: number, offsetX: number, offsetY: number) {
+  if (command === "H") {
+    return offsetX;
+  }
+  if (command === "V") {
+    return offsetY;
+  }
+  if (command === "A") {
+    if (index === 5) {
+      return offsetX;
+    }
+    if (index === 6) {
+      return offsetY;
+    }
+    return 0;
+  }
+  if (command === "C") {
+    return index % 2 === 0 ? offsetX : offsetY;
+  }
+  if (command === "S" || command === "Q") {
+    return index % 2 === 0 ? offsetX : offsetY;
+  }
+  if (command === "M" || command === "L" || command === "T") {
+    return index % 2 === 0 ? offsetX : offsetY;
+  }
+  return 0;
 }
 
 function getNodesBounds(nodes: DesignNode[]) {

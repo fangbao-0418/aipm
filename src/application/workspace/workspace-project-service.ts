@@ -2752,16 +2752,16 @@ function createInitialWorkspaceDesignFile(projectName: string): WorkspaceDesignF
 function suppressSketchContainerPaint(layer: Record<string, unknown>, node: WorkspaceDesignNode): WorkspaceDesignNode {
   const layerClass = getStringProp(layer, "_class");
   const childLayers = getSketchLayers(layer);
-  const isStructuralContainer = ["group", "shapeGroup", "symbolMaster", "symbolInstance"].includes(layerClass);
-  if (!isStructuralContainer || childLayers.length === 0) {
+  const isVectorContainer = isSketchVectorContainerLayer(layer);
+  if (!isVectorContainer || childLayers.length === 0) {
     return node;
   }
   if (node.svgPath) {
     return node;
   }
 
-  // Sketch shapeGroup/style can describe the composed vector, but drawing the
-  // group frame as a rectangle creates the black blocks seen in imported files.
+  // Sketch vector containers describe the composed vector through children.
+  // Drawing their frame as a filled rectangle creates black blocks.
   return {
     ...node,
     fill: "transparent",
