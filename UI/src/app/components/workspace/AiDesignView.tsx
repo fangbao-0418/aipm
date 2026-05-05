@@ -40,6 +40,7 @@ import { Textarea } from "../ui/textarea";
 import { getProject } from "../../utils/storage";
 import { toast } from "sonner";
 import { getAiDesignFile, getAiDesignPage, importAiDesignFile, saveAiDesignFile, type WorkspaceDesignFile } from "../../utils/workspace-api";
+import { useStopWhellHook } from "../../utils/event";
 
 type DesignLeftTab = "layers" | "components" | "assets" | "prd";
 type DesignRightTab = "design" | "prototype" | "d2c";
@@ -271,6 +272,7 @@ const designFontStretches = [
 export function AiDesignView() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
+  useStopWhellHook();
   const project = useMemo(() => projectId ? getProject(projectId) : null, [projectId]);
   const [file, setFile] = useState<AiDesignFile>(() => createInitialDesignFile(project?.name ?? "未命名设计"));
   const [designFileLoaded, setDesignFileLoaded] = useState(false);
@@ -1291,7 +1293,6 @@ export function AiDesignView() {
             onDrop={handleCanvasDrop}
             onWheel={(event) => {
               if (event.metaKey || event.ctrlKey) {
-                event.preventDefault();
                 const rect = event.currentTarget.getBoundingClientRect();
                 handleZoom(zoom * (event.deltaY < 0 ? 1.08 : 0.92), {
                   x: event.clientX - rect.left,
@@ -1333,14 +1334,14 @@ export function AiDesignView() {
               ) : null}
             </div>
           </div>
-          <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-3xl bg-white px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          {/* <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-3xl bg-white px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
             <ToolbarButton active={tool === "select"} label="选择" onClick={() => setTool("select")} icon={MousePointer2} />
             <ToolbarButton active={tool === "hand"} label="平移" onClick={() => setTool("hand")} icon={Hand} />
             <ToolbarButton active={rightTab === "prototype"} label="原型" onClick={() => setRightTab("prototype")} icon={Play} />
             <div className="mx-1 h-7 w-px bg-[#e5e5e7]" />
             <Button type="button" variant="ghost" size="sm" onClick={() => handleZoom(zoom - 0.1)}>缩小</Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => handleZoom(zoom + 0.1)}>放大</Button>
-          </div>
+          </div> */}
           <DesignMinimap
             nodes={visibleNodes}
             bounds={minimapBounds}
@@ -1645,8 +1646,8 @@ function DesignMinimap({
   viewport: RectBounds;
   onViewportChange: (viewport: MinimapViewport) => void;
 }) {
-  const minimapWidth = 220;
-  const minimapHeight = 150;
+  const minimapWidth = 150;
+  const minimapHeight = 80;
   const scale = Math.min(minimapWidth / Math.max(1, bounds.width), minimapHeight / Math.max(1, bounds.height));
   const contentWidth = bounds.width * scale;
   const contentHeight = bounds.height * scale;
