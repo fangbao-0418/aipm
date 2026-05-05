@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
+  Bot,
   Box,
   ChevronDown,
   Code2,
@@ -23,7 +24,9 @@ import {
   Plus,
   RectangleHorizontal,
   Search,
+  Send,
   Share2,
+  Settings2,
   Table2,
   TextCursorInput,
   Trash2,
@@ -39,10 +42,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../ui/textarea";
 import { getProject } from "../../utils/storage";
 import { toast } from "sonner";
-import { getAiDesignFile, getAiDesignPage, importAiDesignFile, saveAiDesignFile, type WorkspaceDesignFile } from "../../utils/workspace-api";
+import {
+  getAiDesignFile,
+  getAiDesignPage,
+  importAiDesignFile,
+  runAiDesignAgent,
+  saveAiDesignFile,
+  updateWorkspaceLlmSettings,
+  type WorkspaceDesignFile
+} from "../../utils/workspace-api";
 import { useStopWhellHook } from "../../utils/event";
 
-type DesignLeftTab = "layers" | "components" | "assets" | "prd";
+type DesignLeftTab = "layers" | "components" | "assets" | "ai";
 type DesignRightTab = "design" | "prototype" | "d2c";
 type DesignTool = "select" | "hand" | "frame" | "rect" | "text";
 type DesignNodeType = "frame" | "container" | "text" | "button" | "input" | "table" | "card" | "image";
@@ -192,6 +203,12 @@ interface ImportedDesignAsset {
 
 type AiDesignFile = WorkspaceDesignFile;
 
+interface AiDesignChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface RectBounds {
   x: number;
   y: number;
@@ -290,6 +307,22 @@ export function AiDesignView() {
   const [layerQuery, setLayerQuery] = useState("");
   const [expandedLayerIds, setExpandedLayerIds] = useState<string[]>([]);
   const [importingDesignFile, setImportingDesignFile] = useState(false);
+  const [aiMessages, setAiMessages] = useState<AiDesignChatMessage[]>([
+    {
+      id: createId("ai-message"),
+      role: "assistant",
+      content: "我是当前 AI Design 的页面 Agent。你可以让我查询页面、读取当前页 schema、新建/删除/复制页面，也可以描述一个页面让我生成可编辑 schema。"
+    }
+  ]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(true);
+  const [aiSystemPrompt, setAiSystemPrompt] = useState(project?.systemPrompt ?? "");
+  const [aiProvider, setAiProvider] = useState<"openai" | "openai-compatible">(project?.llmSettings?.provider ?? "openai-compatible");
+  const [aiBaseUrl, setAiBaseUrl] = useState(project?.llmSettings?.baseUrl ?? "");
+  const [aiModel, setAiModel] = useState(project?.llmSettings?.stageModelRouting?.design ?? project?.llmSettings?.stageModelRouting?.structure ?? "");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [savingAiSettings, setSavingAiSettings] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [viewportSize, setViewportSize] = useState({ width: 1200, height: 800 });
   const [selectionRect, setSelectionRect] = useState<{
@@ -381,6 +414,7 @@ export function AiDesignView() {
         const queryPage = nextFile.pages.find((page) => page.id === queryPageId);
         const nextSelectedPage = queryPage ?? nextFile.pages[0];
         setFile(nextFile);
+        setAiSystemPrompt(nextFile.aiSettings?.systemPrompt ?? project?.systemPrompt ?? "");
         if (nextSelectedPage) {
           selectDesignPage(nextSelectedPage.id, nextSelectedPage.nodes, { replace: true });
         } else {
@@ -607,6 +641,79 @@ export function AiDesignView() {
     }));
     selectNodes([nextNode.id]);
     setTool("select");
+  };
+
+  const saveAiSettings = async () => {
+    setSavingAiSettings(true);
+    try {
+      await updateWorkspaceLlmSettings(projectId, {
+        provider: aiProvider,
+        baseUrl: aiBaseUrl.trim() || undefined,
+        modelProfile: "balanced",
+        stageModelRouting: {
+          design: aiModel.trim() || undefined
+        },
+        apiKey: aiApiKey.trim() || undefined,
+        systemPrompt: aiSystemPrompt
+      });
+      updateFile((current) => ({
+        ...current,
+        aiSettings: {
+          ...(current.aiSettings ?? {}),
+          systemPrompt: aiSystemPrompt
+        }
+      }));
+      setAiApiKey("");
+      toast.success("AI Design 设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "AI 设置保存失败");
+    } finally {
+      setSavingAiSettings(false);
+    }
+  };
+
+  const runDesignAgentMessage = async (message: string) => {
+    const content = message.trim();
+    if (!content || aiBusy) {
+      return;
+    }
+    setAiInput("");
+    setAiBusy(true);
+    const userMessage: AiDesignChatMessage = { id: createId("ai-message"), role: "user", content };
+    setAiMessages((current) => [...current, userMessage]);
+    try {
+      const response = await runAiDesignAgent(projectId, {
+        message: content,
+        pageId: selectedPageId,
+        systemPrompt: aiSystemPrompt
+      });
+      const nextFile = mergeAgentPageIntoFile(
+        preserveLoadedDesignPages(normalizeDesignFile(response.file, project?.name ?? "未命名设计"), file),
+        response.page
+      );
+      setFile(nextFile);
+      if (response.page) {
+        loadedPageIdsRef.current.add(response.page.id);
+      }
+      if (response.selectedPageId) {
+        const nextPage = response.page ?? nextFile.pages.find((page) => page.id === response.selectedPageId);
+        selectDesignPage(response.selectedPageId, nextPage?.nodes ?? [], { replace: false });
+      }
+      setLeftTab("ai");
+      setAiMessages((current) => [
+        ...current,
+        { id: createId("ai-message"), role: "assistant", content: response.reply }
+      ]);
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : "AI Design Agent 执行失败";
+      setAiMessages((current) => [
+        ...current,
+        { id: createId("ai-message"), role: "assistant", content: messageText }
+      ]);
+      toast.error(messageText);
+    } finally {
+      setAiBusy(false);
+    }
   };
 
   const exportSvg = () => {
@@ -1087,7 +1194,7 @@ export function AiDesignView() {
               { id: "layers", label: "图层" },
               { id: "components", label: "组件" },
               { id: "assets", label: "资源" },
-              { id: "prd", label: "PRD" }
+              { id: "ai", label: "AI" }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1301,17 +1408,126 @@ export function AiDesignView() {
             </div>
           ) : null}
 
-          {leftTab === "prd" ? (
-            <div className="flex min-h-0 flex-1 flex-col p-4">
-              <div className="mb-3">
-                <div className="text-sm font-semibold">PRD 草稿</div>
-                <div className="mt-1 text-xs leading-5 text-[#777]">先承载 PRD 内容，后续从这里生成页面和 UI Schema。</div>
+          {leftTab === "ai" ? (
+            <div className="flex min-h-0 flex-1 flex-col bg-[#fbfbfc]">
+              <div className="border-b border-[#eeeeef] bg-white p-3">
+                <button
+                  type="button"
+                  onClick={() => setAiSettingsOpen((open) => !open)}
+                  className="flex w-full items-center justify-between rounded-xl px-2 py-2 text-left text-sm font-semibold hover:bg-[#f7f7f8]"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings2 className="size-4 text-[#246bfe]" />
+                    AI 设置
+                  </span>
+                  <ChevronDown className={`size-4 text-[#777] transition-transform ${aiSettingsOpen ? "" : "-rotate-90"}`} />
+                </button>
+                {aiSettingsOpen ? (
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <div className="mb-1 text-xs font-medium text-[#666]">系统提示词</div>
+                      <Textarea
+                        value={aiSystemPrompt}
+                        onChange={(event) => setAiSystemPrompt(event.target.value)}
+                        placeholder="约束 AI Design Agent 的设计风格、组件规范、输出格式..."
+                        className="h-24 resize-none border-[#e4e4e7] bg-[#fafafa] text-xs leading-5"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={aiProvider} onValueChange={(value) => setAiProvider(value as "openai" | "openai-compatible")}>
+                        <SelectTrigger className="h-9 rounded-xl border-[#e4e4e7] bg-white text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="openai">OpenAI</SelectItem>
+                          <SelectItem value="openai-compatible">兼容接口</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={aiModel}
+                        onChange={(event) => setAiModel(event.target.value)}
+                        placeholder="设计模型"
+                        className="h-9 rounded-xl border-[#e4e4e7] bg-white text-xs"
+                      />
+                    </div>
+                    <Input
+                      value={aiBaseUrl}
+                      onChange={(event) => setAiBaseUrl(event.target.value)}
+                      placeholder="Base URL，例如 https://api.openai.com/v1"
+                      className="h-9 rounded-xl border-[#e4e4e7] bg-white text-xs"
+                    />
+                    <Input
+                      value={aiApiKey}
+                      onChange={(event) => setAiApiKey(event.target.value)}
+                      placeholder={project?.llmSettings?.apiKeyConfigured ? "API Key 已配置，留空保持不变" : "API Key"}
+                      type="password"
+                      className="h-9 rounded-xl border-[#e4e4e7] bg-white text-xs"
+                    />
+                    <Button type="button" size="sm" className="w-full rounded-xl" disabled={savingAiSettings} onClick={() => void saveAiSettings()}>
+                      {savingAiSettings ? "保存中..." : "保存 AI 设置"}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
-              <Textarea
-                value={file.prdText}
-                onChange={(event) => updateFile((current) => ({ ...current, prdText: event.target.value }))}
-                className="min-h-0 flex-1 resize-none border-[#e4e4e7] bg-[#fafafa] leading-6"
-              />
+
+              {/* <div className="border-b border-[#eeeeef] bg-white p-3">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  <Bot className="size-4 text-[#246bfe]" />
+                  页面 Agent
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "查询页面", prompt: "查询当前设计文件有哪些页面" },
+                    { label: "当前 Schema", prompt: "获取当前页面 schema 信息" },
+                    { label: "新建页面", prompt: "新建一个空白页面" },
+                    { label: "复制页面", prompt: "复制当前页面" },
+                    { label: "删除页面", prompt: "删除当前页面" },
+                    { label: "生成表格页", prompt: "生成一个后台表格查询页面，包含筛选区、表格、分页和主操作按钮" }
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      disabled={aiBusy}
+                      onClick={() => void runDesignAgentMessage(item.prompt)}
+                      className="rounded-xl border border-[#ececef] bg-[#fafafa] px-3 py-2 text-left text-xs font-medium transition hover:border-[#246bfe] hover:bg-[#f7faff] disabled:opacity-60"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div> */}
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <div className="space-y-3">
+                  {aiMessages.map((message) => (
+                    <div key={message.id} className={`rounded-2xl px-3 py-2 text-sm leading-6 ${message.role === "user" ? "ml-6 bg-[#246bfe] text-white" : "mr-6 border border-[#ececef] bg-white text-[#333]"}`}>
+                      <div className="mb-1 text-[11px] font-semibold opacity-70">{message.role === "user" ? "你" : "AI Design Agent"}</div>
+                      <div className="whitespace-pre-wrap">{message.content}</div>
+                    </div>
+                  ))}
+                  {aiBusy ? (
+                    <div className="mr-6 rounded-2xl border border-[#ececef] bg-white px-3 py-2 text-sm text-[#777]">Agent 正在处理页面...</div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="border-t border-[#eeeeef] bg-white p-3">
+                <Textarea
+                  value={aiInput}
+                  onChange={(event) => setAiInput(event.target.value)}
+                  placeholder="告诉 AI：生成一个后台表格查询页 / 删除当前页 / 获取 schema..."
+                  className="h-20 resize-none rounded-2xl border-[#e4e4e7] bg-[#fafafa] text-sm leading-5"
+                />
+                <Button
+                  type="button"
+                  className="mt-2 w-full rounded-2xl"
+                  disabled={aiBusy || !aiInput.trim()}
+                  onClick={() => void runDesignAgentMessage(aiInput)}
+                >
+                  <Send className="mr-2 size-4" />
+                  发送给 Agent
+                </Button>
+              </div>
             </div>
           ) : null}
         </aside>
@@ -3836,10 +4052,43 @@ function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile 
     id: source.id ?? fallback.id,
     name: source.name ?? fallback.name,
     prdText: source.prdText ?? fallback.prdText,
+    aiSettings: source.aiSettings ?? fallback.aiSettings,
     pages,
     importedComponents: Array.isArray(source.importedComponents) ? source.importedComponents : [],
     importedAssets: Array.isArray(source.importedAssets) ? source.importedAssets : [],
     updatedAt: source.updatedAt ?? fallback.updatedAt
+  };
+}
+
+function mergeAgentPageIntoFile(file: AiDesignFile, page?: DesignPage): AiDesignFile {
+  if (!page) {
+    return file;
+  }
+  const hasPage = file.pages.some((item) => item.id === page.id);
+  return {
+    ...file,
+    pages: hasPage
+      ? file.pages.map((item) => item.id === page.id ? { ...page, schemaLoaded: true, nodeCount: page.nodes.length } : item)
+      : [...file.pages, { ...page, schemaLoaded: true, nodeCount: page.nodes.length }]
+  };
+}
+
+function preserveLoadedDesignPages(nextFile: AiDesignFile, currentFile: AiDesignFile): AiDesignFile {
+  const currentById = new Map(currentFile.pages.map((page) => [page.id, page]));
+  return {
+    ...nextFile,
+    pages: nextFile.pages.map((page) => {
+      const current = currentById.get(page.id);
+      if (page.nodes.length > 0 || !current || current.nodes.length === 0) {
+        return page;
+      }
+      return {
+        ...page,
+        nodes: current.nodes,
+        schemaLoaded: current.schemaLoaded,
+        nodeCount: page.nodeCount ?? current.nodeCount ?? current.nodes.length
+      };
+    })
   };
 }
 
@@ -3849,6 +4098,9 @@ function createInitialDesignFile(projectName: string): AiDesignFile {
     id: createId("design"),
     name: `${projectName} AI Design`,
     prdText: "这里承载当前项目的 PRD 草稿。后续 AI 会根据 PRD 生成页面清单、UI Schema 和可编辑画布。",
+    aiSettings: {
+      systemPrompt: ""
+    },
     updatedAt: now,
     importedComponents: [],
     importedAssets: [],

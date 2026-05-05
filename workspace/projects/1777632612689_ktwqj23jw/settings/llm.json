@@ -1,1 +1,1 @@
-{"provider":"openai","modelProfile":"balanced","apiKeyConfigured":false,"stageModelRouting":{"capture":"gpt-5-mini","structure":"gpt-5.2"}}
+{"provider":"openai-compatible","modelProfile":"balanced","apiKeyConfigured":true,"stageModelRouting":{"capture":"gpt-5-mini","structure":"gpt-5.2","design":"gpt-5.2"},"baseUrl":"https://api.apiplus.cloud/v1"}

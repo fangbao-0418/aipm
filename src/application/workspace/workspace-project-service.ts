@@ -56,8 +56,28 @@ const captureChatSchema = z.object({
   reply: z.string(),
   guidance: z.array(z.string()).default([])
 });
+const designAgentSchema = z.object({
+  action: z.enum(["answer", "list-pages", "get-schema", "create-page", "delete-page", "duplicate-page", "generate-schema"]),
+  reply: z.string(),
+  pageName: z.string().optional(),
+  nodes: z.array(z.object({
+    type: z.enum(["frame", "container", "text", "button", "input", "table", "card", "image"]),
+    name: z.string().optional(),
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
+    fill: z.string().optional(),
+    stroke: z.string().optional(),
+    radius: z.number().optional(),
+    text: z.string().optional(),
+    textColor: z.string().optional(),
+    fontSize: z.number().optional()
+  })).default([])
+});
 type LlmChatDecision = z.infer<typeof captureChatSchema>;
 type RuntimeChatDecision = ChatDecision & { model?: string };
+type DesignAgentDecision = z.infer<typeof designAgentSchema>;
 type LlmSettingsSaveResult = {
   bundle: WorkspaceBundle;
   validation: {
@@ -163,6 +183,7 @@ export class WorkspaceProjectService {
     modelProfile: WorkspaceLlmSettings["modelProfile"];
     stageModelRouting?: WorkspaceLlmSettings["stageModelRouting"];
     apiKey?: string;
+    systemPrompt?: string;
   }): Promise<LlmSettingsSaveResult> {
     const project = await this.repository.getProject(projectId);
     const settings: WorkspaceLlmSettings = {
@@ -178,6 +199,9 @@ export class WorkspaceProjectService {
     };
 
     project.llmSettings = settings;
+    if (input.systemPrompt !== undefined) {
+      project.systemPrompt = input.systemPrompt;
+    }
     project.updatedAt = nowIso();
 
     await this.repository.saveProject(project);
@@ -469,6 +493,180 @@ export class WorkspaceProjectService {
       bytes,
       mimeType: mimeTypeFromSketchImageRef(assetId)
     };
+  }
+
+  async runDesignAgent(projectId: string, input: {
+    message: string;
+    pageId?: string;
+    systemPrompt?: string;
+  }): Promise<{
+    reply: string;
+    action: DesignAgentDecision["action"];
+    file: WorkspaceDesignFile;
+    page?: WorkspaceDesignPage;
+    selectedPageId?: string;
+  }> {
+    const project = await this.repository.getProject(projectId);
+    const file = await this.getDesignFile(projectId);
+    const message = input.message.trim();
+    if (!message) {
+      return {
+        reply: "你可以直接告诉我想查询页面、查看 schema、新建/删除/复制页面，或者描述要生成的 UI 页面。",
+        action: "answer",
+        file
+      };
+    }
+
+    const selectedPage = await this.getDesignAgentSelectedPage(projectId, file, input.pageId);
+    const fallbackAction = inferDesignAgentAction(message);
+    const llm = fallbackAction === "generate-schema" ? await this.createProjectLlm(project, "design") : null;
+    const decision = llm
+      ? await this.decideDesignAgentActionWithLlm(project, llm, file, selectedPage, message, input.systemPrompt).catch((error) => {
+          console.warn("[AIPM][DesignAgent] llm decision failed, fallback used", {
+            projectId,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          return buildFallbackDesignAgentDecision(message, fallbackAction);
+        })
+      : buildFallbackDesignAgentDecision(message, fallbackAction);
+
+    if (decision.action === "list-pages") {
+      return {
+        reply: formatDesignPagesReply(file),
+        action: decision.action,
+        file
+      };
+    }
+
+    if (decision.action === "get-schema") {
+      return {
+        reply: formatDesignSchemaReply(selectedPage),
+        action: decision.action,
+        file,
+        page: selectedPage,
+        selectedPageId: selectedPage?.id
+      };
+    }
+
+    if (decision.action === "create-page") {
+      const page = createDesignAgentPage(decision.pageName || inferPageNameFromMessage(message) || "新页面", []);
+      const nextFile = await this.saveDesignPages(projectId, file, [...file.pages, page]);
+      return {
+        reply: decision.reply || `已新建页面「${page.name}」。`,
+        action: decision.action,
+        file: nextFile,
+        page,
+        selectedPageId: page.id
+      };
+    }
+
+    if (decision.action === "delete-page") {
+      if (!selectedPage) {
+        return { reply: "当前没有可删除的页面。", action: decision.action, file };
+      }
+      if (file.pages.length <= 1) {
+        return { reply: "当前只有一个页面，暂时不删除最后一个页面。", action: decision.action, file, page: selectedPage, selectedPageId: selectedPage.id };
+      }
+      const nextPages = file.pages.filter((page) => page.id !== selectedPage.id);
+      const nextFile = await this.saveDesignPages(projectId, file, nextPages);
+      const nextSelectedMeta = nextPages[0];
+      const nextSelectedPage = nextSelectedMeta ? await this.getDesignAgentSelectedPage(projectId, nextFile, nextSelectedMeta.id) : undefined;
+      return {
+        reply: `已删除页面「${selectedPage.name}」。`,
+        action: decision.action,
+        file: nextFile,
+        page: nextSelectedPage,
+        selectedPageId: nextSelectedPage?.id
+      };
+    }
+
+    if (decision.action === "duplicate-page") {
+      if (!selectedPage) {
+        return { reply: "当前没有可复制的页面。", action: decision.action, file };
+      }
+      const page = duplicateDesignAgentPage(selectedPage);
+      const nextFile = await this.saveDesignPages(projectId, file, [...file.pages, page]);
+      return {
+        reply: `已复制页面「${selectedPage.name}」为「${page.name}」。`,
+        action: decision.action,
+        file: nextFile,
+        page,
+        selectedPageId: page.id
+      };
+    }
+
+    if (decision.action === "generate-schema") {
+      const page = createDesignAgentPage(
+        decision.pageName || inferPageNameFromMessage(message) || "AI 生成页面",
+        decision.nodes.length > 0 ? decision.nodes.map(createGeneratedDesignNode) : createFallbackDesignSchemaNodes(message)
+      );
+      const nextFile = await this.saveDesignPages(projectId, file, [...file.pages, page]);
+      return {
+        reply: decision.reply || `已根据提示生成页面「${page.name}」，并写入可编辑 Schema。`,
+        action: decision.action,
+        file: nextFile,
+        page,
+        selectedPageId: page.id
+      };
+    }
+
+    return {
+      reply: decision.reply || "我可以读取当前页面信息、管理页面，也可以根据描述生成新的 UI Schema。",
+      action: "answer",
+      file,
+      page: selectedPage,
+      selectedPageId: selectedPage?.id
+    };
+  }
+
+  private async getDesignAgentSelectedPage(projectId: string, file: WorkspaceDesignFile, pageId?: string) {
+    const pageMeta = file.pages.find((page) => page.id === pageId) ?? file.pages[0];
+    if (!pageMeta) {
+      return undefined;
+    }
+    return this.repository.getDesignPage(projectId, pageMeta.id).catch(() => pageMeta);
+  }
+
+  private async saveDesignPages(projectId: string, file: WorkspaceDesignFile, pages: WorkspaceDesignPage[]) {
+    const nextFile: WorkspaceDesignFile = {
+      ...file,
+      pages,
+      updatedAt: nowIso()
+    };
+    await this.repository.saveDesignFile(projectId, nextFile);
+    return this.repository.getDesignFile(projectId);
+  }
+
+  private async decideDesignAgentActionWithLlm(
+    project: WorkspaceProject,
+    llm: OpenAIClient,
+    file: WorkspaceDesignFile,
+    selectedPage: WorkspaceDesignPage | undefined,
+    message: string,
+    systemPrompt?: string
+  ) {
+    const pageSummary = selectedPage ? summarizeDesignPageForPrompt(selectedPage) : "当前没有选中页面。";
+    const result = await llm.generateJson(designAgentSchema, {
+      systemPrompt: [
+        project.systemPrompt || "",
+        systemPrompt || "",
+        "你是 AI Design Agent，负责在本地设计画布里操作页面和生成 UI Schema。",
+        "你必须返回 JSON，不要返回 Markdown。",
+        "如果用户要求生成页面或 schema，生成 nodes。nodes 使用绝对画布坐标，尽量做成清晰可编辑的 frame、container、text、button、input、table、card。",
+        "不要生成复杂 svgPath。不要删除页面，除非用户明确要求删除。"
+      ].filter(Boolean).join("\n\n"),
+      userPrompt: JSON.stringify({
+        userMessage: message,
+        file: {
+          name: file.name,
+          pageCount: file.pages.length,
+          pages: file.pages.map((page) => ({ id: page.id, name: page.name, nodeCount: page.nodeCount ?? page.nodes.length }))
+        },
+        selectedPage: pageSummary
+      }, null, 2),
+      temperature: 0.35
+    });
+    return result;
   }
 
   private async persistImportedDesignAssets(projectId: string, imported: WorkspaceDesignImportResult): Promise<WorkspaceDesignImportResult> {
@@ -1228,7 +1426,7 @@ export class WorkspaceProjectService {
     }
   }
 
-  private async createProjectLlm(project: WorkspaceProject, stage: "capture" | "structure") {
+  private async createProjectLlm(project: WorkspaceProject, stage: "capture" | "structure" | "design") {
     const settings = await this.repository.getLlmSettings(project.id);
     if (settings.provider !== "openai" && settings.provider !== "openai-compatible") {
       console.warn("[AIPM][LLM] disabled:unsupported-provider", {
@@ -2723,6 +2921,148 @@ function createDesignNode(type: WorkspaceDesignNodeType, overrides: Partial<Work
     locked: false
   };
   return { ...base, ...overrides };
+}
+
+function createGeneratedDesignNode(input: DesignAgentDecision["nodes"][number]): WorkspaceDesignNode {
+  const node = createDesignNode(input.type);
+  return {
+    ...node,
+    name: input.name?.trim() || node.name,
+    x: Number.isFinite(input.x) ? input.x : node.x,
+    y: Number.isFinite(input.y) ? input.y : node.y,
+    width: Math.max(1, Number.isFinite(input.width) ? input.width : node.width),
+    height: Math.max(1, Number.isFinite(input.height) ? input.height : node.height),
+    fill: input.fill?.trim() || node.fill,
+    stroke: input.stroke?.trim() || node.stroke,
+    radius: Number.isFinite(input.radius) ? input.radius ?? node.radius : node.radius,
+    text: input.text ?? node.text,
+    textColor: input.textColor?.trim() || node.textColor,
+    fontSize: Math.max(8, Number.isFinite(input.fontSize) ? input.fontSize ?? node.fontSize : node.fontSize)
+  };
+}
+
+function createDesignAgentPage(name: string, nodes: WorkspaceDesignNode[]): WorkspaceDesignPage {
+  return {
+    id: createDesignId("page"),
+    name: name.trim() || "AI 生成页面",
+    nodes,
+    nodeCount: nodes.length,
+    schemaLoaded: true
+  };
+}
+
+function duplicateDesignAgentPage(page: WorkspaceDesignPage): WorkspaceDesignPage {
+  const idMap = new Map(page.nodes.map((node) => [node.id, createDesignId("node")]));
+  const nodes = page.nodes.map((node) => ({
+    ...node,
+    id: idMap.get(node.id) ?? createDesignId("node"),
+    parentId: node.parentId ? idMap.get(node.parentId) : undefined,
+    x: node.x + 48,
+    y: node.y + 48
+  }));
+  return createDesignAgentPage(`${page.name} Copy`, nodes);
+}
+
+function inferDesignAgentAction(message: string): DesignAgentDecision["action"] {
+  const text = message.toLowerCase();
+  if (/删除|delete|remove/.test(text)) {
+    return "delete-page";
+  }
+  if (/复制|duplicate|copy/.test(text)) {
+    return "duplicate-page";
+  }
+  if (/新建|新增|创建.*页面|create.*page|new.*page/.test(text)) {
+    return "create-page";
+  }
+  if (/生成|设计|画一个|做一个|ui|界面|表单|后台|dashboard/.test(text)) {
+    return "generate-schema";
+  }
+  if (/schema|结构|节点|图层信息|当前页|页面信息/.test(text)) {
+    return "get-schema";
+  }
+  if (/页面列表|有哪些页面|查询页面|list.*page|pages/.test(text)) {
+    return "list-pages";
+  }
+  return "answer";
+}
+
+function buildFallbackDesignAgentDecision(message: string, action = inferDesignAgentAction(message)): DesignAgentDecision {
+  return {
+    action,
+    reply: action === "generate-schema"
+      ? "我会根据你的描述生成一个可编辑页面 Schema。"
+      : "我可以查询页面、读取当前页 Schema、新建/删除/复制页面，也可以根据描述生成页面 Schema。",
+    pageName: inferPageNameFromMessage(message),
+    nodes: action === "generate-schema" ? createFallbackDesignSchemaNodes(message) : []
+  };
+}
+
+function inferPageNameFromMessage(message: string) {
+  const compact = message
+    .replace(/请|帮我|生成|创建|新建|设计|一个|页面|界面|schema/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return compact ? `${compact.slice(0, 18)}页面` : undefined;
+}
+
+function createFallbackDesignSchemaNodes(message: string): WorkspaceDesignNode[] {
+  const title = inferPageNameFromMessage(message)?.replace(/页面$/, "") || "AI 生成";
+  const wantsTable = /表格|列表|table|list/.test(message.toLowerCase());
+  const wantsForm = /表单|输入|搜索|筛选|form|input/.test(message.toLowerCase());
+  const nodes: WorkspaceDesignNode[] = [
+    createDesignNode("frame", { name: `${title} Frame`, x: 520, y: 220, width: 960, height: 640, fill: "#f6f7fb", stroke: "#e5e7eb", radius: 24 }),
+    createDesignNode("text", { name: "页面标题", x: 572, y: 268, width: 360, height: 44, text: title, fontSize: 28, fontWeight: 700 }),
+    createDesignNode("text", { name: "页面说明", x: 572, y: 318, width: 520, height: 28, text: "由 AI Design Agent 生成，可继续编辑图层、样式和文字。", fontSize: 14, textColor: "#667085" }),
+    createDesignNode("button", { name: "主操作", x: 1260, y: 270, width: 150, height: 44, text: "主要操作", radius: 12 })
+  ];
+  if (wantsForm) {
+    nodes.push(
+      createDesignNode("input", { name: "搜索输入", x: 572, y: 380, width: 320, height: 48, text: "请输入关键词", fill: "#ffffff", stroke: "#d0d5dd" }),
+      createDesignNode("button", { name: "查询按钮", x: 912, y: 380, width: 108, height: 48, text: "查询", radius: 12 })
+    );
+  }
+  nodes.push(
+    wantsTable
+      ? createDesignNode("table", { name: "数据表格", x: 572, y: 460, width: 840, height: 300, fill: "#ffffff", stroke: "#eaecf0", radius: 18 })
+      : createDesignNode("card", { name: "内容卡片", x: 572, y: 400, width: 840, height: 300, fill: "#ffffff", stroke: "#eaecf0", radius: 20, text: "" })
+  );
+  return nodes;
+}
+
+function formatDesignPagesReply(file: WorkspaceDesignFile) {
+  if (file.pages.length === 0) {
+    return "当前设计文件里还没有页面。";
+  }
+  return `当前共有 ${file.pages.length} 个页面：\n${file.pages.map((page, index) => `${index + 1}. ${page.name}（${page.nodeCount ?? page.nodes.length} 个节点）`).join("\n")}`;
+}
+
+function formatDesignSchemaReply(page?: WorkspaceDesignPage) {
+  if (!page) {
+    return "当前没有选中页面。";
+  }
+  return [
+    `当前页面：${page.name}`,
+    `节点数量：${page.nodes.length}`,
+    `主要节点：${page.nodes.slice(0, 12).map((node) => `${node.name}/${node.type}`).join("、") || "暂无节点"}`
+  ].join("\n");
+}
+
+function summarizeDesignPageForPrompt(page: WorkspaceDesignPage) {
+  return {
+    id: page.id,
+    name: page.name,
+    nodeCount: page.nodes.length,
+    nodes: page.nodes.slice(0, 80).map((node) => ({
+      id: node.id,
+      type: node.type,
+      name: node.name,
+      x: node.x,
+      y: node.y,
+      width: node.width,
+      height: node.height,
+      text: node.text
+    }))
+  };
 }
 
 function createInitialWorkspaceDesignFile(projectName: string): WorkspaceDesignFile {

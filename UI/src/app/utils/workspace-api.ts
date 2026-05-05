@@ -189,10 +189,21 @@ export interface WorkspaceDesignFile {
   id: string;
   name: string;
   prdText: string;
+  aiSettings?: {
+    systemPrompt?: string;
+  };
   pages: WorkspaceDesignPage[];
   importedComponents: WorkspaceDesignComponent[];
   importedAssets: WorkspaceDesignAsset[];
   updatedAt: string;
+}
+
+export interface AiDesignAgentResponse {
+  reply: string;
+  action: "answer" | "list-pages" | "get-schema" | "create-page" | "delete-page" | "duplicate-page" | "generate-schema";
+  file: WorkspaceDesignFile;
+  page?: WorkspaceDesignPage;
+  selectedPageId?: string;
 }
 
 interface WorkspaceDocumentApiRecord {
@@ -639,6 +650,20 @@ export async function saveAiDesignFile(projectId: string, file: WorkspaceDesignF
   });
 }
 
+export async function runAiDesignAgent(
+  projectId: string,
+  input: {
+    message: string;
+    pageId?: string;
+    systemPrompt?: string;
+  }
+) {
+  return requestJson<AiDesignAgentResponse>(`/api/workspace/projects/${projectId}/design/agent`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export function getWorkspaceSourceFileUrl(projectId: string, fileId: string) {
   return `/api/workspace/projects/${projectId}/intake/files/${fileId}`;
 }
@@ -727,8 +752,9 @@ export async function updateWorkspaceLlmSettings(
     provider: "openai" | "openai-compatible";
     baseUrl?: string;
     modelProfile: "quality" | "balanced" | "cost-saving";
-    stageModelRouting?: Partial<Record<"capture" | "structure", string>>;
+    stageModelRouting?: Partial<Record<"capture" | "structure" | "design", string>>;
     apiKey?: string;
+    systemPrompt?: string;
   }
 ) {
   return requestJson<WorkspaceLlmSettingsUpdateResponse>(`/api/workspace/projects/${projectId}/settings/llm`, {

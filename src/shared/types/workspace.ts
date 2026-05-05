@@ -197,6 +197,9 @@ export interface WorkspaceDesignFile {
   id: string;
   name: string;
   prdText: string;
+  aiSettings?: {
+    systemPrompt?: string;
+  };
   pages: WorkspaceDesignPage[];
   importedComponents: WorkspaceDesignComponent[];
   importedAssets: WorkspaceDesignAsset[];
@@ -228,7 +231,7 @@ export interface WorkspaceLlmSettings {
   baseUrl?: string;
   modelProfile: "quality" | "balanced" | "cost-saving";
   apiKeyConfigured: boolean;
-  stageModelRouting: Partial<Record<"capture" | "structure", string>>;
+  stageModelRouting: Partial<Record<"capture" | "structure" | "design", string>>;
 }
 
 export interface WorkspaceProject {

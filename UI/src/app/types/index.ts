@@ -10,7 +10,7 @@ export interface Project {
     baseUrl?: string;
     modelProfile: "quality" | "balanced" | "cost-saving";
     apiKeyConfigured?: boolean;
-    stageModelRouting?: Partial<Record<"capture" | "structure", string>>;
+    stageModelRouting?: Partial<Record<"capture" | "structure" | "design", string>>;
   };
   createdAt: string;
   updatedAt: string;

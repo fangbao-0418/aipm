@@ -542,6 +542,20 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
     });
   });
 
+  app.post("/api/workspace/projects/:id/design/agent", { bodyLimit: 4 * 1024 * 1024 }, async (request) => {
+    const params = request.params as { id: string };
+    const body = request.body as {
+      message?: string;
+      pageId?: string;
+      systemPrompt?: string;
+    };
+    return workspaceProjectService.runDesignAgent(params.id, {
+      message: body?.message ?? "",
+      pageId: body?.pageId,
+      systemPrompt: body?.systemPrompt
+    });
+  });
+
   app.get("/api/workspace/projects/:id/design/assets/:assetId", async (request, reply) => {
     const params = request.params as { id: string; assetId: string };
     const result = await workspaceProjectService.getDesignAsset(params.id, params.assetId);
@@ -668,8 +682,9 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
       provider: "openai" | "openai-compatible";
       baseUrl?: string;
       modelProfile: "quality" | "balanced" | "cost-saving";
-      stageModelRouting?: Partial<Record<"capture" | "structure", string>>;
+      stageModelRouting?: Partial<Record<"capture" | "structure" | "design", string>>;
       apiKey?: string;
+      systemPrompt?: string;
     };
     return workspaceProjectService.saveLlmSettings(params.id, body);
   });
