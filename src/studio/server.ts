@@ -548,11 +548,13 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
       message?: string;
       pageId?: string;
       systemPrompt?: string;
+      planningMode?: "auto" | "plan";
     };
     return workspaceProjectService.runDesignAgent(params.id, {
       message: body?.message ?? "",
       pageId: body?.pageId,
-      systemPrompt: body?.systemPrompt
+      systemPrompt: body?.systemPrompt,
+      planningMode: body?.planningMode
     });
   });
 

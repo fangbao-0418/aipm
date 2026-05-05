@@ -318,6 +318,7 @@ export function AiDesignView() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(true);
   const [aiSystemPrompt, setAiSystemPrompt] = useState(project?.systemPrompt ?? "");
+  const [aiPlanningMode, setAiPlanningMode] = useState<"auto" | "plan">("auto");
   const [aiProvider, setAiProvider] = useState<"openai" | "openai-compatible">(project?.llmSettings?.provider ?? "openai-compatible");
   const [aiBaseUrl, setAiBaseUrl] = useState(project?.llmSettings?.baseUrl ?? "");
   const [aiModel, setAiModel] = useState(project?.llmSettings?.stageModelRouting?.design ?? project?.llmSettings?.stageModelRouting?.structure ?? "");
@@ -685,7 +686,8 @@ export function AiDesignView() {
       const response = await runAiDesignAgent(projectId, {
         message: content,
         pageId: selectedPageId,
-        systemPrompt: aiSystemPrompt
+        systemPrompt: aiSystemPrompt,
+        planningMode: aiPlanningMode
       });
       const nextFile = mergeAgentPageIntoFile(
         preserveLoadedDesignPages(normalizeDesignFile(response.file, project?.name ?? "未命名设计"), file),
@@ -1221,11 +1223,11 @@ export function AiDesignView() {
                     <Plus className="size-4" />
                   </Button>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 text-xs">
                   {file.pages.map((page) => (
                     <div
                       key={page.id}
-                      className={`group flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm ${page.id === selectedPageId ? "bg-[#f0f0f2] font-semibold" : "hover:bg-[#f7f7f8]"}`}
+                      className={`group flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs ${page.id === selectedPageId ? "bg-[#f0f0f2] font-semibold" : "hover:bg-[#f7f7f8]"}`}
                     >
                       <button
                         type="button"
@@ -1252,12 +1254,12 @@ export function AiDesignView() {
                   ))}
                 </div>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3" style={{ height: '50%', overflow: 'auto' }}>
+              <div className="page-layer min-h-0 flex-1 overflow-y-auto p-3" style={{ height: '50%', overflow: 'auto' }}>
                 <div className="mb-2 flex items-center justify-between text-sm font-semibold">
                   <span>图层</span>
                   <Layers className="size-4 text-[#888]" />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 text-xs">
                   <DesignLayerTree
                     nodes={layerTree}
                     expandedIds={expandedLayerIds}
@@ -1475,6 +1477,21 @@ export function AiDesignView() {
                   <Bot className="size-4 text-[#246bfe]" />
                   页面 Agent
                 </div>
+                <div className="mb-2 flex items-center gap-2 rounded-xl bg-[#f7f7f8] p-1">
+                  {[
+                    { value: "auto", label: "自动执行" },
+                    { value: "plan", label: "规划模式" }
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setAiPlanningMode(item.value as "auto" | "plan")}
+                      className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${aiPlanningMode === item.value ? "bg-white text-[#246bfe] shadow-sm" : "text-[#777]"}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { label: "查询页面", prompt: "查询当前设计文件有哪些页面" },
@@ -1624,7 +1641,7 @@ export function AiDesignView() {
           {rightTab === "design" ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
               {selectedNode ? (
-                <div className="divide-y divide-[#eeeeef]">
+                <div className="divide-y divide-[#eeeeef] text-xs">
                   <InspectorSection title="图层">
                     <Input value={selectedNode.name} onChange={(event) => updateNode(selectedNode.id, { name: event.target.value })} />
                     <div className="mt-3 flex gap-2">
@@ -2061,16 +2078,16 @@ function DesignNodeView({
           </svg>
         ) : node.type === "table" && !importedSketchNode ? (
           <div className="h-full w-full overflow-hidden rounded bg-white text-left text-[13px] text-[#333]">
-            <div className="grid grid-cols-3 bg-[#eef1f7] px-3 py-2 font-semibold">
-              <span>日期</span>
-              <span>姓名</span>
-              <span>状态</span>
+            <div className="grid bg-[#eef1f7] px-3 py-2 font-semibold" style={{ gridTemplateColumns: `repeat(${getDesignTableColumns(node).length}, minmax(0, 1fr))` }}>
+              {getDesignTableColumns(node).map((column) => (
+                <span key={column} className="truncate">{column}</span>
+              ))}
             </div>
             {[1, 2, 3, 4].map((row) => (
-              <div key={row} className="grid grid-cols-3 border-t border-[#e5e7eb] px-3 py-2">
-                <span>2026-05-03</span>
-                <span>需求 {row}</span>
-                <span>进行中</span>
+              <div key={row} className="grid border-t border-[#e5e7eb] px-3 py-2" style={{ gridTemplateColumns: `repeat(${getDesignTableColumns(node).length}, minmax(0, 1fr))` }}>
+                {getDesignTableColumns(node).map((column, index) => (
+                  <span key={`${row}-${column}`} className="truncate">{getDesignTableCellSample(column, row, index)}</span>
+                ))}
               </div>
             ))}
           </div>
@@ -2901,6 +2918,24 @@ function getCssFontFamily(node: DesignNode) {
     : `"PingFang SC", "Microsoft YaHei", sans-serif`;
 }
 
+function getDesignTableColumns(node: DesignNode) {
+  const match = /^columns:(.+)$/i.exec(node.text?.trim() ?? "");
+  const columns = match?.[1]
+    ?.split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return columns && columns.length > 0 ? columns.slice(0, 8) : ["日期", "姓名", "状态"];
+}
+
+function getDesignTableCellSample(column: string, row: number, index: number) {
+  if (/日期|时间|date|time/i.test(column)) return row === 1 ? "2026-05-05" : "2026-05-03";
+  if (/状态|status/i.test(column)) return row % 2 === 0 ? "处理中" : "已上线";
+  if (/负责人|owner|用户|姓名|name/i.test(column)) return row === 1 ? "方宝" : `用户 ${row}`;
+  if (/操作|action/i.test(column)) return "查看";
+  if (/数量|金额|数值|count|amount/i.test(column)) return `${row * 12}`;
+  return index === 0 ? `记录 ${row}` : `${column} ${row}`;
+}
+
 function getNodeTextDecoration(node: DesignNode) {
   return [
     node.underline ? "underline" : "",
@@ -2931,6 +2966,8 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
     drawSvgPathNode(context, node);
   } else if (node.type === "image" && node.imageUrl) {
     drawImageNode(context, node, requestRedraw);
+  } else if (node.type === "table") {
+    drawTableNode(context, node, requestRedraw);
   } else {
     drawBoxNode(context, node, requestRedraw);
     if (node.text) {
@@ -2943,6 +2980,61 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
   }
 
   context.restore();
+}
+
+function drawTableNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
+  drawBoxNode(context, node, requestRedraw);
+  const columns = getDesignTableColumns(node);
+  const headerHeight = Math.min(48, Math.max(34, node.height * 0.16));
+  const rowHeight = Math.max(34, Math.min(46, (node.height - headerHeight) / 4));
+  const columnWidth = node.width / Math.max(1, columns.length);
+
+  context.save();
+  context.clip(roundedRectPath(0, 0, node.width, node.height, Math.max(0, node.radius)));
+  context.fillStyle = "#f2f4f7";
+  context.fillRect(0, 0, node.width, headerHeight);
+  context.strokeStyle = "#eaecf0";
+  context.lineWidth = 1;
+  context.font = `600 13px ${getCssFontFamily(node)}`;
+  context.fillStyle = "#344054";
+  context.textBaseline = "middle";
+
+  columns.forEach((column, index) => {
+    const x = index * columnWidth;
+    if (index > 0) {
+      context.beginPath();
+      context.moveTo(x, 0);
+      context.lineTo(x, node.height);
+      context.stroke();
+    }
+    drawCanvasSingleLineText(context, column, x + 14, headerHeight / 2, columnWidth - 24);
+  });
+
+  context.font = `400 13px ${getCssFontFamily(node)}`;
+  context.fillStyle = "#475467";
+  for (let row = 1; row <= 4; row += 1) {
+    const y = headerHeight + (row - 1) * rowHeight;
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(node.width, y);
+    context.stroke();
+    columns.forEach((column, index) => {
+      drawCanvasSingleLineText(context, getDesignTableCellSample(column, row, index), index * columnWidth + 14, y + rowHeight / 2, columnWidth - 24);
+    });
+  }
+  context.restore();
+}
+
+function drawCanvasSingleLineText(context: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
+  const value = text.trim();
+  if (!value) {
+    return;
+  }
+  let output = value;
+  while (output.length > 1 && context.measureText(output).width > maxWidth) {
+    output = output.slice(0, -1);
+  }
+  context.fillText(output.length < value.length ? `${output.slice(0, Math.max(1, output.length - 1))}…` : output, x, y);
 }
 
 function applyCanvasClip(context: CanvasRenderingContext2D, node: DesignNode) {
@@ -3881,7 +3973,7 @@ function InspectorSection({ title, children }: { title: string; children: ReactN
 
 function NumberField({ label, value, onChange, compact = false }: { label: string; value: number; onChange: (value: number) => void; compact?: boolean }) {
   return (
-    <label className="block">
+    <label className="block text-xs">
       <span className="mb-1 block text-xs font-medium text-[#777]">{label}</span>
       <Input type="number" value={value} onChange={(event) => onChange(Number(event.target.value) || 0)} className={compact ? "h-10 rounded-xl border-[#e4e4e7] bg-[#f4f4f5]" : undefined} />
     </label>
@@ -3902,7 +3994,7 @@ function TextStyleButton({ active, onClick, children }: { active: boolean; onCli
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <label className="mb-3 grid grid-cols-[80px_1fr] items-center gap-3">
+    <label className="mb-3 grid grid-cols-[80px_1fr] items-center gap-3 text-xs">
       <span className="text-xs font-medium text-[#777]">{label}</span>
       <div className="flex items-center gap-2 rounded-xl border border-[#e4e4e7] px-3 py-2">
         <input type="color" value={normalizeColor(value)} onChange={(event) => onChange(event.target.value)} className="size-7 rounded border-0 bg-transparent p-0" />

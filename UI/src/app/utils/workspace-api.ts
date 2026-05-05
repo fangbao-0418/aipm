@@ -200,10 +200,13 @@ export interface WorkspaceDesignFile {
 
 export interface AiDesignAgentResponse {
   reply: string;
-  action: "answer" | "list-pages" | "get-schema" | "create-page" | "delete-page" | "duplicate-page" | "generate-schema";
+  action: "answer" | "list-pages" | "get-schema" | "create-page" | "delete-page" | "duplicate-page" | "generate-schema" | "modify-schema" | "tool-plan" | "tool-execute";
   file: WorkspaceDesignFile;
   page?: WorkspaceDesignPage;
   selectedPageId?: string;
+  plan?: unknown;
+  toolResults?: Array<{ tool: string; ok: boolean; message: string; data?: unknown }>;
+  uiDesignPlan?: unknown;
 }
 
 interface WorkspaceDocumentApiRecord {
@@ -656,6 +659,7 @@ export async function runAiDesignAgent(
     message: string;
     pageId?: string;
     systemPrompt?: string;
+    planningMode?: "auto" | "plan";
   }
 ) {
   return requestJson<AiDesignAgentResponse>(`/api/workspace/projects/${projectId}/design/agent`, {

@@ -1,1 +1,1 @@
-{"provider":"openai-compatible","modelProfile":"balanced","apiKeyConfigured":true,"stageModelRouting":{"capture":"gpt-5-mini","structure":"gpt-5.2","design":"gpt-5.2"},"baseUrl":"https://api.apiplus.cloud/v1"}
+{"provider":"openai-compatible","modelProfile":"balanced","apiKeyConfigured":true,"stageModelRouting":{"capture":"gpt-5-mini","structure":"gpt-5.2","design":"glm-5.1"},"baseUrl":"https://open.bigmodel.cn/api/paas/v4"}
