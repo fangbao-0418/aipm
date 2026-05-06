@@ -558,6 +558,50 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
     });
   });
 
+  app.get("/api/workspace/projects/:id/design/agent/messages", async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { conversationId?: string; limit?: string };
+    return workspaceProjectService.listDesignAgentMessages(params.id, {
+      conversationId: query.conversationId,
+      limit: query.limit ? Number(query.limit) : undefined
+    });
+  });
+
+  app.post("/api/workspace/projects/:id/design/agent/stream", { bodyLimit: 4 * 1024 * 1024 }, async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = request.body as {
+      message?: string;
+      pageId?: string;
+      systemPrompt?: string;
+      planningMode?: "auto" | "plan";
+      conversationId?: string;
+    };
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no"
+    });
+    try {
+      for await (const event of workspaceProjectService.runDesignAgentStream(params.id, {
+        message: body?.message ?? "",
+        pageId: body?.pageId,
+        systemPrompt: body?.systemPrompt,
+        planningMode: body?.planningMode,
+        conversationId: body?.conversationId
+      })) {
+        writeSseEvent(reply.raw, event.type, event);
+      }
+    } catch (error) {
+      writeSseEvent(reply.raw, "error", {
+        type: "error",
+        message: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      reply.raw.end();
+    }
+  });
+
   app.get("/api/workspace/projects/:id/design/assets/:assetId", async (request, reply) => {
     const params = request.params as { id: string; assetId: string };
     const result = await workspaceProjectService.getDesignAsset(params.id, params.assetId);
@@ -1051,6 +1095,11 @@ function openWorkspaceUrl(url: string) {
   } catch {
     // Ignore browser launch failures and keep the server running.
   }
+}
+
+function writeSseEvent(stream: NodeJS.WritableStream, event: string, data: unknown) {
+  stream.write(`event: ${event}\n`);
+  stream.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);

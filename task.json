@@ -5,3 +5,206 @@
 4. 内置tool 有文件处理能力，仅仅针对workspace内的文件读取能力，页面功能能力有对画布整理截图、局部节点位置或者选中区域截图识别能力，可根据schema生成图像能力，比如参考某个页面，就是获取页面的schema从而识别到页面信息进行对比分析，内置tool单独抽离出来，方便后续扩展
 5. 支持联网搜索能力，比如搜索一些sketch素材、页面等
 6. 支持根据图片转schema的能力，后期可不断完善图片转schema的能力，比如提高识别度
+
+
+docs/agent/ui-agent4.md
+docs/agent/ui-role.md
+docs/agent/ui-agent-bugfix.md
+
+根据文档完善design模块里的agent
+src/application/workspace/workspace-project-service.ts
+
+
+“当前商品列表页添加搜索条件”
+模型回复
+“AI Design Agent
+我先判断任务类型，并准备读取当前页面上下文。
+AI Design Agent
+执行计划：AI Design Agent 执行计划
+1. page.get_schema：执行工具
+2. schema.find_nodes：执行工具
+3. schema.update_node：执行工具
+4. schema.add_nodes：执行工具
+5. schema.validate：执行工具
+AI Design Agent
+准备执行：page.get_schema。
+AI Design Agent
+准备执行：page.get_schema
+AI Design Agent
+已完成：page.get_schema
+已获取页面「当前 表单内容丰富点页面」schema。
+AI Design Agent
+准备执行：schema.find_nodes。
+AI Design Agent
+准备执行：schema.find_nodes
+AI Design Agent
+已完成：schema.find_nodes
+已找到 40 个匹配节点。
+AI Design Agent
+准备执行：schema.update_node。
+AI Design Agent
+准备执行：schema.update_node
+AI Design Agent
+执行失败：schema.update_node
+没有找到可修改的节点。
+AI Design Agent
+已完成：transaction.rollback
+已回滚到执行前页面状态，避免半成品 schema 污染画布。
+AI Design Agent
+执行失败：没有找到可修改的节点。
+AI Design Agent
+执行失败，已停止并完成回滚。”
+这个agent我要怎么完善能力，期望效果，模型识别到页面元素，能知道要去哪里添加搜索条件，比如知道正常页面都是在表格的上方，添加搜索条件，不要把表格压住，动态调整整体布局，要交给产品agent去判断业务逻辑是否正确 ，ui去审核样式是否规范、美观，如果目前的工具能力不满足条件，给出建议要怎么做，是一个不断完善满足效果的过程
+
+
+
+
+
+
+负责人 Agent
+任务判断：这是从需求生成新 UI 稿，我不会把它误判成修改当前页面。
+UI 设计师 Agent
+我会先做页面结构、布局风格和组件选择判断，再交给执行 Agent 落 schema。
+UI 设计师 Agent
+UI 设计 Agent 判断：
+负责人 Agent
+执行计划：AI Design Agent 执行计划
+1. 产品经理 Agent -> requirement.parse：执行工具
+2. 产品规划 Agent -> flow.generate：执行工具
+3. 素材 Agent -> asset.resolve：执行工具
+4. Schema 执行 Agent -> schema.generate_ui_from_requirements：执行工具
+5. 审核 Agent -> ui.critic_review：执行工具
+产品经理 Agent
+准备执行：requirement.parse。
+产品经理 Agent
+准备执行：requirement.parse
+产品经理 Agent
+已完成：requirement.parse
+已解析需求：业务模块，识别到 1 个功能点。
+产品规划 Agent
+准备执行：flow.generate。
+产品规划 Agent
+准备执行：flow.generate
+产品规划 Agent
+已完成：flow.generate
+已生成 2 个页面和 1 条用户流程。
+素材 Agent
+准备执行：asset.resolve。
+素材 Agent
+准备执行：asset.resolve
+素材 Agent
+已完成：asset.resolve
+素材 Agent 已解析 0 个素材需求。
+Schema 执行 Agent
+准备执行：schema.generate_ui_from_requirements。
+Schema 执行 Agent
+准备执行：schema.generate_ui_from_requirements
+Schema 执行 Agent
+已完成：schema.generate_ui_from_requirements
+已根据需求生成 2 个 UI 页面稿。
+审核 Agent
+准备执行：ui.critic_review。
+审核 Agent
+准备执行：ui.critic_review
+审核 Agent
+已完成：ui.critic_review
+Critic Agent 审核通过：需求覆盖和无关内容检查通过。
+审核 Agent
+工具执行完成，我现在做一次 UI/schema 审核。
+审核 Agent
+准备执行：ui.review_design
+执行完成后做综合检查
+审核 Agent
+执行失败：ui.review_design
+UI Agent 审核发现 1 个阻塞问题。
+审核 Agent
+审核结果：UI Agent 审核发现 1 个阻塞问题。
+负责人 Agent
+工具已执行，但审核阶段发现问题，请查看 review 信息。
+
+
+
+
+agent输出信息
+“负责人 Agent
+任务判断：这是从需求生成新 UI 稿，我会在当前画布已有画板右侧追加新 UI，不会误改当前已有内容。
+UI 设计师 Agent
+我会先做页面结构、布局风格和组件选择判断，再交给执行 Agent 落 schema。
+UI 设计师 Agent
+UI 设计 Agent 判断：
+负责人 Agent
+执行计划：AI Design Agent 执行计划
+1. 产品经理 Agent -> requirement.parse：解析自然语言需求，识别模块、功能点和实体。
+2. 产品规划 Agent -> flow.generate：根据功能点生成页面清单、用户流程和必要状态。
+3. 素材 Agent -> asset.resolve：解析需要的图标、插画和素材占位。
+4. Schema 执行 Agent -> schema.generate_ui_from_requirements：生成多页面可编辑 UI Schema。
+5. 审核 Agent -> ui.critic_review：检查需求覆盖、无关内容、流程和布局问题。
+产品经理 Agent
+准备执行：requirement.parse。解析自然语言需求，识别模块、功能点和实体。
+产品经理 Agent
+准备执行：requirement.parse
+解析自然语言需求，识别模块、功能点和实体。
+产品经理 Agent
+已完成：requirement.parse
+已解析需求：业务模块，识别到 1 个功能点。
+产品规划 Agent
+准备执行：flow.generate。根据功能点生成页面清单、用户流程和必要状态。
+产品规划 Agent
+准备执行：flow.generate
+根据功能点生成页面清单、用户流程和必要状态。
+产品规划 Agent
+已完成：flow.generate
+已生成 2 个页面和 1 条用户流程。
+素材 Agent
+准备执行：asset.resolve。解析需要的图标、插画和素材占位。
+素材 Agent
+准备执行：asset.resolve
+解析需要的图标、插画和素材占位。
+素材 Agent
+已完成：asset.resolve
+素材 Agent 已解析 0 个素材需求。
+Schema 执行 Agent
+准备执行：schema.generate_ui_from_requirements。生成多页面可编辑 UI Schema。
+Schema 执行 Agent
+准备执行：schema.generate_ui_from_requirements
+生成多页面可编辑 UI Schema。
+Schema 执行 Agent
+已完成：schema.generate_ui_from_requirements
+已在当前画布「功能入口页」右侧追加 2 个 UI 画板，顶对齐，水平间距 40px。
+审核 Agent
+准备执行：ui.critic_review。检查需求覆盖、无关内容、流程和布局问题。
+审核 Agent
+准备执行：ui.critic_review
+检查需求覆盖、无关内容、流程和布局问题。
+审核 Agent
+已完成：ui.critic_review
+Critic Agent 审核通过：需求覆盖和无关内容检查通过。
+审核 Agent
+工具执行完成，我现在做一次 UI/schema 审核。
+审核 Agent
+准备执行：ui.review_design
+执行完成后做综合检查
+审核 Agent
+执行失败：ui.review_design
+UI Agent 审核发现 1 个阻塞问题。
+审核 Agent
+审核结果：UI Agent 审核发现 1 个阻塞问题。
+负责人 Agent
+工具已执行，但审核阶段发现问题，请查看 review 信息。“
+
+负责人负责决策，要输出决策原因
+产品要输出需求，包括功能点、非功能点、界面设计等
+UI 设计师要根据产品经理输出的信息，生成UI稿子
+要对每个页面进行审查，调用截图，聊天框里展示截图，让产品确认是否符合需求，截图如果存在不规范，交互不好的地方要进行修改，作为一个设计师你要有自己的规范，比如pc、移动端布局，pc宽度1920、移动端750等 不要出现元素遮挡、被剪切显示不全等，我只是说一部分你自己输出一份完成的交互规范
+
+
+画布
+1. 画布图层由父级一层一层包裹起来的，鼠标滑过当前元素，当前顶级组被框选，被框选的元素鼠标滑过其他元素（非当前框选的子元素）同级及父级同级别被框选，被框选的子元素只能通过双击才能被选中，拖拽选中的图层，包含子元素要一起移动
+2. 选中模式，点击空区域会把在当前区域的的图层框选中，鼠标拖框选区域会把在这个区域的图层一起进行移动
+
+1. 图层默认顶层只有一层，不显示顶层，从第二层开始展示
+2. 鼠标滑过当前元素，框选规则是这样的
+    a. 框选与自己同级别的
+    b. 如果是自己的子集就还是框选自己
+    c. 如果不是自己的同级别，就框选当前元素的顶级，这里的顶级不是根级别，现在我们不显示根级别，所谓的顶级就是根的临进子集
+3. 空白区域框选也是规避掉根级

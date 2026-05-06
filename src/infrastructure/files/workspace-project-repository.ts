@@ -310,6 +310,59 @@ export class WorkspaceProjectRepository {
     return readJsonFile<WorkspaceDesignPage>(this.designPagePath(projectId, pageId));
   }
 
+  async upsertAgentConversation(input: {
+    id: string;
+    projectId: string;
+    title: string;
+    metadata?: unknown;
+    createdAt: string;
+    updatedAt: string;
+  }) {
+    return this.index.upsertAgentConversation(input);
+  }
+
+  async saveAgentMessage(input: {
+    id: string;
+    conversationId: string;
+    projectId: string;
+    role: string;
+    content?: string;
+    eventType?: string;
+    toolName?: string;
+    toolCallId?: string;
+    metadata?: unknown;
+    createdAt: string;
+  }) {
+    return this.index.insertAgentMessage(input);
+  }
+
+  async listAgentMessages(input: { projectId: string; conversationId: string; limit?: number }) {
+    return this.index.listAgentMessages(input);
+  }
+
+  async searchAgentMessages(input: { projectId: string; conversationId?: string; keyword: string; limit?: number }) {
+    return this.index.searchAgentMessages(input);
+  }
+
+  async upsertAgentToolCall(input: {
+    id: string;
+    conversationId: string;
+    projectId: string;
+    toolName: string;
+    arguments?: unknown;
+    result?: unknown;
+    status: "running" | "success" | "failed";
+    error?: string;
+    startedAt: string;
+    endedAt?: string;
+  }) {
+    return this.index.upsertAgentToolCall(input);
+  }
+
+  async listAgentToolCalls(input: { projectId: string; conversationId: string; toolName?: string; limit?: number }) {
+    return this.index.listAgentToolCalls(input);
+  }
+
   async saveStageState(projectId: string, states: WorkspaceStageStateRecord[]) {
     await this.ensureProjectStructure(projectId);
     await writeJsonFile(this.stageStatePath(projectId), states);

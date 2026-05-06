@@ -209,6 +209,26 @@ export interface AiDesignAgentResponse {
   uiDesignPlan?: unknown;
 }
 
+export type AiDesignAgentStreamEvent =
+  | { type: "message"; content: string; agentRole?: string }
+  | { type: "plan"; title: string; steps: string[]; plan?: unknown; uiDesignPlan?: unknown; agentRole?: string }
+  | { type: "tool_call_start"; toolName: string; params?: unknown; reason?: string; toolCallId?: string; agentRole?: string }
+  | { type: "tool_call_result"; toolName: string; success: boolean; result?: unknown; error?: string; message: string; toolCallId?: string; agentRole?: string }
+  | { type: "schema_patch"; action: "add" | "update" | "delete" | "replace"; file?: WorkspaceDesignFile; page?: WorkspaceDesignPage; selectedPageId?: string; pageId?: string; nodeCount?: number; selectedNodeIds?: string[]; agentRole?: string }
+  | { type: "review"; result?: unknown; message: string; agentRole?: string }
+  | { type: "done"; summary: string; file: WorkspaceDesignFile; page?: WorkspaceDesignPage; selectedPageId?: string; agentRole?: string }
+  | { type: "error"; message: string; agentRole?: string };
+
+export interface AiDesignAgentMessageRecord {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  eventType?: string;
+  toolName?: string;
+  agentRole?: string;
+  createdAt: string;
+}
+
 interface WorkspaceDocumentApiRecord {
   id: string;
   projectId: string;
@@ -666,6 +686,69 @@ export async function runAiDesignAgent(
     method: "POST",
     body: JSON.stringify(input)
   });
+}
+
+export async function streamAiDesignAgent(
+  projectId: string,
+  input: {
+    message: string;
+    pageId?: string;
+    systemPrompt?: string;
+    planningMode?: "auto" | "plan";
+    conversationId?: string;
+  },
+  onEvent: (event: AiDesignAgentStreamEvent) => void
+) {
+  const response = await fetch(`/api/workspace/projects/${projectId}/design/agent/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream"
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  if (!response.body) {
+    throw new Error("AI Design Agent stream missing body");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let done = false;
+
+  while (!done) {
+    const { value, done: readerDone } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !readerDone });
+    let boundary = findSseBoundary(buffer);
+    while (boundary) {
+      const rawEvent = buffer.slice(0, boundary.index);
+      buffer = buffer.slice(boundary.index + boundary.length);
+      const parsed = parseSseEvent(rawEvent);
+      if (parsed) {
+        onEvent(JSON.parse(parsed.data) as AiDesignAgentStreamEvent);
+      }
+      boundary = findSseBoundary(buffer);
+    }
+    if (readerDone) {
+      done = true;
+    }
+  }
+}
+
+export async function getAiDesignAgentMessages(
+  projectId: string,
+  conversationId: string,
+  limit = 200
+) {
+  const params = new URLSearchParams({
+    conversationId,
+    limit: String(limit)
+  });
+  return requestJson<AiDesignAgentMessageRecord[]>(`/api/workspace/projects/${projectId}/design/agent/messages?${params.toString()}`);
 }
 
 export function getWorkspaceSourceFileUrl(projectId: string, fileId: string) {

@@ -39,17 +39,69 @@ const designNodeInputSchema = designNodePatchSchema.extend({
   height: z.number().optional()
 });
 
+export const uiSchemaDraftNodeSchema = z.object({
+  refId: z.string(),
+  parentRef: z.string().optional(),
+  type: nodeTypeSchema,
+  name: z.string(),
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+  fill: z.string().optional(),
+  stroke: z.string().optional(),
+  strokeWidth: z.number().optional(),
+  radius: z.number().optional(),
+  text: z.string().optional(),
+  textColor: z.string().optional(),
+  fontSize: z.number().optional(),
+  fontWeight: z.number().optional(),
+  visible: z.boolean().optional(),
+  locked: z.boolean().optional()
+}).passthrough();
+
+export const uiSchemaDraftSchema = z.object({
+  schemaVersion: z.literal("aipm.design.schema.v1").default("aipm.design.schema.v1"),
+  intent: z.string().default(""),
+  platform: z.enum(["web", "mobile_app"]).default("web"),
+  designRationale: z.array(z.string()).default([]),
+  artboards: z.array(z.object({
+    refId: z.string(),
+    name: z.string(),
+    width: z.number(),
+    height: z.number(),
+    layout: z.string().default(""),
+    nodes: z.array(uiSchemaDraftNodeSchema).default([])
+  })).min(1).max(12)
+});
+
+export type UiSchemaDraft = z.infer<typeof uiSchemaDraftSchema>;
+
 export const designAgentToolNameSchema = z.enum([
+  "requirement.parse",
+  "flow.generate",
+  "asset.resolve",
+  "schema.generate_ui_from_requirements",
   "page.list",
   "page.get_schema",
+  "page.analyze_structure",
   "page.create",
   "page.rename",
   "page.delete",
   "page.duplicate",
+  "product.review_requirements",
+  "layout.insert_above",
+  "layout.plan_insert",
+  "layout.reflow",
+  "layout.update_spacing",
   "schema.validate",
   "schema.find_nodes",
+  "schema.find_nodes_by_semantic",
+  "schema.get_node_tree",
   "schema.create_menu",
   "schema.add_nodes",
+  "schema.add_child",
+  "schema.insert_before",
   "schema.update_node",
   "schema.delete_node",
   "schema.duplicate_node",
@@ -61,6 +113,12 @@ export const designAgentToolNameSchema = z.enum([
   "ui.analyze_color",
   "ui.analyze_typography",
   "ui.review",
+  "ui.review_design",
+  "ui.critic_review",
+  "conversation.get_recent_messages",
+  "conversation.search_messages",
+  "conversation.get_tool_history",
+  "conversation.get_last_failed_step",
   "web.search",
   "image.to_schema"
 ]);
@@ -87,6 +145,7 @@ export type DesignAgentPlan = z.infer<typeof designAgentPlanSchema>;
 export interface DesignAgentToolExecutionContext {
   projectId: string;
   selectedPageId?: string;
+  conversationId?: string;
 }
 
 export interface DesignAgentToolResult {
@@ -104,6 +163,26 @@ export const designAgentToolDescriptions: Array<{
   inputSchema: unknown;
 }> = [
   {
+    name: "requirement.parse",
+    description: "把用户自然语言需求解析成结构化模块、功能点、实体、优先级。用于从零生成 UI 稿前的需求理解。",
+    inputSchema: { userRequest: "string" }
+  },
+  {
+    name: "flow.generate",
+    description: "根据结构化需求生成功能页面清单、用户流程、必要状态。用于 create_new_ui。",
+    inputSchema: { userRequest: "string", parsedRequirement: "optional object" }
+  },
+  {
+    name: "asset.resolve",
+    description: "素材 Agent 解析图标/图片/插画需求，优先返回本地或内部素材占位信息，不直接随机联网抓图。",
+    inputSchema: { userRequest: "string", assetRequests: "optional array" }
+  },
+  {
+    name: "schema.generate_ui_from_requirements",
+    description: "根据需求解析、页面清单和流程，在当前画布已有画板右侧追加多张可编辑 UI 画板。新增画板顶对齐，默认水平间距 40px；不新建独立文件页面。",
+    inputSchema: { userRequest: "string", parsedRequirement: "optional object", flowPlan: "optional object", platform: "optional mobile_app | web", pageId: "optional string", gap: "optional number" }
+  },
+  {
     name: "page.list",
     description: "查询当前 AI Design 文件的页面列表、页面 ID、节点数量。",
     inputSchema: {}
@@ -112,6 +191,11 @@ export const designAgentToolDescriptions: Array<{
     name: "page.get_schema",
     description: "获取指定页面或当前页面的完整 schema，适合分析、对比、二次修改前读取上下文。",
     inputSchema: { pageId: "optional string" }
+  },
+  {
+    name: "page.analyze_structure",
+    description: "把当前页面 schema 分析成语义结构，识别页面类型、主区域、表格、筛选区、推荐插入点。用于避免只靠 find_nodes 猜节点。",
+    inputSchema: { pageId: "optional string", userRequest: "optional string" }
   },
   {
     name: "page.create",
@@ -134,6 +218,31 @@ export const designAgentToolDescriptions: Array<{
     inputSchema: { pageId: "optional string", name: "optional string" }
   },
   {
+    name: "product.review_requirements",
+    description: "产品 Agent 根据页面语义和用户目标判断业务字段是否合理，例如列表页搜索条件推荐商品名称、分类、状态等。",
+    inputSchema: { pageId: "optional string", userRequest: "string", pageStructure: "optional object" }
+  },
+  {
+    name: "layout.insert_above",
+    description: "在目标节点上方插入一个节点组，并自动下移目标节点及其下方内容，避免遮挡。适合在表格上方新增搜索/筛选区。",
+    inputSchema: { pageId: "optional string", targetNodeId: "optional string", insertKind: "filter_bar | custom", filters: "optional Filter[]", spacing: "optional number", height: "optional number" }
+  },
+  {
+    name: "layout.plan_insert",
+    description: "基于页面语义为插入类任务生成推荐插入计划，不修改 schema。适合先判断插入点、父容器、目标节点和布局补偿策略。",
+    inputSchema: { pageId: "optional string", userRequest: "string", insertKind: "optional string" }
+  },
+  {
+    name: "layout.reflow",
+    description: "对页面做基础重排，检测明显重叠并下移后续节点。用于插入内容后的布局补偿。",
+    inputSchema: { pageId: "optional string", spacing: "optional number" }
+  },
+  {
+    name: "layout.update_spacing",
+    description: "调整指定节点与其下方同级节点的垂直间距，避免搜索区和表格贴得过近。",
+    inputSchema: { pageId: "optional string", nodeId: "string", marginBottom: "optional number" }
+  },
+  {
     name: "schema.validate",
     description: "校验页面 schema 是否包含合法节点、尺寸、坐标、父子引用和基础字段。",
     inputSchema: { pageId: "optional string" }
@@ -144,14 +253,34 @@ export const designAgentToolDescriptions: Array<{
     inputSchema: { pageId: "optional string", query: "object: { type?, name?, text?, position? }" }
   },
   {
+    name: "schema.find_nodes_by_semantic",
+    description: "按页面语义查找节点，例如 table、filter_bar、header、main_content，并返回排序后的候选。用于多个节点命中时做可靠选择。",
+    inputSchema: { pageId: "optional string", semantic: "table | filter_bar | header | main_content", userRequest: "optional string" }
+  },
+  {
+    name: "schema.get_node_tree",
+    description: "返回当前页面的节点父子树和节点摘要，用于判断容器层级、插入父节点和局部结构。",
+    inputSchema: { pageId: "optional string", rootNodeId: "optional string" }
+  },
+  {
     name: "schema.create_menu",
     description: "确定性创建左侧/右侧菜单组件。用于“添加菜单/导航栏/侧边栏菜单”等任务，不要用 update_node 伪装添加。若已存在菜单，会停止并返回建议。",
     inputSchema: { pageId: "optional string", position: "left | right", items: "optional string[]", title: "optional string" }
   },
   {
     name: "schema.add_nodes",
-    description: "向当前页面或指定页面新增一个或多个节点，支持 text、image、card、container、table 等基础类型。group/shapeGroup 先映射为 container/card。",
-    inputSchema: { pageId: "optional string", nodes: "DesignNode[]" }
+    description: "向当前页面或指定页面新增一个或多个节点，支持 text、image、card、container、table 等基础类型。可用 position.before/autoLayout 做基础插入补偿。",
+    inputSchema: { pageId: "optional string", nodes: "DesignNode[]", position: "optional { type: 'before', targetNodeId: string }", autoLayout: "optional boolean" }
+  },
+  {
+    name: "schema.add_child",
+    description: "向指定父节点追加子节点，并自动设置 parentId。适合已有搜索区时追加字段。",
+    inputSchema: { pageId: "optional string", parentNodeId: "string", nodes: "DesignNode[]" }
+  },
+  {
+    name: "schema.insert_before",
+    description: "在目标节点之前插入节点组，并可自动下移目标及其下方内容。适合没有高阶 layout 工具时的插入兜底。",
+    inputSchema: { pageId: "optional string", targetNodeId: "string", nodes: "DesignNode[]", spacing: "optional number", autoLayout: "optional boolean" }
   },
   {
     name: "schema.update_node",
@@ -180,8 +309,8 @@ export const designAgentToolDescriptions: Array<{
   },
   {
     name: "canvas.capture",
-    description: "画布截图/局部节点截图能力占位。当前返回 schema 摘要，后续接真实截图识别。",
-    inputSchema: { pageId: "optional string", nodeId: "optional string" }
+    description: "对当前画布、选中区域或节点生成可预览截图。当前版本先返回 schema 渲染的 SVG 预览，后续可接浏览器真实截图和视觉模型识别。",
+    inputSchema: { pageId: "optional string", nodeId: "optional string", nodeIds: "optional string[]", mode: "optional rightmost_artboards | selected | page", limit: "optional number" }
   },
   {
     name: "ui.analyze_layout",
@@ -209,6 +338,36 @@ export const designAgentToolDescriptions: Array<{
     inputSchema: { pageId: "optional string" }
   },
   {
+    name: "ui.review_design",
+    description: "UI Agent 针对设计目标做专业审核，检查搜索区位置、表格遮挡、间距、对齐和是否有阻塞问题。",
+    inputSchema: { pageId: "optional string", userRequest: "optional string" }
+  },
+  {
+    name: "ui.critic_review",
+    description: "Critic Agent 对生成后的 UI 稿做需求覆盖、无关内容、页面流程、布局和状态完整性审查。",
+    inputSchema: { userRequest: "string", pageIds: "optional string[]" }
+  },
+  {
+    name: "conversation.get_recent_messages",
+    description: "获取当前会话最近的消息记录，用于用户说继续、刚才、上次、为什么失败时恢复上下文。",
+    inputSchema: { limit: "optional number" }
+  },
+  {
+    name: "conversation.search_messages",
+    description: "按关键词搜索当前项目或当前会话消息，用于查找用户之前说过的约束和执行记录。",
+    inputSchema: { keyword: "string", conversationId: "optional string", limit: "optional number" }
+  },
+  {
+    name: "conversation.get_tool_history",
+    description: "获取当前会话工具调用历史，包括参数、结果、失败原因。",
+    inputSchema: { toolName: "optional string", limit: "optional number" }
+  },
+  {
+    name: "conversation.get_last_failed_step",
+    description: "获取当前会话最近一次失败工具调用，用于自动修复和继续执行。",
+    inputSchema: {}
+  },
+  {
     name: "web.search",
     description: "联网搜索能力占位。后续接 web search/MCP，用于搜索 Sketch 素材、页面参考、竞品等。",
     inputSchema: { query: "string" }
@@ -226,10 +385,20 @@ export class DesignAgentToolService {
   async execute(context: DesignAgentToolExecutionContext, call: DesignAgentToolCall): Promise<DesignAgentToolResult> {
     const normalized = designAgentToolCallSchema.parse(call);
     switch (normalized.tool) {
+      case "requirement.parse":
+        return this.parseRequirement(context.projectId, normalized.input);
+      case "flow.generate":
+        return this.generateFlow(context.projectId, normalized.input);
+      case "asset.resolve":
+        return this.resolveAssets(context.projectId, normalized.input);
+      case "schema.generate_ui_from_requirements":
+        return this.generateUiFromRequirements(context.projectId, normalized.input, context.selectedPageId);
       case "page.list":
         return this.listPages(context.projectId);
       case "page.get_schema":
         return this.getPageSchema(context.projectId, normalized.input.pageId as string | undefined ?? context.selectedPageId);
+      case "page.analyze_structure":
+        return this.analyzePageStructure(context.projectId, normalized.input, context.selectedPageId);
       case "page.create":
         return this.createPage(context.projectId, normalized.input);
       case "page.rename":
@@ -238,14 +407,32 @@ export class DesignAgentToolService {
         return this.deletePage(context.projectId, normalized.input.pageId as string | undefined ?? context.selectedPageId);
       case "page.duplicate":
         return this.duplicatePage(context.projectId, normalized.input, context.selectedPageId);
+      case "product.review_requirements":
+        return this.reviewProductRequirements(context.projectId, normalized.input, context.selectedPageId);
+      case "layout.insert_above":
+        return this.insertAbove(context.projectId, normalized.input, context.selectedPageId);
+      case "layout.plan_insert":
+        return this.planInsert(context.projectId, normalized.input, context.selectedPageId);
+      case "layout.reflow":
+        return this.reflowLayout(context.projectId, normalized.input, context.selectedPageId);
+      case "layout.update_spacing":
+        return this.updateSpacing(context.projectId, normalized.input, context.selectedPageId);
       case "schema.validate":
         return this.validateSchema(context.projectId, normalized.input.pageId as string | undefined ?? context.selectedPageId);
       case "schema.find_nodes":
         return this.findNodes(context.projectId, normalized.input, context.selectedPageId);
+      case "schema.find_nodes_by_semantic":
+        return this.findNodesBySemantic(context.projectId, normalized.input, context.selectedPageId);
+      case "schema.get_node_tree":
+        return this.getNodeTree(context.projectId, normalized.input, context.selectedPageId);
       case "schema.create_menu":
         return this.createMenu(context.projectId, normalized.input, context.selectedPageId);
       case "schema.add_nodes":
         return this.addNodes(context.projectId, normalized.input, context.selectedPageId);
+      case "schema.add_child":
+        return this.addChild(context.projectId, normalized.input, context.selectedPageId);
+      case "schema.insert_before":
+        return this.insertBefore(context.projectId, normalized.input, context.selectedPageId);
       case "schema.update_node":
         return this.updateNode(context.projectId, normalized.input, context.selectedPageId);
       case "schema.delete_node":
@@ -268,6 +455,22 @@ export class DesignAgentToolService {
         return this.analyzeUi(context.projectId, normalized.input.pageId as string | undefined ?? context.selectedPageId, "typography");
       case "ui.review":
         return this.analyzeUi(context.projectId, normalized.input.pageId as string | undefined ?? context.selectedPageId, "review");
+      case "ui.review_design":
+        return this.reviewDesign(context.projectId, normalized.input, context.selectedPageId);
+      case "ui.critic_review":
+        return this.criticReview(context.projectId, normalized.input, context.selectedPageId);
+      case "conversation.get_recent_messages":
+        return this.getRecentMessages(context.projectId, context.conversationId, normalized.input.limit as number | undefined);
+      case "conversation.search_messages":
+        return this.searchMessages(context.projectId, {
+          conversationId: normalized.input.conversationId as string | undefined ?? context.conversationId,
+          keyword: normalized.input.keyword as string | undefined,
+          limit: normalized.input.limit as number | undefined
+        });
+      case "conversation.get_tool_history":
+        return this.getToolHistory(context.projectId, context.conversationId, normalized.input.toolName as string | undefined, normalized.input.limit as number | undefined);
+      case "conversation.get_last_failed_step":
+        return this.getLastFailedStep(context.projectId, context.conversationId);
       case "web.search":
         return {
           ok: false,
@@ -281,6 +484,165 @@ export class DesignAgentToolService {
           data: { imagePath: normalized.input.imagePath }
         };
     }
+  }
+
+  private async parseRequirement(projectId: string, input: Record<string, unknown>): Promise<DesignAgentToolResult> {
+    await this.getFile(projectId);
+    const userRequest = String(input.userRequest ?? "");
+    const parsed = parseUiRequirement(userRequest);
+    return {
+      ok: true,
+      message: formatRequirementParseMessage(parsed),
+      data: parsed
+    };
+  }
+
+  private async generateFlow(projectId: string, input: Record<string, unknown>): Promise<DesignAgentToolResult> {
+    await this.getFile(projectId);
+    const parsed = isRecord(input.parsedRequirement) ? input.parsedRequirement : parseUiRequirement(String(input.userRequest ?? ""));
+    const flowPlan = generateUiFlowPlan(parsed);
+    return {
+      ok: true,
+      message: [
+        `已生成 ${flowPlan.pages.length} 个页面和 ${flowPlan.flows.length} 条用户流程。`,
+        flowPlan.pages.length > 0 ? `页面：${flowPlan.pages.map((page) => page.name).join("、")}` : "",
+        flowPlan.flows.length > 0 ? `流程：${flowPlan.flows.map((flow) => `${flow.name}(${flow.steps.join(" -> ")})`).join("；")}` : ""
+      ].filter(Boolean).join("\n"),
+      data: flowPlan
+    };
+  }
+
+  private async resolveAssets(projectId: string, input: Record<string, unknown>): Promise<DesignAgentToolResult> {
+    await this.getFile(projectId);
+    const requests = Array.isArray(input.assetRequests) ? input.assetRequests : inferAssetRequests(String(input.userRequest ?? ""));
+    const assets = requests.map((request, index) => {
+      const item = isRecord(request) ? request : { type: "icon", name: String(request) };
+      const type = String(item.type ?? "icon");
+      const name = String(item.name ?? item.query ?? `asset_${index + 1}`);
+      return {
+        id: `${type}_${name}`.replace(/[^\w-]+/g, "_").toLowerCase(),
+        type: type === "image" || type === "illustration" ? "image" : "svg",
+        source: type === "image" || type === "illustration" ? "internal_asset_placeholder" : "local_icon_library",
+        usage: String(item.usage ?? name),
+        license: "internal-placeholder"
+      };
+    });
+    return {
+      ok: true,
+      message: formatAssetResolveMessage(assets),
+      data: { assets, strategy: buildAssetStrategy(assets) }
+    };
+  }
+
+  private async generateUiFromRequirements(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) {
+      return {
+        ok: false,
+        message: "当前没有可追加 UI 画板的画布，请先创建或导入一个设计页面。",
+        file
+      };
+    }
+    const gap = numberOr(input.gap, 40);
+    const parsedDraft = uiSchemaDraftSchema.safeParse(input.schemaDraft);
+    if (!parsedDraft.success) {
+      return {
+        ok: false,
+        message: "缺少有效的 schemaDraft。当前主链路不再使用关键词模板兜底，必须先由 Agent 生成符合 aipm.design.schema.v1 的 UI Schema Draft。",
+        file,
+        page,
+        selectedPageId: page.id,
+        data: { issues: parsedDraft.error.issues }
+      };
+    }
+    const schemaDraft = parsedDraft.data;
+    const firstArtboard = schemaDraft.artboards[0];
+    const placement = getCanvasAppendPlacement(page, { width: firstArtboard.width, height: firstArtboard.height }, gap);
+    const generatedNodes = createUiNodesFromSchemaDraft(schemaDraft, placement);
+    const generatedFrameIds = generatedNodes.filter((node) => node.type === "frame" && !node.parentId).map((node) => node.id);
+    const nextPage: WorkspaceDesignPage = {
+      ...page,
+      nodes: [...page.nodes, ...generatedNodes],
+      nodeCount: page.nodes.length + generatedNodes.length,
+      schemaLoaded: true
+    };
+    const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+    return {
+      ok: true,
+      message: `已在当前画布「${page.name}」右侧追加 ${generatedFrameIds.length} 个 UI 画板，顶对齐，水平间距 ${gap}px。`,
+      file: nextFile,
+      page: nextPage,
+      selectedPageId: nextPage.id,
+      data: {
+        pageId: nextPage.id,
+        generatedFrameIds,
+        generatedCount: generatedFrameIds.length,
+        placement,
+        schemaDraft: {
+          schemaVersion: schemaDraft.schemaVersion,
+          intent: schemaDraft.intent,
+          platform: schemaDraft.platform,
+          artboards: schemaDraft.artboards.map((artboard) => ({ refId: artboard.refId, name: artboard.name, nodeCount: artboard.nodes.length }))
+        }
+      }
+    };
+  }
+
+  private async criticReview(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const file = await this.getFile(projectId);
+    const userRequest = String(input.userRequest ?? "");
+    const requiredTopics = inferRequiredTopics(userRequest);
+    const requestedPageIds = Array.isArray(input.pageIds) ? input.pageIds.map(String) : [];
+    const generatedFrameIds = Array.isArray(input.generatedFrameIds) ? input.generatedFrameIds.map(String).filter(Boolean) : [];
+    const candidatePageIds = requestedPageIds.length > 0 ? requestedPageIds : selectedPageId ? [selectedPageId] : file.pages
+      .filter((page) => requiredTopics.length === 0 || requiredTopics.some((topic) => page.name.includes(topic)))
+      .map((page) => page.id);
+    const pageIds = candidatePageIds.length > 0 ? candidatePageIds : file.pages.map((page) => page.id);
+    const pages = await Promise.all(pageIds.map((pageId) => this.repository.getDesignPage(projectId, pageId).catch(() => null)));
+    const existingPages = pages.filter((page): page is WorkspaceDesignPage => Boolean(page));
+    const scopedNodesByPage = existingPages.map((page) => {
+      if (generatedFrameIds.length === 0) return { page, nodes: page.nodes };
+      const scopeIds = new Set<string>();
+      generatedFrameIds.forEach((frameId) => {
+        if (page.nodes.some((node) => node.id === frameId)) {
+          scopeIds.add(frameId);
+          collectDescendantNodeIds(page.nodes, frameId).forEach((id) => scopeIds.add(id));
+        }
+      });
+      return {
+        page,
+        nodes: scopeIds.size > 0 ? page.nodes.filter((node) => scopeIds.has(node.id)) : page.nodes
+      };
+    });
+    const generatedText = scopedNodesByPage.map(({ page, nodes }) => `${page.name} ${nodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" ")}`).join(" ");
+    const coverage = Object.fromEntries(requiredTopics.map((topic) => [topic, generatedText.includes(topic) ? "covered" : "missing"]));
+    const irrelevantContent = ["订单", "商品列表", "搜索筛选区"].filter((topic) => !userRequest.includes(topic) && generatedText.includes(topic));
+    const missing = Object.entries(coverage).filter(([, status]) => status === "missing").map(([topic]) => topic);
+    return {
+      ok: missing.length === 0 && irrelevantContent.length === 0,
+      message: missing.length === 0 && irrelevantContent.length === 0
+        ? "Critic Agent 审核通过：需求覆盖和无关内容检查通过。"
+        : [
+          `Critic Agent 发现 ${missing.length} 个缺失主题、${irrelevantContent.length} 个无关内容。`,
+          missing.length > 0 ? `缺失主题：${missing.join("、")}` : "",
+          irrelevantContent.length > 0 ? `无关内容：${irrelevantContent.join("、")}` : "",
+          generatedFrameIds.length > 0 ? `审查范围：本次生成的 ${generatedFrameIds.length} 个画板。` : `审查范围：${pageIds.length} 个页面。`
+        ].filter(Boolean).join("\n"),
+      file,
+      page: existingPages[0],
+      selectedPageId: existingPages[0]?.id,
+      data: {
+        reviewScope: {
+          pageIds,
+          generatedFrameIds,
+          scopedNodeCount: scopedNodesByPage.reduce((sum, item) => sum + item.nodes.length, 0)
+        },
+        requirementCoverage: coverage,
+        missingTopics: missing,
+        irrelevantContent,
+        decision: missing.length === 0 && irrelevantContent.length === 0 ? "passed" : "needs_fix"
+      }
+    };
   }
 
   private async listPages(projectId: string): Promise<DesignAgentToolResult> {
@@ -346,6 +708,205 @@ export class DesignAgentToolService {
     return { ok: true, message: `已复制页面「${page.name}」。`, file: nextFile, page: nextPage, selectedPageId: nextPage.id };
   }
 
+  private async analyzePageStructure(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可分析的页面。", file };
+    const structure = analyzePageSemantics(page, String(input.userRequest ?? ""));
+    return {
+      ok: true,
+      message: `已分析页面「${page.name}」：${structure.pageType}，识别到 ${structure.mainRegions.length} 个主要区域。`,
+      file,
+      page,
+      selectedPageId: page.id,
+      data: structure
+    };
+  }
+
+  private async reviewProductRequirements(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可做业务审核的页面。", file };
+    const structure = analyzePageSemantics(page, String(input.userRequest ?? ""));
+    const table = structure.mainRegions.find((region) => region.type === "table");
+    if (!table) {
+      return {
+        ok: false,
+        message: `产品 Agent 判断：当前页面「${page.name}」不是列表/表格页，不能臆测为订单列表页，也不应直接添加列表搜索条件。`,
+        file,
+        page,
+        selectedPageId: page.id,
+        data: {
+          pageType: structure.pageType,
+          businessEntity: null,
+          recommendedFilters: [],
+          decision: "not_applicable",
+          reason: "未识别到主表格或列表区域，需要用户指定要修改的区域，或先生成/选择列表页。"
+        }
+      };
+    }
+    const entity = table?.businessEntity ?? inferBusinessEntity(page, String(input.userRequest ?? ""));
+    const filters = buildRecommendedFilters(entity, table?.columns ?? []);
+    return {
+      ok: true,
+      message: `产品 Agent 已建议 ${filters.length} 个搜索条件，适合 ${entity} 列表页。`,
+      file,
+      page,
+      selectedPageId: page.id,
+      data: {
+        pageType: structure.pageType,
+        businessEntity: entity,
+        recommendedFilters: filters,
+        actions: ["查询", "重置"],
+        businessReview: `符合${entity}列表页常见检索逻辑。`
+      }
+    };
+  }
+
+  private async insertAbove(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可插入布局的页面。", file };
+    const structure = analyzePageSemantics(page, String(input.userRequest ?? ""));
+    const targetNodeId = typeof input.targetNodeId === "string" ? input.targetNodeId : structure.recommendedInsertionPoints[0]?.beforeNodeId;
+    const fallbackMode = typeof input.fallbackMode === "string" ? input.fallbackMode : "";
+    const target = targetNodeId
+      ? page.nodes.find((node) => node.id === targetNodeId)
+      : fallbackMode ? findFallbackInsertionTarget(page, fallbackMode) : undefined;
+    if (!target) {
+      return {
+        ok: false,
+        message: fallbackMode
+          ? `没有找到可插入前置内容的目标节点，fallbackMode=${fallbackMode} 也未找到安全插入点。`
+          : "没有找到可插入前置内容的目标节点。建议先使用 page.analyze_structure 确认主表格或内容区。",
+        file,
+        page,
+        selectedPageId: page.id
+      };
+    }
+    const spacing = numberOr(input.spacing, 16);
+    const height = numberOr(input.height, 96);
+    const filters = parseFilterInputs(input.filters, buildRecommendedFilters(structure.recommendedInsertionPoints[0]?.businessEntity ?? inferBusinessEntity(page, ""), []));
+    const insertNodes = createFilterBarNodes({
+      x: target.x,
+      y: target.y,
+      width: Math.max(target.width, 720),
+      height,
+      filters
+    });
+    const shiftY = height + spacing;
+    const insertIds = new Set(insertNodes.map((node) => node.id));
+    const shiftedNodes = page.nodes.map((node) => {
+      if (node.y >= target.y && !insertIds.has(node.id)) {
+        return { ...node, y: node.y + shiftY };
+      }
+      return node;
+    });
+    const nextPage = {
+      ...page,
+      nodes: [...shiftedNodes, ...insertNodes],
+      nodeCount: shiftedNodes.length + insertNodes.length,
+      schemaLoaded: true
+    };
+    const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+    return {
+      ok: true,
+      message: `已在「${target.name}」上方新增搜索条件区域，并将下方内容下移 ${shiftY}px。`,
+      file: nextFile,
+      page: nextPage,
+      selectedPageId: nextPage.id,
+      data: {
+        insertedNodeIds: insertNodes.map((node) => node.id),
+        targetNodeId: target.id,
+        shiftedBy: shiftY,
+        filters
+      }
+    };
+  }
+
+  private async planInsert(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可规划插入的页面。", file };
+    const userRequest = String(input.userRequest ?? "");
+    const structure = analyzePageSemantics(page, userRequest);
+    const insertionPoint = structure.recommendedInsertionPoints[0];
+    const target = insertionPoint?.beforeNodeId ? page.nodes.find((node) => node.id === insertionPoint.beforeNodeId) : undefined;
+    const filters = buildRecommendedFilters(insertionPoint?.businessEntity ?? inferBusinessEntity(page, userRequest), target ? parseTableColumnsFromNode(target) : []);
+    return {
+      ok: Boolean(insertionPoint),
+      message: insertionPoint
+        ? `已规划插入点：在「${target?.name ?? insertionPoint.beforeNodeId}」上方新增${input.insertKind ?? "内容"}。`
+        : "没有找到可靠插入点，建议先创建或定位主内容区。",
+      file,
+      page,
+      selectedPageId: page.id,
+      data: {
+        pageType: structure.pageType,
+        insertionPoint,
+        targetNode: target ? summarizeNode(target) : undefined,
+        layoutStrategy: insertionPoint ? {
+          tool: "layout.insert_above",
+          input: {
+            targetNodeId: insertionPoint.beforeNodeId,
+            insertKind: input.insertKind ?? "filter_bar",
+            spacing: 16,
+            height: 96,
+            filters
+          }
+        } : undefined,
+        fallbackStrategy: insertionPoint ? {
+          tool: "schema.insert_before",
+          input: {
+            targetNodeId: insertionPoint.beforeNodeId,
+            spacing: 16,
+            autoLayout: true
+          }
+        } : undefined
+      }
+    };
+  }
+
+  private async reflowLayout(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可重排的页面。", file };
+    const spacing = numberOr(input.spacing, 16);
+    const nextNodes = reflowOverlappingNodes(page.nodes, spacing);
+    const movedCount = nextNodes.filter((node, index) => node.y !== page.nodes[index]?.y).length;
+    const nextPage = { ...page, nodes: nextNodes, nodeCount: nextNodes.length, schemaLoaded: true };
+    const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+    return {
+      ok: true,
+      message: movedCount > 0 ? `已完成布局重排，调整 ${movedCount} 个节点。` : "布局重排完成，未发现需要移动的明显重叠节点。",
+      file: nextFile,
+      page: nextPage,
+      selectedPageId: nextPage.id,
+      data: { movedCount }
+    };
+  }
+
+  private async updateSpacing(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可调整间距的页面。", file };
+    const nodeId = typeof input.nodeId === "string" ? input.nodeId : "";
+    const target = page.nodes.find((node) => node.id === nodeId);
+    if (!target) return { ok: false, message: "没有找到要调整间距的节点。", file, page, selectedPageId: page.id };
+    const marginBottom = numberOr(input.marginBottom, 16);
+    const desiredNextY = target.y + target.height + marginBottom;
+    const nextNodes = page.nodes.map((node) => {
+      if (node.id === target.id || node.parentId !== target.parentId || node.y < target.y + target.height) return node;
+      const delta = Math.max(0, desiredNextY - node.y);
+      return delta > 0 ? { ...node, y: node.y + delta } : node;
+    });
+    const movedCount = nextNodes.filter((node, index) => node.y !== page.nodes[index]?.y).length;
+    const nextPage = { ...page, nodes: nextNodes, nodeCount: nextNodes.length, schemaLoaded: true };
+    const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+    return {
+      ok: true,
+      message: movedCount > 0 ? `已将「${target.name}」下方间距调整为至少 ${marginBottom}px。` : `「${target.name}」下方间距已满足 ${marginBottom}px。`,
+      file: nextFile,
+      page: nextPage,
+      selectedPageId: nextPage.id,
+      data: { nodeId: target.id, movedCount, marginBottom }
+    };
+  }
+
   private async validateSchema(projectId: string, pageId?: string): Promise<DesignAgentToolResult> {
     const { file, page } = await this.getFileAndPage(projectId, pageId);
     if (!page) return { ok: false, message: "当前没有可校验的页面。", file };
@@ -384,6 +945,49 @@ export class DesignAgentToolService {
           text: node.text
         }))
       }
+    };
+  }
+
+  private async findNodesBySemantic(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可查询的页面。", file };
+    const semantic = String(input.semantic ?? "");
+    const structure = analyzePageSemantics(page, String(input.userRequest ?? ""));
+    const regionMatches = structure.mainRegions.filter((region) => region.type === semantic);
+    const nodes = regionMatches
+      .map((region) => page.nodes.find((node) => node.id === region.nodeId))
+      .filter((node): node is WorkspaceDesignNode => Boolean(node));
+    const fallbackNodes = semantic === "main_content"
+      ? findMainContentCandidates(page)
+      : [];
+    const matches = nodes.length > 0 ? nodes : fallbackNodes;
+    return {
+      ok: true,
+      message: `按语义「${semantic || "未指定"}」找到 ${matches.length} 个候选节点。`,
+      file,
+      page,
+      selectedPageId: page.id,
+      data: {
+        semantic,
+        nodes: matches.map(summarizeNode),
+        structure
+      }
+    };
+  }
+
+  private async getNodeTree(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可读取节点树的页面。", file };
+    const rootNodeId = typeof input.rootNodeId === "string" ? input.rootNodeId : undefined;
+    const root = rootNodeId ? page.nodes.find((node) => node.id === rootNodeId) : undefined;
+    const tree = root ? buildNodeTree(page.nodes, root.id) : page.nodes.filter((node) => !node.parentId).map((node) => buildNodeTree(page.nodes, node.id));
+    return {
+      ok: true,
+      message: root ? `已读取节点「${root.name}」的子树。` : `已读取页面「${page.name}」节点树。`,
+      file,
+      page,
+      selectedPageId: page.id,
+      data: { tree }
     };
   }
 
@@ -464,10 +1068,64 @@ export class DesignAgentToolService {
     const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
     if (!page) return { ok: false, message: "当前没有可修改的页面。", file };
     const nodes = parseNodeInputs(input.nodes);
+    if (isBeforePosition(input.position)) {
+      return this.insertBefore(projectId, {
+        pageId: input.pageId,
+        targetNodeId: input.position.targetNodeId,
+        nodes,
+        autoLayout: input.autoLayout
+      }, selectedPageId);
+    }
     const nextPage = { ...page, nodes: [...page.nodes, ...autoPlaceNodes(page, nodes)], schemaLoaded: true };
     nextPage.nodeCount = nextPage.nodes.length;
     const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
     return { ok: true, message: `已向页面「${page.name}」新增 ${nodes.length} 个节点。`, file: nextFile, page: nextPage, selectedPageId: nextPage.id };
+  }
+
+  private async addChild(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可修改的页面。", file };
+    const parentNodeId = typeof input.parentNodeId === "string" ? input.parentNodeId : "";
+    const parent = page.nodes.find((node) => node.id === parentNodeId);
+    if (!parent) return { ok: false, message: "没有找到可追加子节点的父节点。", file, page, selectedPageId: page.id };
+    const nodes = parseNodeInputs(input.nodes).map((node, index) => ({
+      ...node,
+      parentId: parent.id,
+      x: node.x || parent.x + 20 + index * 176,
+      y: node.y || parent.y + Math.max(20, parent.height - node.height - 16)
+    }));
+    const nextPage = { ...page, nodes: [...page.nodes, ...nodes], nodeCount: page.nodes.length + nodes.length, schemaLoaded: true };
+    const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+    return { ok: true, message: `已向「${parent.name}」追加 ${nodes.length} 个子节点。`, file: nextFile, page: nextPage, selectedPageId: nextPage.id };
+  }
+
+  private async insertBefore(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可插入节点的页面。", file };
+    const targetNodeId = typeof input.targetNodeId === "string" ? input.targetNodeId : "";
+    const target = page.nodes.find((node) => node.id === targetNodeId);
+    if (!target) return { ok: false, message: "没有找到插入目标节点。", file, page, selectedPageId: page.id };
+    const spacing = numberOr(input.spacing, 16);
+    const nodes = parseNodeInputs(input.nodes);
+    const prepared = placeNodesBeforeTarget(nodes, target, spacing);
+    const insertedHeight = getNodesHeight(prepared);
+    const shiftY = input.autoLayout === false ? 0 : insertedHeight + spacing;
+    const nextNodes = page.nodes.map((node) => {
+      if (shiftY > 0 && node.y >= target.y && node.parentId === target.parentId) {
+        return { ...node, y: node.y + shiftY };
+      }
+      return node;
+    });
+    const nextPage = { ...page, nodes: [...nextNodes, ...prepared], nodeCount: nextNodes.length + prepared.length, schemaLoaded: true };
+    const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+    return {
+      ok: true,
+      message: `已在「${target.name}」前插入 ${prepared.length} 个节点${shiftY > 0 ? `，并下移同级内容 ${shiftY}px` : ""}。`,
+      file: nextFile,
+      page: nextPage,
+      selectedPageId: nextPage.id,
+      data: { targetNodeId: target.id, insertedNodeIds: prepared.map((node) => node.id), shiftedBy: shiftY }
+    };
   }
 
   private async updateNode(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
@@ -530,14 +1188,34 @@ export class DesignAgentToolService {
   private async captureCanvas(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
     const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
     if (!page) return { ok: false, message: "当前没有可截图的页面。", file };
-    const node = input.nodeId ? page.nodes.find((item) => item.id === input.nodeId) : undefined;
+    const nodeIds = Array.isArray(input.nodeIds) ? input.nodeIds.map(String) : [];
+    const mode = String(input.mode ?? "");
+    const limit = Math.max(1, Math.min(12, numberOr(input.limit, 6)));
+    const explicitNodes = [
+      ...nodeIds.map((nodeId) => page.nodes.find((item) => item.id === nodeId)).filter((node): node is WorkspaceDesignNode => Boolean(node)),
+      input.nodeId ? page.nodes.find((item) => item.id === input.nodeId) : undefined
+    ].filter((node): node is WorkspaceDesignNode => Boolean(node));
+    const captureTargets = explicitNodes.length > 0
+      ? explicitNodes
+      : mode === "rightmost_artboards"
+        ? getTopLevelArtboards(page).sort((a, b) => b.x - a.x).slice(0, limit).reverse()
+        : getTopLevelArtboards(page).slice(0, limit);
+    const previews = captureTargets.map((target) => ({
+      nodeId: target.id,
+      label: target.name,
+      width: target.width,
+      height: target.height,
+      dataUrl: buildNodePreviewSvgDataUrl(page, target)
+    }));
     return {
       ok: true,
-      message: "当前版本返回 schema 摘要，真实截图识别会在后续接入。",
+      message: previews.length > 0
+        ? `已生成 ${previews.length} 张画板预览，请在聊天框中逐页确认。`
+        : "当前画布没有可预览的顶层画板。",
       file,
       page,
       selectedPageId: page.id,
-      data: { page: summarizePage(page), node }
+      data: { page: summarizePage(page), previews }
     };
   }
 
@@ -555,13 +1233,112 @@ export class DesignAgentToolService {
     };
   }
 
+  private async reviewDesign(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可做 UI 审核的页面。", file };
+    const request = String(input.userRequest ?? "");
+    const structure = analyzePageSemantics(page, request);
+    const issues: Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> = [];
+    const hasSearchIntent = /(列表|表格|table|list).*(搜索|筛选|查询|filter|search|query)|(搜索|筛选|查询|filter|search|query).*(列表|表格|table|list)/i.test(request);
+    const filterRegion = structure.mainRegions.find((region) => region.type === "filter_bar");
+    const tableRegion = structure.mainRegions.find((region) => region.type === "table");
+    if (hasSearchIntent && !filterRegion) {
+      issues.push({
+        level: "blocking",
+        message: "用户要求添加搜索条件，但页面没有识别到搜索/筛选区域。",
+        suggestedFix: { tool: "layout.insert_above", input: { insertKind: "filter_bar" } }
+      });
+    }
+    if (filterRegion && tableRegion && filterRegion.bbox.y >= tableRegion.bbox.y) {
+      issues.push({
+        level: "blocking",
+        message: "搜索区没有位于表格上方。",
+        suggestedFix: { tool: "layout.insert_above", input: { targetNodeId: tableRegion.nodeId, insertKind: "filter_bar" } }
+      });
+    }
+    const overlaps = detectMeaningfulOverlaps(page.nodes);
+    if (overlaps.length > 0) {
+      issues.push({
+        level: "warning",
+        message: `检测到 ${overlaps.length} 处可能遮挡或重叠。`,
+        suggestedFix: { tool: "layout.reflow", input: { spacing: 16 } }
+      });
+    }
+    const frameIssues = reviewArtboardLayout(page);
+    issues.push(...frameIssues);
+    const blockingCount = issues.filter((issue) => issue.level === "blocking").length;
+    return {
+      ok: blockingCount === 0,
+      message: blockingCount === 0
+        ? `UI Agent 审核通过：已检查 ${getTopLevelArtboards(page).length} 个画板，没有发现阻塞问题。`
+        : `UI Agent 审核发现 ${blockingCount} 个阻塞问题。`,
+      file,
+      page,
+      selectedPageId: page.id,
+      data: {
+        passed: blockingCount === 0,
+        issues,
+        structure,
+        designRules: getDesignReviewRules()
+      }
+    };
+  }
+
+  private async getRecentMessages(projectId: string, conversationId?: string, limit?: number): Promise<DesignAgentToolResult> {
+    if (!conversationId) return { ok: false, message: "缺少 conversationId，无法查询最近会话。" };
+    const messages = await this.repository.listAgentMessages({ projectId, conversationId, limit: limit ?? 20 });
+    return {
+      ok: true,
+      message: `已读取最近 ${messages.length} 条会话记录。`,
+      data: { messages }
+    };
+  }
+
+  private async searchMessages(projectId: string, input: { conversationId?: string; keyword?: string; limit?: number }): Promise<DesignAgentToolResult> {
+    if (!input.keyword?.trim()) return { ok: false, message: "缺少搜索关键词。" };
+    const messages = await this.repository.searchAgentMessages({
+      projectId,
+      conversationId: input.conversationId,
+      keyword: input.keyword.trim(),
+      limit: input.limit ?? 10
+    });
+    return {
+      ok: true,
+      message: `已搜索到 ${messages.length} 条相关会话记录。`,
+      data: { messages }
+    };
+  }
+
+  private async getToolHistory(projectId: string, conversationId?: string, toolName?: string, limit?: number): Promise<DesignAgentToolResult> {
+    if (!conversationId) return { ok: false, message: "缺少 conversationId，无法查询工具历史。" };
+    const toolCalls = await this.repository.listAgentToolCalls({ projectId, conversationId, toolName, limit: limit ?? 20 });
+    return {
+      ok: true,
+      message: `已读取 ${toolCalls.length} 条工具调用历史。`,
+      data: { toolCalls }
+    };
+  }
+
+  private async getLastFailedStep(projectId: string, conversationId?: string): Promise<DesignAgentToolResult> {
+    if (!conversationId) return { ok: false, message: "缺少 conversationId，无法查询失败步骤。" };
+    const toolCalls = await this.repository.listAgentToolCalls({ projectId, conversationId, limit: 50 });
+    const failed = toolCalls.find((call) => call.status === "failed");
+    return {
+      ok: true,
+      message: failed ? `最近失败工具是 ${failed.toolName}。` : "当前会话没有失败工具调用。",
+      data: { failed }
+    };
+  }
+
   private async getFile(projectId: string) {
     return this.repository.getDesignFile(projectId);
   }
 
   private async getFileAndPage(projectId: string, pageId?: string) {
     const file = await this.getFile(projectId);
-    const pageMeta = file.pages.find((page) => page.id === pageId) ?? file.pages[0];
+    const pageMeta = pageId
+      ? file.pages.find((page) => page.id === pageId)
+      : file.pages[0];
     const page = pageMeta ? await this.repository.getDesignPage(projectId, pageMeta.id).catch(() => pageMeta) : undefined;
     return { file, page };
   }
@@ -576,6 +1353,524 @@ export class DesignAgentToolService {
 function parseNodeInputs(value: unknown): WorkspaceDesignNode[] {
   const nodes = Array.isArray(value) ? value : [];
   return nodes.map((item) => createDesignNode(nodeTypeSchema.parse((item as { type?: unknown }).type), designNodeInputSchema.parse(item)));
+}
+
+function parseUiRequirement(userRequest: string) {
+  const features: Array<{ name: string; type: string; priority: "high" | "medium" | "low"; entities: string[] }> = [];
+  const addFeature = (name: string, type: string, entities: string[], priority: "high" | "medium" | "low" = "high") => {
+    if (!features.some((feature) => feature.type === type)) {
+      features.push({ name, type, priority, entities });
+    }
+  };
+  if (/手机|手机号|验证码|登录|注册/.test(userRequest)) {
+    addFeature("手机号验证码登录/注册", "auth_phone", ["手机号", "验证码", "登录", "注册"]);
+  }
+  if (/微信|支付宝|快捷登录|第三方|绑定/.test(userRequest)) {
+    addFeature("第三方快捷登录与账号绑定", "auth_binding", ["微信", "支付宝", "绑定账号"]);
+  }
+  if (/个人信息|资料|头像|昵称|生日|性别/.test(userRequest)) {
+    addFeature("个人信息管理", "profile", ["头像", "昵称", "手机号", "性别", "生日"]);
+  }
+  if (/实名|身份证|人脸/.test(userRequest)) {
+    addFeature("实名认证", "identity_verification", ["身份证", "人脸识别", "账号安全"], "medium");
+  }
+  if (/地址|地图|选址/.test(userRequest)) {
+    addFeature("地址管理", "address", ["地址添加", "编辑", "删除", "地图选址"]);
+  }
+  if (/产品|商品|详情页|详情|sku|规格|价格|库存|评价/.test(userRequest)) {
+    addFeature("产品详情展示", "product_detail", ["产品图片", "产品标题", "价格", "规格", "库存", "评价", "购买操作"]);
+  }
+  if (features.length === 0) {
+    addFeature("核心功能", "generic", ["入口", "详情", "状态"]);
+  }
+  return {
+    module: /产品|商品|sku|规格|价格|库存/.test(userRequest)
+      ? "商品产品模块"
+      : /用户|登录|注册|个人|实名|地址/.test(userRequest) ? "用户基础模块" : "业务模块",
+    platform: /app|移动|手机|手机号/.test(userRequest.toLowerCase()) ? "mobile_app" : "web",
+    features,
+    nonFunctionalRequirements: inferNonFunctionalRequirements(userRequest),
+    interfaceRequirements: inferInterfaceRequirements(userRequest),
+    interactionRequirements: inferInteractionRequirements(userRequest)
+  };
+}
+
+function inferNonFunctionalRequirements(userRequest: string) {
+  const items = ["信息结构清晰，核心路径不超过 3 步", "状态反馈完整，包含默认、加载、空、错误、成功状态"];
+  if (/实名|身份证|人脸|手机号|登录|注册|账号/.test(userRequest)) {
+    items.push("涉及账号与身份信息时必须强调安全、隐私和异常兜底");
+  }
+  if (/团队|协作|项目|任务/.test(userRequest)) {
+    items.push("多人协作场景需要体现权限、变更记录和通知提醒");
+  }
+  return items;
+}
+
+function inferInterfaceRequirements(userRequest: string) {
+  const platform = /app|移动|手机|手机号/.test(userRequest.toLowerCase()) ? "mobile_app" : "web";
+  const items = platform === "mobile_app"
+    ? ["移动端画板基准 750px 设计稿 / 375px 逻辑宽度", "主要操作按钮靠近底部安全区，输入表单保持单列布局"]
+    : ["PC 端以 1920px 宽屏为设计基准，内容区建议 1440px 画板", "顶部导航、左侧导航、内容卡片和表格区域需要清晰分层"];
+  if (/地图|地址|选址/.test(userRequest)) {
+    items.push("地图选址需要明确搜索入口、定位状态、地址卡片和确认按钮");
+  }
+  return items;
+}
+
+function inferInteractionRequirements(userRequest: string) {
+  const items = ["每个页面要有明确主行动、返回/取消路径和异常提示"];
+  if (/验证码|登录|注册/.test(userRequest)) {
+    items.push("验证码需要倒计时、重发、错误提示和登录成功反馈");
+  }
+  if (/上传|身份证|人脸/.test(userRequest)) {
+    items.push("上传流程需要支持重新上传、识别中、失败重试和隐私说明");
+  }
+  if (/编辑|删除|添加|管理/.test(userRequest)) {
+    items.push("列表/表单操作需要二次确认、保存反馈和空状态引导");
+  }
+  return items;
+}
+
+function generateUiFlowPlan(parsedRequirement: Record<string, unknown>) {
+  const features = Array.isArray(parsedRequirement.features) ? parsedRequirement.features as Array<Record<string, unknown>> : [];
+  const pages: Array<{ id: string; name: string; sourceFeature: string; state?: string }> = [];
+  const flows: Array<{ name: string; steps: string[] }> = [];
+  const addPage = (id: string, name: string, sourceFeature: string, state?: string) => {
+    if (!pages.some((page) => page.id === id)) pages.push({ id, name, sourceFeature, state });
+  };
+  features.forEach((feature) => {
+    const type = String(feature.type ?? "");
+    const name = String(feature.name ?? "功能");
+    if (type === "auth_phone") {
+      addPage("login", "登录/注册页", name);
+      addPage("verify_code", "验证码输入页", name);
+      addPage("auth_success", "登录成功页", name, "success");
+      flows.push({ name: "手机号登录注册流程", steps: ["login", "verify_code", "auth_success"] });
+    } else if (type === "auth_binding") {
+      addPage("third_party_bind", "第三方账号绑定页", name);
+      flows.push({ name: "第三方登录绑定流程", steps: ["login", "third_party_bind", "auth_success"] });
+    } else if (type === "profile") {
+      addPage("profile", "个人信息页", name);
+      addPage("profile_edit", "编辑个人资料页", name);
+      flows.push({ name: "个人信息完善流程", steps: ["profile", "profile_edit", "profile"] });
+    } else if (type === "identity_verification") {
+      addPage("identity", "实名认证页", name);
+      addPage("id_card_upload", "身份证上传页", name);
+      addPage("face_verify", "人脸识别引导页", name);
+      addPage("identity_success", "实名认证成功页", name, "success");
+      flows.push({ name: "实名认证流程", steps: ["profile", "identity", "id_card_upload", "face_verify", "identity_success"] });
+    } else if (type === "address") {
+      addPage("address_list", "地址管理页", name);
+      addPage("address_edit", "新增/编辑地址页", name);
+      addPage("map_pick", "地图搜索选址页", name);
+      addPage("address_empty", "地址空状态页", name, "empty");
+      flows.push({ name: "地址新增编辑流程", steps: ["address_list", "address_edit", "map_pick", "address_edit", "address_list"] });
+    } else if (type === "product_detail") {
+      addPage("product_detail", "产品详情页", name);
+      flows.push({ name: "产品详情浏览与转化流程", steps: ["product_detail"] });
+    } else {
+      addPage("home", "功能入口页", name);
+      addPage("detail", "功能详情页", name);
+      flows.push({ name: `${name}流程`, steps: ["home", "detail"] });
+    }
+  });
+  return {
+    taskType: "create_new_ui",
+    module: String(parsedRequirement.module ?? "业务模块"),
+    platform: String(parsedRequirement.platform ?? "mobile_app"),
+    pages,
+    flows,
+    states: ["default", "loading", "empty", "error", "success", "disabled"]
+  };
+}
+
+function createUiPagesFromFlowPlan(flowPlan: Record<string, unknown>, userRequest: string): WorkspaceDesignPage[] {
+  const pages = Array.isArray(flowPlan.pages) ? flowPlan.pages as Array<Record<string, unknown>> : [];
+  const platform = String(flowPlan.platform ?? "mobile_app");
+  const canvas = platform === "mobile_app" ? { width: 375, height: 812 } : { width: 1440, height: 1024 };
+  return pages.slice(0, 14).map((pageInput, index) => {
+    const pageId = createDesignId("page");
+    const pageName = String(pageInput.name ?? `页面 ${index + 1}`);
+    const nodes = createSemanticPageNodes(pageName, String(pageInput.id ?? ""), userRequest, canvas, index);
+    return {
+      id: pageId,
+      name: pageName,
+      nodes,
+      nodeCount: nodes.length,
+      schemaLoaded: true
+    };
+  });
+}
+
+function createUiNodesFromFlowPlan(
+  flowPlan: Record<string, unknown>,
+  userRequest: string,
+  canvas: { width: number; height: number },
+  placement: { startX: number; topY: number; gap: number }
+) {
+  const pages = Array.isArray(flowPlan.pages) ? flowPlan.pages as Array<Record<string, unknown>> : [];
+  return pages.slice(0, 14).flatMap((pageInput, index) => {
+    const pageName = String(pageInput.name ?? `页面 ${index + 1}`);
+    const origin = {
+      x: placement.startX + index * (canvas.width + placement.gap),
+      y: placement.topY
+    };
+    return createSemanticPageNodes(pageName, String(pageInput.id ?? ""), userRequest, canvas, index, origin);
+  });
+}
+
+function createUiNodesFromSchemaDraft(schemaDraft: UiSchemaDraft, placement: { startX: number; topY: number; gap: number }) {
+  const nodes: WorkspaceDesignNode[] = [];
+  schemaDraft.artboards.forEach((artboard, index) => {
+    const originX = placement.startX + index * (artboard.width + placement.gap);
+    const originY = placement.topY;
+    const frameId = createDesignId("frame");
+    const refToNodeId = new Map<string, string>([[artboard.refId, frameId]]);
+    nodes.push(createDesignNode("frame", {
+      id: frameId,
+      name: `${artboard.name} 画板`,
+      x: originX,
+      y: originY,
+      width: artboard.width,
+      height: artboard.height,
+      fill: "#f7f8fb",
+      stroke: "#e4e7ec",
+      radius: artboard.width >= 900 ? 24 : 28
+    }));
+    artboard.nodes.forEach((draftNode) => {
+      refToNodeId.set(draftNode.refId, createDesignId("node"));
+    });
+    artboard.nodes.forEach((draftNode) => {
+      const nodeId = refToNodeId.get(draftNode.refId) ?? createDesignId("node");
+      const parentId = draftNode.parentRef ? refToNodeId.get(draftNode.parentRef) : frameId;
+      if (draftNode.type === "table") {
+        nodes.push(...createGranularTableNodesFromDraft(draftNode, {
+          nodeId,
+          parentId,
+          originX,
+          originY,
+          platform: schemaDraft.platform
+        }));
+        return;
+      }
+      const normalizedDraftNode = normalizeDraftNodeForRendering(draftNode);
+      nodes.push(createDesignNode(draftNode.type, {
+        ...normalizedDraftNode,
+        id: nodeId,
+        parentId,
+        x: originX + normalizedDraftNode.x,
+        y: originY + normalizedDraftNode.y,
+        width: normalizedDraftNode.width,
+        height: normalizedDraftNode.height,
+        visible: normalizedDraftNode.visible,
+        locked: normalizedDraftNode.locked
+      }));
+    });
+  });
+  return nodes;
+}
+
+function createSemanticPageNodes(
+  pageName: string,
+  pageKey: string,
+  userRequest: string,
+  canvas: { width: number; height: number },
+  index: number,
+  origin?: { x: number; y: number }
+) {
+  const originX = origin?.x ?? 520 + (index % 4) * (canvas.width + 56);
+  const originY = origin?.y ?? 220 + Math.floor(index / 4) * (canvas.height + 80);
+  const frameId = createDesignId("frame");
+  const nodes: WorkspaceDesignNode[] = [
+    createDesignNode("frame", {
+      id: frameId,
+      name: `${pageName} 画板`,
+      x: originX,
+      y: originY,
+      width: canvas.width,
+      height: canvas.height,
+      fill: "#f7f8fb",
+      stroke: "#e4e7ec",
+      radius: 28
+    }),
+    createDesignNode("text", {
+      parentId: frameId,
+      name: "页面标题",
+      x: originX + 24,
+      y: originY + 48,
+      width: canvas.width - 48,
+      height: 36,
+      text: pageName,
+      fontSize: 24,
+      textColor: "#101828"
+    })
+  ];
+  const addInput = (label: string, y: number, placeholder = `请输入${label}`) => {
+    nodes.push(createDesignNode("text", {
+      parentId: frameId,
+      name: `${label}标签`,
+      x: originX + 24,
+      y,
+      width: canvas.width - 48,
+      height: 20,
+      text: label,
+      fontSize: 13,
+      textColor: "#475467"
+    }));
+    nodes.push(createDesignNode("input", {
+      parentId: frameId,
+      name: `${label}输入框`,
+      x: originX + 24,
+      y: y + 26,
+      width: canvas.width - 48,
+      height: 52,
+      text: placeholder,
+      radius: 14
+    }));
+  };
+  if (/login|verify|登录|注册|验证码/.test(pageKey + pageName)) {
+    addInput("手机号", originY + 132, "请输入手机号");
+    addInput("验证码", originY + 220, "请输入验证码");
+    nodes.push(createDesignNode("button", { parentId: frameId, name: "登录注册按钮", x: originX + 24, y: originY + 326, width: canvas.width - 48, height: 48, text: "登录 / 注册", radius: 16 }));
+    nodes.push(createDesignNode("text", { parentId: frameId, name: "第三方登录", x: originX + 24, y: originY + 430, width: canvas.width - 48, height: 28, text: userRequest.includes("微信") || userRequest.includes("支付宝") ? "微信 / 支付宝快捷登录" : "快捷登录", fontSize: 14, textColor: "#667085" }));
+  } else if (/bind|绑定/.test(pageKey + pageName)) {
+    nodes.push(createDesignNode("card", { parentId: frameId, name: "账号绑定卡片", x: originX + 24, y: originY + 132, width: canvas.width - 48, height: 180, text: "绑定微信或支付宝账号，保障账号安全" }));
+    nodes.push(createDesignNode("button", { parentId: frameId, name: "绑定按钮", x: originX + 24, y: originY + 344, width: canvas.width - 48, height: 48, text: "一键绑定", radius: 16 }));
+  } else if (/profile|个人|资料/.test(pageKey + pageName)) {
+    ["头像", "昵称", "手机号", "性别", "生日"].forEach((item, itemIndex) => {
+      nodes.push(createDesignNode("card", { parentId: frameId, name: `${item}信息项`, x: originX + 24, y: originY + 124 + itemIndex * 64, width: canvas.width - 48, height: 52, text: item, radius: 14 }));
+    });
+  } else if (/identity|实名|身份证|face/.test(pageKey + pageName)) {
+    nodes.push(createDesignNode("card", { parentId: frameId, name: "实名步骤卡片", x: originX + 24, y: originY + 132, width: canvas.width - 48, height: 220, text: "身份证上传 -> 人脸识别 -> 认证完成", radius: 18 }));
+    nodes.push(createDesignNode("button", { parentId: frameId, name: "开始认证按钮", x: originX + 24, y: originY + 388, width: canvas.width - 48, height: 48, text: "开始认证", radius: 16 }));
+  } else if (/address|地址|map|地图/.test(pageKey + pageName)) {
+    nodes.push(createDesignNode("card", { parentId: frameId, name: "地址卡片", x: originX + 24, y: originY + 124, width: canvas.width - 48, height: 104, text: "默认地址 / 收件人 / 手机号", radius: 16 }));
+    nodes.push(createDesignNode("button", { parentId: frameId, name: "新增地址按钮", x: originX + 24, y: originY + 260, width: canvas.width - 48, height: 48, text: "新增地址", radius: 16 }));
+    if (/map|地图/.test(pageKey + pageName)) {
+      nodes.push(createDesignNode("container", { parentId: frameId, name: "地图选址区域", x: originX + 24, y: originY + 124, width: canvas.width - 48, height: 320, fill: "#eaf2ff", stroke: "#b2ccff", radius: 18 }));
+    }
+  } else if (/product|商品|产品|详情/.test(pageKey + pageName)) {
+    if (canvas.width >= 900) {
+      nodes.push(createDesignNode("container", { parentId: frameId, name: "产品图片区", x: originX + 48, y: originY + 132, width: 520, height: 520, fill: "#eef2f7", stroke: "#d0d5dd", radius: 24, text: "产品主图" }));
+      nodes.push(createDesignNode("text", { parentId: frameId, name: "产品标题", x: originX + 620, y: originY + 132, width: 560, height: 44, text: "高端智能产品名称", fontSize: 28, textColor: "#101828" }));
+      nodes.push(createDesignNode("text", { parentId: frameId, name: "产品卖点", x: originX + 620, y: originY + 188, width: 620, height: 28, text: "一句话突出核心卖点、适用人群和差异化价值", fontSize: 15, textColor: "#667085" }));
+      nodes.push(createDesignNode("card", { parentId: frameId, name: "价格库存卡片", x: originX + 620, y: originY + 244, width: 620, height: 112, fill: "#fff7ed", stroke: "#fed7aa", radius: 18, text: "¥ 399.00 / 库存充足 / 限时优惠" }));
+      nodes.push(createDesignNode("card", { parentId: frameId, name: "规格选择区", x: originX + 620, y: originY + 384, width: 620, height: 156, fill: "#ffffff", stroke: "#e4e7ec", radius: 18, text: "颜色：曜石黑 / 冰川银；规格：标准版 / Pro 版" }));
+      nodes.push(createDesignNode("button", { parentId: frameId, name: "加入购物车按钮", x: originX + 620, y: originY + 572, width: 184, height: 52, text: "加入购物车", fill: "#101828", radius: 16 }));
+      nodes.push(createDesignNode("button", { parentId: frameId, name: "立即购买按钮", x: originX + 824, y: originY + 572, width: 184, height: 52, text: "立即购买", fill: "#246bfe", radius: 16 }));
+      nodes.push(createDesignNode("card", { parentId: frameId, name: "详情评价参数区", x: originX + 48, y: originY + 700, width: canvas.width - 96, height: 240, fill: "#ffffff", stroke: "#e4e7ec", radius: 20, text: "商品详情 / 参数规格 / 用户评价 / 售后保障" }));
+    } else {
+      nodes.push(createDesignNode("container", { parentId: frameId, name: "产品主图", x: originX, y: originY + 104, width: canvas.width, height: 320, fill: "#eef2f7", stroke: "#d0d5dd", radius: 0, text: "产品主图" }));
+      nodes.push(createDesignNode("text", { parentId: frameId, name: "产品标题", x: originX + 24, y: originY + 452, width: canvas.width - 48, height: 36, text: "高端智能产品名称", fontSize: 22, textColor: "#101828" }));
+      nodes.push(createDesignNode("text", { parentId: frameId, name: "价格", x: originX + 24, y: originY + 500, width: canvas.width - 48, height: 36, text: "¥ 399.00", fontSize: 26, textColor: "#f04438" }));
+      nodes.push(createDesignNode("card", { parentId: frameId, name: "规格选择区", x: originX + 24, y: originY + 556, width: canvas.width - 48, height: 112, text: "已选：曜石黑 / Pro 版 / 1 件", radius: 16 }));
+      nodes.push(createDesignNode("card", { parentId: frameId, name: "详情评价区", x: originX + 24, y: originY + 692, width: canvas.width - 48, height: 72, text: "详情 / 参数 / 评价", radius: 16 }));
+      nodes.push(createDesignNode("button", { parentId: frameId, name: "底部购买按钮", x: originX + 24, y: originY + canvas.height - 76, width: canvas.width - 48, height: 52, text: "立即购买", fill: "#246bfe", radius: 18 }));
+    }
+  } else {
+    nodes.push(createDesignNode("card", { parentId: frameId, name: "内容区", x: originX + 24, y: originY + 132, width: canvas.width - 48, height: 280, text: pageName, radius: 18 }));
+  }
+  return nodes;
+}
+
+function normalizeDraftNodeForRendering(draftNode: z.infer<typeof uiSchemaDraftNodeSchema>) {
+  if (draftNode.type !== "text") {
+    return draftNode;
+  }
+  const text = String(draftNode.text ?? draftNode.name ?? "");
+  const fontSize = draftNode.fontSize ?? 14;
+  const charsPerLine = Math.max(6, Math.floor(draftNode.width / Math.max(8, fontSize)));
+  const estimatedLines = Math.max(1, Math.ceil(text.length / charsPerLine));
+  return {
+    ...draftNode,
+    height: Math.max(draftNode.height, Math.ceil(estimatedLines * fontSize * 1.55))
+  };
+}
+
+function createGranularTableNodesFromDraft(
+  draftNode: z.infer<typeof uiSchemaDraftNodeSchema>,
+  context: {
+    nodeId: string;
+    parentId?: string;
+    originX: number;
+    originY: number;
+    platform: "web" | "mobile_app";
+  }
+) {
+  const x = context.originX + draftNode.x;
+  const y = context.originY + draftNode.y;
+  const width = Math.max(160, draftNode.width);
+  const height = Math.max(120, draftNode.height);
+  const columns = inferColumns(`${draftNode.name} ${draftNode.text ?? ""}`).slice(0, context.platform === "mobile_app" ? 3 : 6);
+  const nodes: WorkspaceDesignNode[] = [
+    createDesignNode("container", {
+      id: context.nodeId,
+      parentId: context.parentId,
+      name: `${draftNode.name || "数据列表"}容器`,
+      x,
+      y,
+      width,
+      height,
+      fill: draftNode.fill ?? "#ffffff",
+      stroke: draftNode.stroke ?? "#e4e7ec",
+      strokeWidth: draftNode.strokeWidth ?? 1,
+      radius: draftNode.radius ?? 16
+    })
+  ];
+
+  if (context.platform === "mobile_app") {
+    const rowHeight = 76;
+    const rowGap = 10;
+    const visibleRows = Math.max(2, Math.min(4, Math.floor((height - 24) / (rowHeight + rowGap))));
+    Array.from({ length: visibleRows }).forEach((_, rowIndex) => {
+      const rowId = createDesignId("node");
+      const rowY = y + 12 + rowIndex * (rowHeight + rowGap);
+      nodes.push(createDesignNode("container", {
+        id: rowId,
+        parentId: context.nodeId,
+        name: `列表项 ${rowIndex + 1}`,
+        x: x + 12,
+        y: rowY,
+        width: width - 24,
+        height: rowHeight,
+        fill: "#ffffff",
+        stroke: "#eef0f4",
+        radius: 14
+      }));
+      columns.forEach((column, columnIndex) => {
+        nodes.push(createDesignNode("text", {
+          parentId: rowId,
+          name: `${column}文本`,
+          x: x + 28,
+          y: rowY + 14 + columnIndex * 21,
+          width: width - 56,
+          height: 20,
+          text: columnIndex === 0 ? `${column} ${rowIndex + 1}` : `${column}：${sampleTableCell(column, rowIndex)}`,
+          fontSize: columnIndex === 0 ? 14 : 12,
+          textColor: columnIndex === 0 ? "#101828" : "#667085"
+        }));
+      });
+    });
+    return nodes;
+  }
+
+  const headerHeight = 36;
+  const rowHeight = 38;
+  const columnWidth = Math.max(72, (width - 24) / columns.length);
+  columns.forEach((column, columnIndex) => {
+    nodes.push(createDesignNode("container", {
+      parentId: context.nodeId,
+      name: `${column}表头单元格`,
+      x: x + 12 + columnIndex * columnWidth,
+      y: y + 12,
+      width: columnWidth,
+      height: headerHeight,
+      fill: "#f2f4f7",
+      stroke: "#e4e7ec",
+      radius: columnIndex === 0 ? 8 : 0
+    }));
+    nodes.push(createDesignNode("text", {
+      parentId: context.nodeId,
+      name: `${column}表头文字`,
+      x: x + 24 + columnIndex * columnWidth,
+      y: y + 22,
+      width: columnWidth - 24,
+      height: 18,
+      text: column,
+      fontSize: 12,
+      textColor: "#344054"
+    }));
+  });
+  Array.from({ length: 3 }).forEach((_, rowIndex) => {
+    columns.forEach((column, columnIndex) => {
+      const cellX = x + 12 + columnIndex * columnWidth;
+      const cellY = y + 12 + headerHeight + rowIndex * rowHeight;
+      nodes.push(createDesignNode("container", {
+        parentId: context.nodeId,
+        name: `${column}单元格 ${rowIndex + 1}`,
+        x: cellX,
+        y: cellY,
+        width: columnWidth,
+        height: rowHeight,
+        fill: "#ffffff",
+        stroke: "#eef0f4",
+        radius: 0
+      }));
+      nodes.push(createDesignNode("text", {
+        parentId: context.nodeId,
+        name: `${column}单元格文字 ${rowIndex + 1}`,
+        x: cellX + 12,
+        y: cellY + 11,
+        width: columnWidth - 24,
+        height: 18,
+        text: sampleTableCell(column, rowIndex),
+        fontSize: 12,
+        textColor: "#475467"
+      }));
+    });
+  });
+  return nodes;
+}
+
+function sampleTableCell(column: string, rowIndex: number) {
+  if (/日期|时间|date|time/i.test(column)) return ["2026-05-05", "2026-05-03", "2026-05-01"][rowIndex] ?? "2026-05-01";
+  if (/状态|status/i.test(column)) return ["待处理", "已完成", "进行中"][rowIndex] ?? "待处理";
+  if (/金额|收入|收益|余额|price|amount/i.test(column)) return ["¥450.00", "¥128.00", "¥89.00"][rowIndex] ?? "¥0.00";
+  if (/姓名|用户|司机|name|user/i.test(column)) return ["方宝", "用户 2", "用户 3"][rowIndex] ?? `用户 ${rowIndex + 1}`;
+  return [`记录 ${rowIndex + 1}`, `内容 ${rowIndex + 1}`, `备注 ${rowIndex + 1}`][rowIndex] ?? `内容 ${rowIndex + 1}`;
+}
+
+function inferAssetRequests(userRequest: string) {
+  const requests: Array<Record<string, string>> = [];
+  if (/微信/.test(userRequest)) requests.push({ type: "icon", name: "wechat", usage: "third_party_login" });
+  if (/支付宝/.test(userRequest)) requests.push({ type: "icon", name: "alipay", usage: "third_party_login" });
+  if (/实名|身份证|人脸/.test(userRequest)) requests.push({ type: "illustration", name: "identity_security", usage: "identity_page" });
+  if (/地图|地址/.test(userRequest)) requests.push({ type: "icon", name: "map_pin", usage: "address_page" });
+  return requests;
+}
+
+function inferRequiredTopics(userRequest: string) {
+  return ["手机号", "验证码", "微信", "支付宝", "绑定", "个人信息", "实名认证", "地址", "地图"].filter((topic) => userRequest.includes(topic));
+}
+
+function formatRequirementParseMessage(parsed: ReturnType<typeof parseUiRequirement>) {
+  return [
+    `已解析需求：${parsed.module}，识别到 ${parsed.features.length} 个功能点。`,
+    parsed.features.length > 0 ? `功能点：${parsed.features.map((feature) => `${feature.name}(${feature.entities.join("、")})`).join("；")}` : "",
+    parsed.nonFunctionalRequirements.length > 0 ? `非功能要求：${parsed.nonFunctionalRequirements.join("；")}` : "",
+    parsed.interfaceRequirements.length > 0 ? `界面设计要求：${parsed.interfaceRequirements.join("；")}` : "",
+    parsed.interactionRequirements.length > 0 ? `交互要求：${parsed.interactionRequirements.join("；")}` : ""
+  ].filter(Boolean).join("\n");
+}
+
+function formatAssetResolveMessage(assets: Array<{ id: string; type: string; usage: string; source: string }>) {
+  if (assets.length === 0) {
+    return [
+      "素材 Agent 未识别到必须外部获取的素材。",
+      "本次会使用基础组件、系统图标占位和 CSS/SVG 自绘元素，避免随机素材影响 UI 一致性。"
+    ].join("\n");
+  }
+  return [
+    `素材 Agent 已解析 ${assets.length} 个素材需求。`,
+    `素材清单：${assets.map((asset) => `${asset.id}(${asset.type}，${asset.usage})`).join("、")}`,
+    "获取策略：优先使用本地组件库/内置 SVG 占位；外部素材必须走授权来源，不能随机抓图。"
+  ].join("\n");
+}
+
+function buildAssetStrategy(assets: Array<{ id: string; type: string; usage: string; source: string }>) {
+  return {
+    mode: assets.length > 0 ? "resolve_or_generate" : "self_draw",
+    rules: [
+      "优先使用基础组件和内置图标，保证可编辑、可复用。",
+      "插画类素材先生成占位容器和语义名称，后续可接图片生成或素材库替换。",
+      "外部素材必须记录来源和授权，不允许静默使用不明版权资源。"
+    ],
+    assets
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function createDesignNode(type: WorkspaceDesignNodeType, overrides: Partial<WorkspaceDesignNode> = {}): WorkspaceDesignNode {
@@ -706,6 +2001,28 @@ function findMenuLikeNode(page: WorkspaceDesignPage, position: "left" | "right")
   });
 }
 
+function findFallbackInsertionTarget(page: WorkspaceDesignPage, fallbackMode: string) {
+  const visibleNodes = page.nodes.filter((node) => node.visible !== false);
+  if (fallbackMode === "largest_table_or_list") {
+    return visibleNodes
+      .filter(isTableLikeNode)
+      .sort((a, b) => b.width * b.height - a.width * a.height)[0];
+  }
+  if (fallbackMode === "largest_content") {
+    return visibleNodes
+      .filter((node) => node.type !== "text" && node.type !== "button")
+      .sort((a, b) => b.width * b.height - a.width * a.height)[0];
+  }
+  if (fallbackMode === "first_frame_content") {
+    const frame = getTopLevelArtboards(page).filter((node) => node.id !== "page-preview-frame").sort((a, b) => a.x - b.x)[0];
+    if (!frame) return undefined;
+    return visibleNodes
+      .filter((node) => node.id !== frame.id && (node.parentId === frame.id || isNodeInsideTarget(node, frame)))
+      .sort((a, b) => a.y - b.y)[0] ?? frame;
+  }
+  return undefined;
+}
+
 function parseStringArray(value: unknown, fallback: string[]) {
   if (!Array.isArray(value)) return fallback;
   const items = value.map((item) => String(item).trim()).filter(Boolean);
@@ -771,6 +2088,68 @@ function summarizePage(page: WorkspaceDesignPage) {
   };
 }
 
+function summarizeNode(node: WorkspaceDesignNode) {
+  return {
+    id: node.id,
+    parentId: node.parentId,
+    type: node.type,
+    name: node.name,
+    x: node.x,
+    y: node.y,
+    width: node.width,
+    height: node.height,
+    text: node.text
+  };
+}
+
+function buildNodeTree(nodes: WorkspaceDesignNode[], nodeId: string): Record<string, unknown> {
+  const node = nodes.find((item) => item.id === nodeId);
+  if (!node) return {};
+  return {
+    ...summarizeNode(node),
+    children: nodes.filter((item) => item.parentId === node.id).map((child) => buildNodeTree(nodes, child.id))
+  };
+}
+
+function findMainContentCandidates(page: WorkspaceDesignPage) {
+  const bounds = getPageBounds(page);
+  return page.nodes
+    .filter((node) => node.visible !== false)
+    .filter((node) => node.type === "container" || node.type === "frame" || node.type === "card")
+    .filter((node) => node.width >= bounds.width * 0.45 && node.height >= 120)
+    .sort((a, b) => (b.width * b.height) - (a.width * a.height))
+    .slice(0, 5);
+}
+
+function isBeforePosition(value: unknown): value is { type: "before"; targetNodeId: string } {
+  return Boolean(value)
+    && typeof value === "object"
+    && (value as { type?: unknown }).type === "before"
+    && typeof (value as { targetNodeId?: unknown }).targetNodeId === "string";
+}
+
+function placeNodesBeforeTarget(nodes: WorkspaceDesignNode[], target: WorkspaceDesignNode, spacing: number) {
+  if (nodes.length === 0) return nodes;
+  const height = getNodesHeight(nodes);
+  const minX = Math.min(...nodes.map((node) => node.x));
+  const minY = Math.min(...nodes.map((node) => node.y));
+  const targetY = target.y - height - spacing;
+  return nodes.map((node) => ({
+    ...node,
+    parentId: node.parentId ?? target.parentId,
+    x: node.x ? target.x + (node.x - minX) : target.x,
+    y: node.y ? targetY + (node.y - minY) : targetY,
+    width: node.width || target.width
+  }));
+}
+
+function getNodesHeight(nodes: WorkspaceDesignNode[]) {
+  if (nodes.length === 0) return 0;
+  const minY = Math.min(...nodes.map((node) => node.y));
+  const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+  return maxY - minY;
+}
+
 function buildUiAnalysis(page: WorkspaceDesignPage, kind: "layout" | "spacing" | "color" | "typography" | "review") {
   const visibleNodes = page.nodes.filter((node) => node.visible !== false);
   const bounds = getPageBounds(page);
@@ -806,6 +2185,282 @@ function buildUiAnalysis(page: WorkspaceDesignPage, kind: "layout" | "spacing" |
     bounds,
     suggestions: sections
   };
+}
+
+function reviewArtboardLayout(page: WorkspaceDesignPage): Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> {
+  const artboards = getTopLevelArtboards(page).filter((node) => node.id !== "page-preview-frame");
+  const issues: Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> = [];
+  artboards.forEach((frame) => {
+    const children = page.nodes.filter((node) => node.parentId === frame.id || isNodeInsideTarget(node, frame)).filter((node) => node.id !== frame.id);
+    const clipped = children.filter((node) => (
+      node.x < frame.x ||
+      node.y < frame.y ||
+      node.x + node.width > frame.x + frame.width ||
+      node.y + node.height > frame.y + frame.height
+    ));
+    if (clipped.length > 0) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」存在 ${clipped.length} 个元素超出画板边界，可能被剪切显示不全。`,
+        suggestedFix: { tool: "layout.reflow", input: { pageId: page.id, spacing: 16 } }
+      });
+    }
+    const meaningfulChildren = children.filter((node) => node.visible !== false && node.type !== "text");
+    if (meaningfulChildren.length === 0) {
+      issues.push({
+        level: "warning",
+        message: `画板「${frame.name}」缺少可交互或内容组件，需要补充输入、按钮、卡片、列表或状态区。`
+      });
+    }
+    const primaryActions = children.filter((node) => node.type === "button");
+    if (primaryActions.length === 0) {
+      issues.push({
+        level: "warning",
+        message: `画板「${frame.name}」没有明确主操作按钮，用户可能不知道下一步做什么。`
+      });
+    }
+  });
+  return issues;
+}
+
+function getDesignReviewRules() {
+  return {
+    pc: {
+      designWidth: 1920,
+      artboardWidth: 1440,
+      layout: "顶部导航 / 左侧导航 / 内容区清晰分层，表格和表单不可互相遮挡。"
+    },
+    mobile: {
+      designWidth: 750,
+      logicalWidth: 375,
+      layout: "单列为主，底部主操作避开安全区，表单输入和错误反馈同屏可见。"
+    },
+    common: [
+      "新增画板顶对齐，横向间距默认 40px。",
+      "所有元素必须在所属画板内，禁止被剪切、遮挡或不可点击。",
+      "每个页面必须有页面标题、核心内容区、主行动和异常/空状态考虑。",
+      "涉及账号、实名、地址等敏感能力时，需要隐私、安全和失败重试说明。"
+    ]
+  };
+}
+
+function analyzePageSemantics(page: WorkspaceDesignPage, userRequest: string) {
+  const bounds = getPageBounds(page);
+  const tableNodes = page.nodes.filter(isTableLikeNode).sort((a, b) => (b.width * b.height) - (a.width * a.height));
+  const filterNodes = page.nodes.filter(isFilterLikeNode).sort((a, b) => a.y - b.y);
+  const entity = inferBusinessEntity(page, userRequest);
+  const mainRegions = [
+    ...findHeaderRegions(page),
+    ...filterNodes.map((node) => ({
+      type: "filter_bar" as const,
+      nodeId: node.id,
+      name: node.name,
+      exists: true,
+      bbox: nodeToBbox(node)
+    })),
+    ...tableNodes.map((node) => ({
+      type: "table" as const,
+      nodeId: node.id,
+      name: node.name,
+      businessEntity: entity,
+      bbox: nodeToBbox(node),
+      columns: parseTableColumnsFromNode(node)
+    }))
+  ];
+  const primaryTable = tableNodes[0];
+  return {
+    pageType: tableNodes.length > 0 ? `${entity}_list` : "unknown_page",
+    bounds,
+    mainRegions,
+    recommendedInsertionPoints: primaryTable ? [{
+      purpose: "add_search_conditions",
+      position: "above_table",
+      parentNodeId: primaryTable.parentId,
+      beforeNodeId: primaryTable.id,
+      businessEntity: entity,
+      reason: "列表页搜索条件通常放在主表格上方。"
+    }] : []
+  };
+}
+
+function isTableLikeNode(node: WorkspaceDesignNode) {
+  const text = `${node.type} ${node.name} ${node.text ?? ""}`.toLowerCase();
+  return node.type === "table" || /table|列表|表格|grid|list/.test(text);
+}
+
+function isFilterLikeNode(node: WorkspaceDesignNode) {
+  const text = `${node.type} ${node.name} ${node.text ?? ""}`.toLowerCase();
+  return /filter|search|query|筛选|搜索|查询|条件/.test(text) && node.type !== "table";
+}
+
+function findHeaderRegions(page: WorkspaceDesignPage) {
+  return page.nodes
+    .filter((node) => /header|顶部|标题栏|导航/.test(`${node.name} ${node.text ?? ""}`.toLowerCase()) || node.y <= getPageBounds(page).y + 90)
+    .slice(0, 3)
+    .map((node) => ({
+      type: "header" as const,
+      nodeId: node.id,
+      name: node.name,
+      bbox: nodeToBbox(node)
+    }));
+}
+
+function nodeToBbox(node: WorkspaceDesignNode) {
+  return { x: node.x, y: node.y, w: node.width, h: node.height };
+}
+
+function inferBusinessEntity(page: WorkspaceDesignPage, userRequest: string) {
+  const text = `${page.name} ${userRequest} ${page.nodes.slice(0, 80).map((node) => `${node.name} ${node.text ?? ""}`).join(" ")}`;
+  if (/商品|product|sku|库存|价格/.test(text)) return "商品";
+  if (/订单|order|支付|金额/.test(text)) return "订单";
+  if (/用户|会员|客户|user|customer/.test(text)) return "用户";
+  if (/任务|项目|进度|task|project/.test(text)) return "任务";
+  return "业务对象";
+}
+
+function parseTableColumnsFromNode(node: WorkspaceDesignNode) {
+  const serialized = /^columns:(.+)$/i.exec(node.text?.trim() ?? "")?.[1];
+  if (serialized) return serialized.split("|").map((item) => item.trim()).filter(Boolean);
+  const text = `${node.name} ${node.text ?? ""}`;
+  const known = ["商品名称", "价格", "库存", "状态", "操作", "名称", "创建时间", "负责人"];
+  return known.filter((column) => text.includes(column));
+}
+
+function buildRecommendedFilters(entity: string, columns: string[]) {
+  const columnText = columns.join(" ");
+  if (entity === "商品" || /商品|价格|库存|状态/.test(columnText)) {
+    return [
+      { label: "商品名称", component: "input", placeholder: "请输入商品名称" },
+      { label: "商品分类", component: "select", placeholder: "请选择分类" },
+      { label: "商品状态", component: "select", options: ["上架", "下架"] }
+    ];
+  }
+  if (entity === "订单") {
+    return [
+      { label: "订单编号", component: "input", placeholder: "请输入订单编号" },
+      { label: "订单状态", component: "select", options: ["待处理", "已完成", "已取消"] },
+      { label: "创建时间", component: "input", placeholder: "请选择时间范围" }
+    ];
+  }
+  return [
+    { label: "名称", component: "input", placeholder: "请输入名称" },
+    { label: "状态", component: "select", options: ["启用", "停用"] }
+  ];
+}
+
+function parseFilterInputs(value: unknown, fallback: Array<Record<string, unknown>>) {
+  if (!Array.isArray(value)) return fallback;
+  const filters = value
+    .map((item) => item && typeof item === "object" ? item as Record<string, unknown> : null)
+    .filter((item): item is Record<string, unknown> => Boolean(item?.label));
+  return filters.length > 0 ? filters : fallback;
+}
+
+function createFilterBarNodes(input: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  filters: Array<Record<string, unknown>>;
+}) {
+  const containerId = createDesignId("filter");
+  const fieldWidth = Math.max(160, Math.floor((input.width - 240) / Math.max(input.filters.length, 1)));
+  const nodes: WorkspaceDesignNode[] = [
+    createDesignNode("container", {
+      id: containerId,
+      name: "搜索条件区域",
+      x: input.x,
+      y: input.y,
+      width: input.width,
+      height: input.height,
+      fill: "#ffffff",
+      stroke: "#eaecf0",
+      radius: 12
+    })
+  ];
+  input.filters.forEach((filter, index) => {
+    const label = String(filter.label ?? `条件${index + 1}`);
+    const fieldX = input.x + 20 + index * (fieldWidth + 16);
+    nodes.push(createDesignNode("text", {
+      parentId: containerId,
+      name: `${label}标签`,
+      x: fieldX,
+      y: input.y + 18,
+      width: fieldWidth,
+      height: 20,
+      text: label,
+      fontSize: 13,
+      textColor: "#344054"
+    }));
+    nodes.push(createDesignNode("input", {
+      parentId: containerId,
+      name: `${label}输入`,
+      x: fieldX,
+      y: input.y + 44,
+      width: fieldWidth,
+      height: 36,
+      text: String(filter.placeholder ?? `请选择${label}`),
+      fill: "#ffffff",
+      stroke: "#d0d5dd",
+      radius: 8
+    }));
+  });
+  nodes.push(
+    createDesignNode("button", {
+      parentId: containerId,
+      name: "查询按钮",
+      x: input.x + input.width - 184,
+      y: input.y + 44,
+      width: 76,
+      height: 36,
+      text: "查询",
+      radius: 8
+    }),
+    createDesignNode("button", {
+      parentId: containerId,
+      name: "重置按钮",
+      x: input.x + input.width - 96,
+      y: input.y + 44,
+      width: 76,
+      height: 36,
+      text: "重置",
+      fill: "#ffffff",
+      stroke: "#d0d5dd",
+      textColor: "#344054",
+      radius: 8
+    })
+  );
+  return nodes;
+}
+
+function reflowOverlappingNodes(nodes: WorkspaceDesignNode[], spacing: number) {
+  const sorted = [...nodes].sort((a, b) => a.y - b.y || a.x - b.x);
+  const yById = new Map<string, number>();
+  sorted.forEach((node, index) => {
+    let nextY = yById.get(node.id) ?? node.y;
+    for (let i = 0; i < index; i += 1) {
+      const previous = sorted[i];
+      const previousY = yById.get(previous.id) ?? previous.y;
+      const horizontalOverlap = node.x < previous.x + previous.width && node.x + node.width > previous.x;
+      const verticalOverlap = nextY < previousY + previous.height + spacing && nextY + node.height > previousY;
+      if (horizontalOverlap && verticalOverlap && node.parentId === previous.parentId) {
+        nextY = previousY + previous.height + spacing;
+      }
+    }
+    yById.set(node.id, nextY);
+  });
+  return nodes.map((node) => ({ ...node, y: yById.get(node.id) ?? node.y }));
+}
+
+function detectMeaningfulOverlaps(nodes: WorkspaceDesignNode[]) {
+  return nodes
+    .filter((node) => node.visible !== false && node.type !== "text")
+    .flatMap((node, index, list) => list.slice(index + 1).filter((other) => node.parentId === other.parentId && rectsOverlap(node, other)).map((other) => [node.id, other.id]))
+    .slice(0, 20);
+}
+
+function numberOr(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function inferSpacingHints(nodes: WorkspaceDesignNode[]) {
@@ -858,6 +2513,92 @@ function getPageBounds(page: WorkspaceDesignPage) {
   const maxX = Math.max(...page.nodes.map((node) => node.x + node.width));
   const maxY = Math.max(...page.nodes.map((node) => node.y + node.height));
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function getTopLevelArtboards(page: WorkspaceDesignPage) {
+  const frames = page.nodes.filter((node) =>
+    node.visible !== false &&
+    node.type === "frame" &&
+    !node.parentId &&
+    node.width >= 240 &&
+    node.height >= 320
+  );
+  if (frames.length > 0) return frames;
+  const bounds = getPageBounds(page);
+  return page.nodes.length > 0
+    ? [createDesignNode("frame", { id: "page-preview-frame", name: page.name, x: bounds.x, y: bounds.y, width: bounds.width || 960, height: bounds.height || 640, fill: "#f7f8fb" })]
+    : [];
+}
+
+function buildNodePreviewSvgDataUrl(page: WorkspaceDesignPage, target: WorkspaceDesignNode) {
+  const children = page.nodes
+    .filter((node) => node.id === target.id || node.parentId === target.id || isNodeInsideTarget(node, target))
+    .sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0));
+  const body = children.map((node) => renderPreviewNode(node, target)).join("");
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(target.width)}" height="${Math.round(target.height)}" viewBox="0 0 ${Math.round(target.width)} ${Math.round(target.height)}">`,
+    `<rect width="100%" height="100%" fill="${escapeSvgAttr(target.fill === "transparent" ? "#ffffff" : target.fill || "#ffffff")}"/>`,
+    body,
+    "</svg>"
+  ].join("");
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function renderPreviewNode(node: WorkspaceDesignNode, target: WorkspaceDesignNode) {
+  const x = Math.round(node.x - target.x);
+  const y = Math.round(node.y - target.y);
+  const width = Math.max(1, Math.round(node.width));
+  const height = Math.max(1, Math.round(node.height));
+  if (node.id === target.id) {
+    return "";
+  }
+  if (node.type === "text") {
+    return `<text x="${x}" y="${y + Math.max(12, Math.round(node.fontSize ?? 14))}" fill="${escapeSvgAttr(node.textColor || "#101828")}" font-size="${Math.round(node.fontSize ?? 14)}" font-family="PingFang SC, sans-serif">${escapeSvgText(node.text || node.name)}</text>`;
+  }
+  const fill = node.fill === "transparent" ? "#ffffff" : node.fill || "#ffffff";
+  const stroke = node.stroke === "transparent" ? "#e4e7ec" : node.stroke || "#e4e7ec";
+  const label = node.text || (["button", "input", "card", "table"].includes(node.type) ? node.name : "");
+  return [
+    `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${Math.round(node.radius ?? 8)}" fill="${escapeSvgAttr(fill)}" stroke="${escapeSvgAttr(stroke)}" stroke-width="${Math.max(0, node.strokeWidth ?? 1)}"/>`,
+    label ? `<text x="${x + 14}" y="${y + Math.min(height - 10, 28)}" fill="${escapeSvgAttr(node.textColor || (node.type === "button" ? "#ffffff" : "#344054"))}" font-size="${Math.round(node.fontSize ?? 14)}" font-family="PingFang SC, sans-serif">${escapeSvgText(label).slice(0, 80)}</text>` : ""
+  ].join("");
+}
+
+function isNodeInsideTarget(node: WorkspaceDesignNode, target: WorkspaceDesignNode) {
+  if (node.id === target.id) return true;
+  return node.x >= target.x
+    && node.y >= target.y
+    && node.x + node.width <= target.x + target.width
+    && node.y + node.height <= target.y + target.height;
+}
+
+function escapeSvgText(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeSvgAttr(value: string) {
+  return escapeSvgText(value).replace(/"/g, "&quot;");
+}
+
+function getCanvasAppendPlacement(page: WorkspaceDesignPage, canvas: { width: number; height: number }, gap: number) {
+  const artboards = getTopLevelArtboards(page).filter((node) => node.id !== "page-preview-frame");
+  const boundsSource = artboards.length > 0 ? artboards : page.nodes.filter((node) => node.visible !== false);
+  if (boundsSource.length === 0) {
+    return {
+      startX: 520,
+      topY: 220,
+      gap,
+      anchor: "empty_canvas"
+    };
+  }
+  const right = Math.max(...boundsSource.map((node) => node.x + node.width));
+  const top = Math.min(...boundsSource.map((node) => node.y));
+  return {
+    startX: Math.round(right + gap),
+    topY: Math.round(top),
+    gap,
+    anchor: artboards.length > 0 ? "right_of_existing_artboards" : "right_of_existing_content"
+  };
 }
 
 function defaultNodeName(type: WorkspaceDesignNodeType) {

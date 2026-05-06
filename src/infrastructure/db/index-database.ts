@@ -103,6 +103,47 @@ export class IndexDatabase {
 
         CREATE INDEX IF NOT EXISTS idx_workspace_document_versions_document
         ON workspace_document_versions(document_id, version_number DESC);
+
+        CREATE TABLE IF NOT EXISTS agent_conversations (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          metadata TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_messages (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT,
+          event_type TEXT,
+          tool_name TEXT,
+          tool_call_id TEXT,
+          metadata TEXT,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_agent_messages_conversation_created
+        ON agent_messages(conversation_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS agent_tool_calls (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          tool_name TEXT NOT NULL,
+          arguments TEXT,
+          result TEXT,
+          status TEXT NOT NULL,
+          error TEXT,
+          started_at TEXT NOT NULL,
+          ended_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_conversation_started
+        ON agent_tool_calls(conversation_id, started_at DESC);
       `);
     }
   }
@@ -346,6 +387,188 @@ export class IndexDatabase {
     };
   }
 
+  async upsertAgentConversation(input: {
+    id: string;
+    projectId: string;
+    title: string;
+    metadata?: unknown;
+    createdAt: string;
+    updatedAt: string;
+  }) {
+    await this.ensureReady();
+    this.db!.prepare(`
+      INSERT INTO agent_conversations (id, project_id, title, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        project_id = excluded.project_id,
+        title = excluded.title,
+        metadata = excluded.metadata,
+        updated_at = excluded.updated_at
+    `).run(
+      input.id,
+      input.projectId,
+      input.title,
+      input.metadata ? JSON.stringify(input.metadata) : null,
+      input.createdAt,
+      input.updatedAt
+    );
+  }
+
+  async insertAgentMessage(input: {
+    id: string;
+    conversationId: string;
+    projectId: string;
+    role: string;
+    content?: string;
+    eventType?: string;
+    toolName?: string;
+    toolCallId?: string;
+    metadata?: unknown;
+    createdAt: string;
+  }) {
+    await this.ensureReady();
+    this.db!.prepare(`
+      INSERT INTO agent_messages (
+        id, conversation_id, project_id, role, content, event_type, tool_name, tool_call_id, metadata, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      input.id,
+      input.conversationId,
+      input.projectId,
+      input.role,
+      input.content ?? null,
+      input.eventType ?? null,
+      input.toolName ?? null,
+      input.toolCallId ?? null,
+      input.metadata ? JSON.stringify(input.metadata) : null,
+      input.createdAt
+    );
+  }
+
+  async listAgentMessages(input: { projectId: string; conversationId: string; limit?: number }) {
+    await this.ensureReady();
+    const rows = this.db!.prepare(`
+      SELECT role, content, event_type, tool_name, tool_call_id, metadata, created_at
+      FROM agent_messages
+      WHERE project_id = ? AND conversation_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(input.projectId, input.conversationId, input.limit ?? 20) as Array<{
+      role: string;
+      content: string | null;
+      event_type: string | null;
+      tool_name: string | null;
+      tool_call_id: string | null;
+      metadata: string | null;
+      created_at: string;
+    }>;
+    return rows.reverse().map((row) => ({
+      role: row.role,
+      content: row.content ?? "",
+      eventType: row.event_type ?? undefined,
+      toolName: row.tool_name ?? undefined,
+      toolCallId: row.tool_call_id ?? undefined,
+      metadata: parseJsonSafe(row.metadata),
+      createdAt: row.created_at
+    }));
+  }
+
+  async searchAgentMessages(input: { projectId: string; conversationId?: string; keyword: string; limit?: number }) {
+    await this.ensureReady();
+    const rows = this.db!.prepare(`
+      SELECT conversation_id, role, content, event_type, tool_name, created_at
+      FROM agent_messages
+      WHERE project_id = ?
+        AND (? IS NULL OR conversation_id = ?)
+        AND content LIKE '%' || ? || '%'
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(input.projectId, input.conversationId ?? null, input.conversationId ?? null, input.keyword, input.limit ?? 10) as Array<{
+      conversation_id: string;
+      role: string;
+      content: string | null;
+      event_type: string | null;
+      tool_name: string | null;
+      created_at: string;
+    }>;
+    return rows.map((row) => ({
+      conversationId: row.conversation_id,
+      role: row.role,
+      content: row.content ?? "",
+      eventType: row.event_type ?? undefined,
+      toolName: row.tool_name ?? undefined,
+      createdAt: row.created_at
+    }));
+  }
+
+  async upsertAgentToolCall(input: {
+    id: string;
+    conversationId: string;
+    projectId: string;
+    toolName: string;
+    arguments?: unknown;
+    result?: unknown;
+    status: "running" | "success" | "failed";
+    error?: string;
+    startedAt: string;
+    endedAt?: string;
+  }) {
+    await this.ensureReady();
+    this.db!.prepare(`
+      INSERT INTO agent_tool_calls (
+        id, conversation_id, project_id, tool_name, arguments, result, status, error, started_at, ended_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        result = excluded.result,
+        status = excluded.status,
+        error = excluded.error,
+        ended_at = excluded.ended_at
+    `).run(
+      input.id,
+      input.conversationId,
+      input.projectId,
+      input.toolName,
+      input.arguments ? JSON.stringify(input.arguments) : null,
+      input.result ? JSON.stringify(input.result) : null,
+      input.status,
+      input.error ?? null,
+      input.startedAt,
+      input.endedAt ?? null
+    );
+  }
+
+  async listAgentToolCalls(input: { projectId: string; conversationId: string; toolName?: string; limit?: number }) {
+    await this.ensureReady();
+    const rows = this.db!.prepare(`
+      SELECT id, tool_name, arguments, result, status, error, started_at, ended_at
+      FROM agent_tool_calls
+      WHERE project_id = ? AND conversation_id = ? AND (? IS NULL OR tool_name = ?)
+      ORDER BY started_at DESC
+      LIMIT ?
+    `).all(input.projectId, input.conversationId, input.toolName ?? null, input.toolName ?? null, input.limit ?? 20) as Array<{
+      id: string;
+      tool_name: string;
+      arguments: string | null;
+      result: string | null;
+      status: string;
+      error: string | null;
+      started_at: string;
+      ended_at: string | null;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      toolName: row.tool_name,
+      arguments: parseJsonSafe(row.arguments),
+      result: parseJsonSafe(row.result),
+      status: row.status,
+      error: row.error ?? undefined,
+      startedAt: row.started_at,
+      endedAt: row.ended_at ?? undefined
+    }));
+  }
+
   async deleteWorkspaceDocumentMeta(projectId: string, documentId: string) {
     await this.ensureReady();
     this.db!.prepare(`
@@ -465,4 +688,13 @@ export class IndexDatabase {
 function sequenceFromId(id: string) {
   const numeric = Number(id.replace(/^[a-z-]+/, ""));
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function parseJsonSafe(value: string | null) {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
 }

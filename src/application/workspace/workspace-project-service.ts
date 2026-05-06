@@ -13,7 +13,9 @@ import { buildFallbackChatDecision, type ChatDecision } from "./chat-rules.js";
 import {
   DesignAgentToolService,
   designAgentPlanSchema,
+  designAgentToolCallSchema,
   designAgentToolDescriptions,
+  uiSchemaDraftSchema,
   type DesignAgentPlan,
   type DesignAgentToolCall,
   type DesignAgentToolResult
@@ -115,6 +117,28 @@ type LlmChatDecision = z.infer<typeof captureChatSchema>;
 type RuntimeChatDecision = ChatDecision & { model?: string };
 type DesignAgentDecision = z.infer<typeof designAgentSchema>;
 type UiDesignerPlan = z.infer<typeof uiDesignerPlanSchema>;
+type DesignAgentRoleName =
+  | "负责人 Agent"
+  | "产品经理 Agent"
+  | "产品规划 Agent"
+  | "UI 设计师 Agent"
+  | "Schema 执行 Agent"
+  | "页面理解 Agent"
+  | "素材 Agent"
+  | "审核 Agent"
+  | "文件 Agent"
+  | "联网 Agent"
+  | "视觉识别 Agent"
+  | "记忆 Agent";
+export type DesignAgentStreamEvent =
+  | { type: "message"; content: string; agentRole?: DesignAgentRoleName }
+  | { type: "plan"; title: string; steps: string[]; plan: DesignAgentPlan; uiDesignPlan?: UiDesignerPlan; agentRole?: DesignAgentRoleName }
+  | { type: "tool_call_start"; toolName: string; params?: unknown; reason?: string; toolCallId: string; agentRole?: DesignAgentRoleName }
+  | { type: "tool_call_result"; toolName: string; success: boolean; result?: unknown; error?: string; message: string; toolCallId?: string; agentRole?: DesignAgentRoleName }
+  | { type: "schema_patch"; action: "add" | "update" | "delete" | "replace"; pageId?: string; nodeCount?: number; selectedNodeIds?: string[]; file?: WorkspaceDesignFile; page?: WorkspaceDesignPage; agentRole?: DesignAgentRoleName }
+  | { type: "review"; result: unknown; message: string; agentRole?: DesignAgentRoleName }
+  | { type: "done"; summary: string; file: WorkspaceDesignFile; page?: WorkspaceDesignPage; selectedPageId?: string; agentRole?: DesignAgentRoleName }
+  | { type: "error"; message: string; agentRole?: DesignAgentRoleName };
 type LlmSettingsSaveResult = {
   bundle: WorkspaceBundle;
   validation: {
@@ -563,6 +587,13 @@ export class WorkspaceProjectService {
     }
 
     const selectedPage = await this.getDesignAgentSelectedPage(projectId, file, input.pageId);
+    if (input.pageId && !selectedPage) {
+      return {
+        reply: `当前页 ${input.pageId} 不存在或 schema 未加载，已停止执行，避免错误回退到第一个页面。`,
+        action: "answer",
+        file
+      };
+    }
     const llmForPlan = await this.createProjectLlm(project, "design");
     if (!llmForPlan) {
       return {
@@ -629,7 +660,7 @@ export class WorkspaceProjectService {
       };
     }
 
-    if (input.planningMode === "plan" || toolPlan.mode === "plan") {
+    if (shouldStopAfterDesignAgentPlan(input.planningMode, toolPlan, message)) {
       return {
         reply: formatDesignToolPlanReply(toolPlan, uiDesignPlan),
         action: "tool-plan",
@@ -646,7 +677,6 @@ export class WorkspaceProjectService {
       let latestFile = file;
       let latestPage = selectedPage;
       const toolResults: Array<{ tool: string; ok: boolean; message: string; data?: unknown }> = [];
-      const snapshot = await this.createDesignExecutionSnapshot(projectId, file);
       for (const step of toolPlan.steps.slice(0, 8)) {
         const result = await this.executeDesignToolStep(projectId, selectedPageId, step);
         toolResults.push({ tool: step.tool, ok: result.ok, message: result.message, data: result.data });
@@ -654,18 +684,10 @@ export class WorkspaceProjectService {
         if (result.page) latestPage = result.page;
         if (result.selectedPageId) selectedPageId = result.selectedPageId;
         if (!result.ok) {
-          const restored = await this.restoreDesignExecutionSnapshot(projectId, snapshot);
-          latestFile = restored.file;
-          latestPage = selectedPageId ? restored.pages.find((page) => page.id === selectedPageId) ?? latestPage : latestPage;
-          toolResults.push({
-            tool: "transaction.rollback",
-            ok: true,
-            message: "已回滚到执行前页面状态，避免半成品 schema 污染画布。"
-          });
           break;
         }
       }
-      const failed = toolResults.some((result) => !result.ok && result.tool !== "transaction.rollback");
+      const failed = toolResults.some((result) => !result.ok);
       const alreadyReviewed = toolResults.some((result) => result.tool === "ui.review");
       if (!failed && !alreadyReviewed) {
         const reviewResult = await this.executeDesignToolStep(projectId, selectedPageId, {
@@ -701,8 +723,428 @@ export class WorkspaceProjectService {
     };
   }
 
+  async *runDesignAgentStream(projectId: string, input: {
+    message: string;
+    pageId?: string;
+    systemPrompt?: string;
+    planningMode?: "auto" | "plan";
+    conversationId?: string;
+  }): AsyncGenerator<DesignAgentStreamEvent> {
+    const project = await this.repository.getProject(projectId);
+    const conversationId = input.conversationId || `design-agent-${projectId}`;
+    const createdAt = nowIso();
+    await this.repository.upsertAgentConversation({
+      id: conversationId,
+      projectId,
+      title: "AI Design Agent",
+      metadata: { pageId: input.pageId },
+      createdAt,
+      updatedAt: createdAt
+    });
+
+    const emit = async (event: DesignAgentStreamEvent) => {
+      await this.persistDesignAgentStreamEvent(projectId, conversationId, event);
+      return event;
+    };
+
+    const file = await this.getDesignFile(projectId);
+    const message = input.message.trim();
+    await this.repository.saveAgentMessage({
+      id: createAgentRunId("msg"),
+      conversationId,
+      projectId,
+      role: "user",
+      content: message,
+      eventType: "message",
+      createdAt: nowIso()
+    });
+
+    if (!message) {
+      yield await emit({ type: "error", agentRole: "负责人 Agent", message: "请输入要执行的 AI Design 任务。" });
+      yield await emit({ type: "done", agentRole: "负责人 Agent", summary: "已停止：没有收到有效输入。", file });
+      return;
+    }
+
+    const selectedPage = await this.getDesignAgentSelectedPage(projectId, file, input.pageId);
+    if (input.pageId && !selectedPage) {
+      const errorMessage = `当前页 ${input.pageId} 不存在或 schema 未加载，已停止执行，避免错误回退到第一个页面。`;
+      yield await emit({ type: "error", agentRole: "负责人 Agent", message: errorMessage });
+      yield await emit({ type: "done", agentRole: "负责人 Agent", summary: errorMessage, file });
+      return;
+    }
+    const llmForPlan = await this.createProjectLlm(project, "design");
+    if (!llmForPlan) {
+      const errorMessage = "当前无法执行 AI Design Agent：没有可用的设计模型连接。请先配置 API Key、Base URL 和设计模型。";
+      yield await emit({ type: "error", agentRole: "负责人 Agent", message: errorMessage });
+      yield await emit({ type: "done", agentRole: "负责人 Agent", summary: "已停止：不会使用本地 fallback 伪造执行结果。", file, page: selectedPage, selectedPageId: selectedPage?.id });
+      return;
+    }
+
+    try {
+      const routedTaskType = routeDesignAgentTask(message);
+      yield await emit({
+        type: "message",
+        agentRole: "负责人 Agent",
+        content: routedTaskType === "create_new_ui"
+          ? "任务判断：这是从需求生成新 UI 稿，我会在当前画布已有画板右侧追加新 UI，不会误改当前已有内容。"
+          : "任务判断：这是对当前页面/画布的操作，我会先读取必要上下文再执行。"
+      });
+      const taskProfile = classifyDesignAgentTask(message);
+      let uiDesignPlan: UiDesignerPlan | undefined;
+      if (taskProfile.needUIAgent) {
+        yield await emit({ type: "message", agentRole: "UI 设计师 Agent", content: "我会先做页面结构、布局风格和组件选择判断，再交给执行 Agent 落 schema。" });
+        uiDesignPlan = await this.createUiDesignerPlan(project, llmForPlan, selectedPage, message, input.systemPrompt);
+        yield await emit({ type: "message", agentRole: "UI 设计师 Agent", content: formatUiDesignPlanReply(uiDesignPlan) || "UI 设计判断已完成。" });
+      }
+
+      let toolPlan = await this.planDesignAgentTools(project, llmForPlan, file, selectedPage, message, input.systemPrompt, {
+        taskProfile,
+        uiDesignPlan
+      });
+      toolPlan = normalizeDesignAgentPlanForIntent(message, toolPlan);
+      validateDesignAgentPlanForIntent(message, toolPlan);
+      yield await emit({
+        type: "plan",
+        agentRole: "负责人 Agent",
+        title: toolPlan.title,
+        steps: toolPlan.steps.map((step, index) => `${index + 1}. ${getDesignAgentRoleForTool(step.tool)} -> ${step.tool}：${step.reason || "执行工具"}`),
+        plan: toolPlan,
+        uiDesignPlan
+      });
+
+      if (shouldStopAfterDesignAgentPlan(input.planningMode, toolPlan, message)) {
+        yield await emit({ type: "done", agentRole: "负责人 Agent", summary: "已输出执行计划，当前为明确规划模式，未执行工具。", file, page: selectedPage, selectedPageId: selectedPage?.id });
+        return;
+      }
+
+      if (toolPlan.steps.length === 0) {
+        if (routeDesignAgentTask(message) === "create_new_ui") {
+          toolPlan = normalizeDesignAgentPlanForIntent(message, {
+            ...toolPlan,
+            mode: "execute",
+            reply: "这是生成 UI 稿任务，禁止空回答，我会按标准流程生成 UI 产物。"
+          });
+          yield await emit({
+            type: "plan",
+            agentRole: "负责人 Agent",
+            title: toolPlan.title,
+            steps: toolPlan.steps.map((step, index) => `${index + 1}. ${getDesignAgentRoleForTool(step.tool)} -> ${step.tool}：${step.reason || "执行工具"}`),
+            plan: toolPlan,
+            uiDesignPlan
+          });
+        } else {
+        yield await emit({ type: "message", agentRole: "负责人 Agent", content: toolPlan.reply || "我判断这次不需要调用工具。" });
+        yield await emit({ type: "done", agentRole: "负责人 Agent", summary: toolPlan.reply || "已完成回答。", file, page: selectedPage, selectedPageId: selectedPage?.id });
+        return;
+        }
+      }
+
+      let selectedPageId = selectedPage?.id;
+      let latestFile = file;
+      let latestPage = selectedPage;
+      let latestGeneratedFrameIds: string[] = [];
+
+      for (const step of toolPlan.steps.slice(0, 8)) {
+        let executableStep = step;
+        if (step.tool === "schema.generate_ui_from_requirements" && !isRecordLike(step.input.schemaDraft)) {
+          yield await emit({ type: "message", agentRole: "Schema 执行 Agent", content: "我先让 Schema Agent 根据产品/设计上下文生成 aipm.design.schema.v1 草案，再执行落盘。" });
+          const schemaDraft = await this.createUiSchemaDraft(project, llmForPlan, selectedPage, message, input.systemPrompt, uiDesignPlan, String(step.input.platform ?? ""));
+          executableStep = {
+            ...step,
+            input: {
+              ...step.input,
+              schemaDraft
+            }
+          };
+          yield await emit({
+            type: "message",
+            agentRole: "Schema 执行 Agent",
+            content: [
+              `Schema Draft 已生成：${schemaDraft.artboards.length} 个画板。`,
+              schemaDraft.designRationale.length > 0 ? `设计依据：${schemaDraft.designRationale.join("；")}` : "",
+              `画板：${schemaDraft.artboards.map((artboard) => `${artboard.name}(${artboard.width}x${artboard.height}, ${artboard.nodes.length} nodes)`).join("、")}`
+            ].filter(Boolean).join("\n")
+          });
+        }
+        if (executableStep.tool === "ui.critic_review") {
+          executableStep = {
+            ...executableStep,
+            input: {
+              ...executableStep.input,
+              pageIds: selectedPageId ? [selectedPageId] : undefined,
+              generatedFrameIds: latestGeneratedFrameIds
+            }
+          };
+        }
+        const toolCallId = createAgentRunId("tool");
+        const agentRole = getDesignAgentRoleForTool(executableStep.tool);
+        yield await emit({ type: "tool_call_start", agentRole, toolName: executableStep.tool, params: executableStep.input, reason: executableStep.reason, toolCallId });
+        await this.repository.upsertAgentToolCall({
+          id: toolCallId,
+          conversationId,
+          projectId,
+          toolName: executableStep.tool,
+          arguments: executableStep.input,
+          status: "running",
+          startedAt: nowIso()
+        });
+
+        const result = await this.executeDesignToolStep(projectId, selectedPageId, executableStep, conversationId);
+        await this.repository.upsertAgentToolCall({
+          id: toolCallId,
+          conversationId,
+          projectId,
+          toolName: executableStep.tool,
+          arguments: executableStep.input,
+          result: result.data,
+          status: result.ok ? "success" : "failed",
+          error: result.ok ? undefined : result.message,
+          startedAt: nowIso(),
+          endedAt: nowIso()
+        });
+        yield await emit({
+          type: "tool_call_result",
+          agentRole,
+          toolName: executableStep.tool,
+          success: result.ok,
+          result: result.data,
+          error: result.ok ? undefined : result.message,
+          message: result.message,
+          toolCallId
+        });
+
+        if (result.file) latestFile = result.file;
+        if (result.page) latestPage = result.page;
+        if (result.selectedPageId) selectedPageId = result.selectedPageId;
+        const generatedFrameIds = getGeneratedFrameIds(result.data);
+        if (generatedFrameIds.length > 0) {
+          latestGeneratedFrameIds = generatedFrameIds;
+        }
+        if (result.ok && isSchemaMutationTool(executableStep.tool)) {
+          yield await emit({
+            type: "schema_patch",
+            agentRole,
+            action: inferSchemaPatchAction(executableStep.tool),
+            file: latestFile,
+            page: latestPage,
+            pageId: selectedPageId,
+            nodeCount: latestPage?.nodes.length,
+            selectedNodeIds: generatedFrameIds
+          });
+        }
+
+        if (!result.ok) {
+          let failedResult = result;
+          let recovered = false;
+          let recoveryAttemptCount = 0;
+          for (let retryAttempt = 1; retryAttempt <= 3; retryAttempt += 1) {
+            const recoveryStep = buildDesignAgentRecoveryStep(message, executableStep, failedResult, retryAttempt);
+            if (!recoveryStep) break;
+            recoveryAttemptCount = retryAttempt;
+            const recoveryToolCallId = createAgentRunId("tool");
+            const recoveryAgentRole = getDesignAgentRoleForTool(recoveryStep.tool);
+            yield await emit({ type: "message", agentRole: "负责人 Agent", content: `${formatRetryAttemptLabel(retryAttempt)}重试：${recoveryStep.reason}` });
+            yield await emit({ type: "tool_call_start", agentRole: recoveryAgentRole, toolName: recoveryStep.tool, params: recoveryStep.input, reason: recoveryStep.reason, toolCallId: recoveryToolCallId });
+            await this.repository.upsertAgentToolCall({
+              id: recoveryToolCallId,
+              conversationId,
+              projectId,
+              toolName: recoveryStep.tool,
+              arguments: recoveryStep.input,
+              status: "running",
+              startedAt: nowIso()
+            });
+            const recoveryResult = await this.executeDesignToolStep(projectId, selectedPageId, recoveryStep, conversationId);
+            await this.repository.upsertAgentToolCall({
+              id: recoveryToolCallId,
+              conversationId,
+              projectId,
+              toolName: recoveryStep.tool,
+              arguments: recoveryStep.input,
+              result: recoveryResult.data,
+              status: recoveryResult.ok ? "success" : "failed",
+              error: recoveryResult.ok ? undefined : recoveryResult.message,
+              startedAt: nowIso(),
+              endedAt: nowIso()
+            });
+            yield await emit({
+              type: "tool_call_result",
+              agentRole: recoveryAgentRole,
+              toolName: recoveryStep.tool,
+              success: recoveryResult.ok,
+              result: recoveryResult.data,
+              error: recoveryResult.ok ? undefined : recoveryResult.message,
+              message: recoveryResult.message,
+              toolCallId: recoveryToolCallId
+            });
+            if (recoveryResult.ok) {
+              if (recoveryResult.file) latestFile = recoveryResult.file;
+              if (recoveryResult.page) latestPage = recoveryResult.page;
+              if (recoveryResult.selectedPageId) selectedPageId = recoveryResult.selectedPageId;
+              const recoveryGeneratedFrameIds = getGeneratedFrameIds(recoveryResult.data);
+              if (recoveryGeneratedFrameIds.length > 0) {
+                latestGeneratedFrameIds = recoveryGeneratedFrameIds;
+              }
+              if (isSchemaMutationTool(recoveryStep.tool)) {
+                yield await emit({
+                  type: "schema_patch",
+                  agentRole: recoveryAgentRole,
+                  action: inferSchemaPatchAction(recoveryStep.tool),
+                  file: latestFile,
+                  page: latestPage,
+                  pageId: selectedPageId,
+                  nodeCount: latestPage?.nodes.length,
+                  selectedNodeIds: recoveryGeneratedFrameIds
+                });
+              }
+              recovered = true;
+              break;
+            }
+            failedResult = recoveryResult;
+          }
+          if (recovered) continue;
+          yield await emit({ type: "error", agentRole: "负责人 Agent", message: failedResult.message });
+          yield await emit({
+            type: "done",
+            agentRole: "负责人 Agent",
+            summary: recoveryAttemptCount > 0
+              ? `执行失败，已完成 ${recoveryAttemptCount} 次恢复尝试；当前暂不回滚，已保留成功步骤产物和中间状态。`
+              : "执行失败，当前失败类型没有安全的自动恢复步骤；暂不回滚，已保留成功步骤产物和中间状态。",
+            file: latestFile,
+            page: latestPage,
+            selectedPageId
+          });
+          return;
+        }
+      }
+
+      const reviewToolName: DesignAgentToolCall["tool"] = /搜索|筛选|查询|filter|search|query/i.test(message) ? "ui.review_design" : "ui.review";
+      const reviewAgentRole = getDesignAgentRoleForTool(reviewToolName);
+      const reviewToolCallId = createAgentRunId("tool");
+      yield await emit({ type: "message", agentRole: reviewAgentRole, content: "工具执行完成，我现在做一次 UI/schema 审核。" });
+      yield await emit({ type: "tool_call_start", agentRole: reviewAgentRole, toolName: reviewToolName, params: {}, reason: "执行完成后做综合检查", toolCallId: reviewToolCallId });
+      let reviewResult = await this.executeDesignToolStep(projectId, selectedPageId, {
+        tool: reviewToolName,
+        reason: "执行完成后由审核 Agent 做一次 UI/schema 综合检查。",
+        input: { userRequest: message }
+      }, conversationId);
+      yield await emit({
+        type: "tool_call_result",
+        agentRole: reviewAgentRole,
+        toolName: reviewToolName,
+        success: reviewResult.ok,
+        result: reviewResult.data,
+        error: reviewResult.ok ? undefined : reviewResult.message,
+        message: reviewResult.message,
+        toolCallId: reviewToolCallId
+      });
+      if (!reviewResult.ok) {
+        const fixStep = buildDesignReviewFixStep(reviewResult.data);
+        if (fixStep) {
+          const fixToolCallId = createAgentRunId("tool");
+          const fixAgentRole = getDesignAgentRoleForTool(fixStep.tool);
+          yield await emit({ type: "tool_call_start", agentRole: fixAgentRole, toolName: fixStep.tool, params: fixStep.input, reason: fixStep.reason, toolCallId: fixToolCallId });
+          const fixResult = await this.executeDesignToolStep(projectId, selectedPageId, fixStep, conversationId);
+          yield await emit({
+            type: "tool_call_result",
+            agentRole: fixAgentRole,
+            toolName: fixStep.tool,
+            success: fixResult.ok,
+            result: fixResult.data,
+            error: fixResult.ok ? undefined : fixResult.message,
+            message: fixResult.message,
+            toolCallId: fixToolCallId
+          });
+          if (fixResult.ok) {
+            if (fixResult.file) latestFile = fixResult.file;
+            if (fixResult.page) latestPage = fixResult.page;
+            if (fixResult.selectedPageId) selectedPageId = fixResult.selectedPageId;
+            if (isSchemaMutationTool(fixStep.tool)) {
+              yield await emit({
+                type: "schema_patch",
+                agentRole: fixAgentRole,
+                action: inferSchemaPatchAction(fixStep.tool),
+                file: latestFile,
+                page: latestPage,
+                pageId: selectedPageId,
+                nodeCount: latestPage?.nodes.length
+              });
+            }
+            const secondReviewToolCallId = createAgentRunId("tool");
+            yield await emit({ type: "tool_call_start", agentRole: reviewAgentRole, toolName: reviewToolName, params: {}, reason: "自动修复后再次审核", toolCallId: secondReviewToolCallId });
+            reviewResult = await this.executeDesignToolStep(projectId, selectedPageId, {
+              tool: reviewToolName,
+              reason: "自动修复后由审核 Agent 复查。",
+              input: { userRequest: message }
+            }, conversationId);
+            yield await emit({
+              type: "tool_call_result",
+              agentRole: reviewAgentRole,
+              toolName: reviewToolName,
+              success: reviewResult.ok,
+              result: reviewResult.data,
+              error: reviewResult.ok ? undefined : reviewResult.message,
+              message: reviewResult.message,
+              toolCallId: secondReviewToolCallId
+            });
+          }
+        }
+      }
+      yield await emit({ type: "review", agentRole: reviewAgentRole, result: reviewResult.data, message: reviewResult.message });
+      if (reviewResult.file) latestFile = reviewResult.file;
+      if (reviewResult.page) latestPage = reviewResult.page;
+      if (reviewResult.selectedPageId) selectedPageId = reviewResult.selectedPageId;
+
+      yield await emit({
+        type: "done",
+        agentRole: "负责人 Agent",
+        summary: reviewResult.ok ? "已完成：计划内工具执行完毕，并完成 UI/schema 审核。" : "工具已执行，但审核阶段发现问题，请查看 review 信息。",
+        file: latestFile,
+        page: latestPage,
+        selectedPageId
+      });
+    } catch (error) {
+      const messageText = formatDesignAgentError(error);
+      yield await emit({ type: "error", agentRole: "负责人 Agent", message: messageText });
+      yield await emit({ type: "done", agentRole: "负责人 Agent", summary: "执行失败，已停止。", file, page: selectedPage, selectedPageId: selectedPage?.id });
+    }
+  }
+
+  async listDesignAgentMessages(projectId: string, input?: {
+    conversationId?: string;
+    limit?: number;
+  }) {
+    await this.repository.getProject(projectId);
+    const conversationId = input?.conversationId || `design-agent-${projectId}`;
+    const messages = await this.repository.listAgentMessages({
+      projectId,
+      conversationId,
+      limit: input?.limit ?? 200
+    });
+    const visibleEventTypes = new Set(["message", "plan", "tool_call_start", "tool_call_result", "review", "done", "error"]);
+    return messages
+      .filter((message) => message.content.trim())
+      .filter((message) => !message.eventType || visibleEventTypes.has(message.eventType))
+      .map((message, index) => {
+        const metadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
+          ? message.metadata as Record<string, unknown>
+          : {};
+        return {
+          id: `${conversationId}-${message.createdAt}-${index}`,
+          role: message.role === "user" ? "user" : "assistant",
+          content: message.content,
+          eventType: message.eventType,
+          toolName: message.toolName,
+          agentRole: typeof metadata.agentRole === "string" ? metadata.agentRole : undefined,
+          createdAt: message.createdAt
+        };
+      });
+  }
+
   private async getDesignAgentSelectedPage(projectId: string, file: WorkspaceDesignFile, pageId?: string) {
-    const pageMeta = file.pages.find((page) => page.id === pageId) ?? file.pages[0];
+    const pageMeta = pageId
+      ? file.pages.find((page) => page.id === pageId)
+      : file.pages[0];
     if (!pageMeta) {
       return undefined;
     }
@@ -726,18 +1168,30 @@ export class WorkspaceProjectService {
         project.systemPrompt || "",
         systemPrompt || "",
         "你是 AI Design Agent 的主调度器，负责把用户意图、当前页面 schema、UI 设计方案转成标准 tool 调用计划。",
+        "你的第一步是任务路由：create_new_ui / edit_existing_ui / extend_existing_ui / generate_component / generate_flow。",
+        "如果用户说“根据需求生成 UI 稿/生成交互稿/生成交互 UI 稿/做一个 App 页面/设计一组页面/新建 UI”，必须是 create_new_ui：在当前画布已有画板右侧追加新 UI 画板，不修改已有节点。",
+        "用户需求文本里的“添加、编辑、删除、管理、上传、绑定”等词通常是产品功能，不是画布编辑指令；不能因此路由为 edit_existing_ui。",
+        "create_new_ui 禁止返回空 steps，原则上必须产出 UI schema、画板和预览截图。",
+        "create_new_ui 不等于新建独立文件页面；必须使用 schema.generate_ui_from_requirements 在当前画布追加画板。",
+        "create_new_ui 生成的画板必须和当前画布已有画板顶对齐，向右追加，默认水平间距 40px。",
+        "只有用户明确说“修改当前页面/修改这个页面/修改选中节点/在画布指定地方修改/改这里”时，才允许使用 page.get_schema 和页面编辑工具。",
+        "create_new_ui 必须按 requirement.parse -> flow.generate -> asset.resolve -> schema.generate_ui_from_requirements -> ui.critic_review 的链路规划。",
+        "create_new_ui 的计划必须覆盖用户需求中的主要功能点，禁止引入用户未提到的业务对象，例如订单、商品列表、搜索筛选区。",
         "你具备自我判断、自我推理和多轮执行意识：先读上下文，再定位目标，再修改，再校验。",
         "你的输出必须是可执行计划，不要假装已经执行。",
         "执行任何页面局部修改前，第一步必须使用 page.get_schema 获取当前页面 schema，再基于返回信息选择 schema.* 工具。",
         "如果需要定位左侧/右侧/顶部/内容区，优先在 page.get_schema 后使用 schema.find_nodes 查询目标节点。",
+        "只有用户明确提到列表/表格/数据表，并要求添加搜索条件/筛选条件/查询条件时，才走 page.analyze_structure -> product.review_requirements -> layout.insert_above；地图搜索、地址搜索、登录页搜索不属于列表筛选。",
+        "product.review_requirements 如果没有识别到列表/表格，必须拒绝业务字段建议，禁止臆测订单、商品等业务对象。",
+        "如果 schema.update_node 失败或找不到目标，不要直接停止；应切换到 layout.insert_above、schema.add_nodes 或 layout.reflow 完成用户目标。",
         "当用户说“添加菜单/新增菜单/左侧添加菜单/导航栏/侧边栏菜单”，必须使用 schema.create_menu，不要使用 schema.update_node。",
         "当用户说“添加/插入/修改/调整 table/text/image/group/shapeGroup/container”等组件时，必须使用 schema.* 工具修改当前页面，不要新建页面。",
-        "只有用户明确说“新建页面/创建页面/生成完整新页面”时才使用 page.create。",
+        "只有用户明确说“新建独立页面/创建独立页面/新增文件页面/复制页面”时才使用 page.create；普通生成 UI 稿不要用 page.create。",
         "如果用户需求涉及页面设计、排版、风格、组件选择，应参考 UI 设计 Agent 的设计方案生成 tool steps。",
         "如果用户提到参考、素材、竞品、联网搜索，并且 web.search tool 可用，可以先规划 web.search；如果工具返回不可用，要把不可用原因和建议告诉用户。",
         "如果用户只问问题，mode=answer 且 steps=[]。",
         "如果用户要求先规划、不要执行，mode=plan。",
-        "每次修改后尽量追加 schema.validate 校验。",
+        "每次修改后尽量追加 schema.validate 校验，并在 UI 任务最后使用 ui.review_design 或 ui.review 审核。",
         "plan.title 要说明任务目标；plan.userGoal 要复述用户目标；plan.assumptions 写出关键假设。",
         "可用工具如下：",
         JSON.stringify(designAgentToolDescriptions, null, 2)
@@ -784,6 +1238,52 @@ export class WorkspaceProjectService {
     });
   }
 
+  private async createUiSchemaDraft(
+    project: WorkspaceProject,
+    llm: OpenAIClient,
+    selectedPage: WorkspaceDesignPage | undefined,
+    message: string,
+    systemPrompt?: string,
+    uiDesignPlan?: UiDesignerPlan,
+    platformOverride?: string
+  ) {
+    const targetPlatform = platformOverride === "mobile_app" || /小程序|移动端|手机|app/i.test(message) ? "mobile_app" : "web";
+    return this.generateJsonWithRepair(llm, uiSchemaDraftSchema, {
+      systemPrompt: [
+        project.systemPrompt || "",
+        systemPrompt || "",
+        "你是 AIPM Schema Agent，负责把产品需求和 UI 设计方案转换成 aipm.design.schema.v1。",
+        "你不是关键词模板引擎，必须基于需求语义、页面目标、用户动作和设计规范推理出可编辑 UI Schema Draft。",
+        "输出只能是 JSON，必须符合 schemaVersion=aipm.design.schema.v1。",
+        "artboards 是要追加到当前画布右侧的新 UI 画板；不要输出已有页面内容。",
+        "web/PC 画板推荐 1440x1024 或按需求调整；mobile_app 画板使用 375x812 逻辑尺寸。",
+        `本次目标平台：${targetPlatform}。如果目标平台是 mobile_app 或小程序，必须生成 375x812 左右的移动端单列页面，禁止生成 PC dashboard、PC 表格页、横向统计面板。`,
+        "所有 node 坐标都必须是相对 artboard 左上角的局部坐标，不是全局画布坐标。",
+        "node.type 只能使用 frame/container/text/button/input/table/card/image。",
+        "高保真原则：不要用一个大 card/table 承载整块信息；必须拆成可编辑的 container/text/button/input/image 等颗粒节点。",
+        "移动端原则：列表/记录/订单/消息/收益明细必须用多张卡片或行容器表达，禁止使用 table 节点；按钮、文字、金额、状态必须独立节点。",
+        "文本排版：中文长文案要拆成多行 text 节点或给足高度，禁止文字互相遮挡、溢出、被截断。",
+        "每个 artboard 至少包含：页面标题、核心内容区、主操作或关键状态反馈。",
+        "如果需求是详情页，要输出能表达详情页信息架构的 schema，而不是泛化卡片。",
+        "避免元素重叠、越界；所有节点必须在 artboard 范围内。"
+      ].filter(Boolean).join("\n\n"),
+      userPrompt: JSON.stringify({
+        userRequest: message,
+        targetPlatform,
+        uiDesignPlan: uiDesignPlan ?? null,
+        currentCanvasSummary: selectedPage ? summarizeDesignPageForPrompt(selectedPage) : null,
+        schemaContract: {
+          schemaVersion: "aipm.design.schema.v1",
+          nodeTypes: ["frame", "container", "text", "button", "input", "table", "card", "image"],
+          coordinateSystem: "artboard-local",
+          requiredArtboardFields: ["refId", "name", "width", "height", "nodes"],
+          requiredNodeFields: ["refId", "type", "name", "x", "y", "width", "height"]
+        }
+      }, null, 2),
+      temperature: 0.35
+    });
+  }
+
   private async generateJsonWithRepair<S extends z.ZodTypeAny>(
     llm: OpenAIClient,
     schema: S,
@@ -817,9 +1317,9 @@ export class WorkspaceProjectService {
     }
   }
 
-  private async executeDesignToolStep(projectId: string, selectedPageId: string | undefined, step: DesignAgentToolCall): Promise<DesignAgentToolResult> {
+  private async executeDesignToolStep(projectId: string, selectedPageId: string | undefined, step: DesignAgentToolCall, conversationId?: string): Promise<DesignAgentToolResult> {
     try {
-      return await this.designTools.execute({ projectId, selectedPageId }, step);
+      return await this.designTools.execute({ projectId, selectedPageId, conversationId }, step);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -846,6 +1346,23 @@ export class WorkspaceProjectService {
       updatedAt: nowIso()
     });
     return { file, pages: snapshot.pages };
+  }
+
+  private async persistDesignAgentStreamEvent(projectId: string, conversationId: string, event: DesignAgentStreamEvent) {
+    const role = event.type === "tool_call_result" || event.type === "tool_call_start" ? "tool" : "assistant";
+    const content = getDesignAgentEventContent(event);
+    await this.repository.saveAgentMessage({
+      id: createAgentRunId("msg"),
+      conversationId,
+      projectId,
+      role,
+      content,
+      eventType: event.type,
+      toolName: "toolName" in event ? event.toolName : undefined,
+      toolCallId: "toolCallId" in event ? event.toolCallId : undefined,
+      metadata: stripLargeDesignEventPayload(event),
+      createdAt: nowIso()
+    });
   }
 
   private async saveDesignPages(projectId: string, file: WorkspaceDesignFile, pages: WorkspaceDesignPage[]) {
@@ -3465,8 +3982,77 @@ function makeDesignToolPlan(message: string, wantsPlanOnly: boolean, reply: stri
   };
 }
 
+function getDesignAgentRoleForTool(tool: DesignAgentToolCall["tool"]): DesignAgentRoleName {
+  if (tool === "requirement.parse" || tool === "product.review_requirements") {
+    return "产品经理 Agent";
+  }
+  if (tool === "flow.generate") {
+    return "产品规划 Agent";
+  }
+  if (tool === "asset.resolve") {
+    return "素材 Agent";
+  }
+  if (tool === "page.analyze_structure" || tool === "page.get_schema" || tool === "page.list") {
+    return "页面理解 Agent";
+  }
+  if (tool === "workspace.read_file") {
+    return "文件 Agent";
+  }
+  if (tool === "web.search") {
+    return "联网 Agent";
+  }
+  if (tool === "image.to_schema" || tool === "canvas.capture" || tool.startsWith("ui.analyze_")) {
+    return "视觉识别 Agent";
+  }
+  if (tool.startsWith("conversation.")) {
+    return "记忆 Agent";
+  }
+  if (tool === "ui.review" || tool === "ui.review_design" || tool === "ui.critic_review" || tool === "schema.validate") {
+    return "审核 Agent";
+  }
+  if (
+    tool === "schema.generate_ui_from_requirements" ||
+    tool.startsWith("schema.") ||
+    tool.startsWith("layout.") ||
+    tool.startsWith("page.")
+  ) {
+    return "Schema 执行 Agent";
+  }
+  return "负责人 Agent";
+}
+
+function getGeneratedFrameIds(data: unknown) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return [];
+  const value = (data as Record<string, unknown>).generatedFrameIds;
+  if (!Array.isArray(value)) return [];
+  const ids = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  return ids;
+}
+
+function isRecordLike(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function validateDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan) {
+  const taskType = routeDesignAgentTask(message);
+  if (taskType === "create_new_ui") {
+    const forbiddenTools = new Set(["page.get_schema", "page.analyze_structure", "schema.update_node", "schema.delete_node", "layout.insert_above", "layout.reflow"]);
+    const usedForbidden = plan.steps.find((step) => forbiddenTools.has(step.tool));
+    const requiredTools = ["requirement.parse", "flow.generate", "schema.generate_ui_from_requirements"];
+    const missingTool = requiredTools.find((tool) => !plan.steps.some((step) => step.tool === tool));
+    if (usedForbidden || missingTool) {
+      throw new Error([
+        "计划安全校验失败：当前任务是从需求生成新 UI，不是修改当前页面。",
+        usedForbidden ? `不允许使用页面编辑工具：${usedForbidden.tool}` : "",
+        missingTool ? `缺少必要工具：${missingTool}` : "",
+        "建议：按 requirement.parse -> flow.generate -> asset.resolve -> schema.generate_ui_from_requirements -> ui.critic_review 重新规划。"
+      ].filter(Boolean).join("\n"));
+    }
+    return;
+  }
+
   const isAddMenu = /(添加|新增|加一个|加入|放一个|插入|add|insert).*(菜单|导航|menu|sidebar|侧边栏)|(?:菜单|导航|menu|sidebar|侧边栏).*(添加|新增|加一个|加入|放一个|插入|add|insert)/i.test(message);
+  const isAddSearchCondition = isListSearchConditionIntent(message);
   if (isAddMenu) {
     const hasCreateMenu = plan.steps.some((step) => step.tool === "schema.create_menu");
     const hasUnsafeUpdate = plan.steps.some((step) => step.tool === "schema.update_node");
@@ -3478,10 +4064,28 @@ function validateDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan
       ].join("\n"));
     }
   }
+  if (isAddSearchCondition) {
+    const hasAnalyze = plan.steps.some((step) => step.tool === "page.analyze_structure");
+    const hasProductReview = plan.steps.some((step) => step.tool === "product.review_requirements");
+    const hasInsertFallback = plan.steps.some((step) => step.tool === "layout.insert_above" || step.tool === "schema.add_child" || step.tool === "schema.insert_before");
+    const hasUnsafeTableUpdate = plan.steps.some((step) => step.tool === "schema.update_node" && /table|表格/i.test(JSON.stringify(step.input)));
+    if (!hasAnalyze || !hasProductReview || !hasInsertFallback || hasUnsafeTableUpdate) {
+      throw new Error([
+        "计划安全校验失败：用户意图是给列表页添加搜索/筛选条件。",
+        "必须先 page.analyze_structure，再 product.review_requirements，并使用 layout.insert_above / schema.add_child / schema.insert_before 完成插入。",
+        "不允许把搜索条件直接 update 到表格节点内部。"
+      ].join("\n"));
+    }
+  }
 
   const schemaMutationTools = new Set([
+    "layout.insert_above",
+    "layout.reflow",
+    "layout.update_spacing",
     "schema.create_menu",
     "schema.add_nodes",
+    "schema.add_child",
+    "schema.insert_before",
     "schema.update_node",
     "schema.delete_node",
     "schema.duplicate_node",
@@ -3498,6 +4102,201 @@ function validateDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan
       "建议：重新规划为 page.get_schema/page.create -> 定位/生成 -> schema 修改 -> schema.validate。"
     ].join("\n"));
   }
+}
+
+function shouldStopAfterDesignAgentPlan(
+  planningMode: "auto" | "plan" | undefined,
+  plan: DesignAgentPlan,
+  message: string
+) {
+  return (planningMode === "plan" || plan.mode === "plan") && isExplicitDesignPlanOnly(message);
+}
+
+function isExplicitDesignPlanOnly(message: string) {
+  return /只规划|先规划|不要执行|别执行|仅输出计划|规划模式|plan only/i.test(message);
+}
+
+function normalizeDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan): DesignAgentPlan {
+  if (routeDesignAgentTask(message) === "create_new_ui") {
+    const hasCreateUiFlow = plan.steps.some((step) => step.tool === "requirement.parse")
+      && plan.steps.some((step) => step.tool === "flow.generate")
+      && plan.steps.some((step) => step.tool === "schema.generate_ui_from_requirements");
+    const hasPageEditTool = plan.steps.some((step) => ["page.get_schema", "page.analyze_structure", "schema.update_node", "layout.insert_above"].includes(step.tool));
+    if (hasCreateUiFlow && !hasPageEditTool) return plan;
+    return {
+      ...plan,
+      title: plan.title || "根据需求生成 UI 稿",
+      userGoal: plan.userGoal || message,
+      mode: isExplicitDesignPlanOnly(message) ? "plan" : "execute",
+      reply: isExplicitDesignPlanOnly(message) ? "我先给出计划，不执行工具。" : "我会根据需求在当前画布右侧追加多张 UI 画板。",
+      assumptions: [...plan.assumptions, "这是从需求生成新 UI，不改已有画板内容", "新画板在当前画布右侧追加，顶对齐，水平间距 40px", "先解析需求，再生成页面和流程，最后生成可渲染 schema"],
+      steps: [
+        { tool: "requirement.parse", reason: "解析自然语言需求，识别模块、功能点和实体。", input: { userRequest: message } },
+        { tool: "flow.generate", reason: "根据功能点生成页面清单、用户流程和必要状态。", input: { userRequest: message } },
+        { tool: "asset.resolve", reason: "解析需要的图标、插画和素材占位。", input: { userRequest: message } },
+        { tool: "schema.generate_ui_from_requirements", reason: "在当前画布右侧追加多页面可编辑 UI 画板，顶对齐并保持 40px 间距。", input: { userRequest: message, platform: /app|移动|手机|小程序/i.test(message) ? "mobile_app" : "web", gap: 40 } },
+        { tool: "canvas.capture", reason: "生成 UI 后输出右侧新增画板的预览截图，交给产品确认。", input: { mode: "rightmost_artboards", limit: 6 } },
+        { tool: "ui.critic_review", reason: "检查需求覆盖、无关内容、流程和布局问题。", input: { userRequest: message } }
+      ]
+    };
+  }
+
+  const isAddMenu = /(添加|新增|加一个|加入|放一个|插入|add|insert).*(菜单|导航|menu|sidebar|侧边栏)|(?:菜单|导航|menu|sidebar|侧边栏).*(添加|新增|加一个|加入|放一个|插入|add|insert)/i.test(message);
+  const isAddSearchCondition = isListSearchConditionIntent(message);
+  if (isAddSearchCondition) {
+    const hasSemanticFlow = plan.steps.some((step) => step.tool === "page.analyze_structure")
+      && plan.steps.some((step) => step.tool === "product.review_requirements")
+      && plan.steps.some((step) => step.tool === "layout.insert_above" || step.tool === "schema.add_child" || step.tool === "schema.insert_before");
+    const hasUnsafeTableUpdate = plan.steps.some((step) => step.tool === "schema.update_node" && /table|表格/i.test(JSON.stringify(step.input)));
+    if (hasSemanticFlow && !hasUnsafeTableUpdate) return plan;
+    return {
+      ...plan,
+      title: plan.title || "添加列表页搜索条件",
+      userGoal: plan.userGoal || message,
+      assumptions: [...plan.assumptions, "列表页搜索条件优先放在主表格上方", "找不到已有搜索区时自动新增搜索区域并重排布局"],
+      steps: [
+        { tool: "page.get_schema", reason: "先读取当前页面 schema，确认可编辑上下文。", input: {} },
+        { tool: "page.analyze_structure", reason: "分析页面语义，识别主表格、已有筛选区和推荐插入点。", input: { userRequest: message } },
+        { tool: "product.review_requirements", reason: "由产品 Agent 判断搜索字段是否符合业务对象。", input: { userRequest: message } },
+        { tool: "layout.insert_above", reason: "在主表格上方新增搜索条件区域，并自动下移表格避免遮挡。", input: { userRequest: message, insertKind: "filter_bar", spacing: 16, height: 96 } },
+        { tool: "schema.validate", reason: "修改后校验 schema 合法性。", input: {} },
+        { tool: "ui.review_design", reason: "由 UI Agent 审核搜索区位置、间距、遮挡和对齐。", input: { userRequest: message } }
+      ]
+    };
+  }
+  if (!isAddMenu) return plan;
+  const hasCreateMenu = plan.steps.some((step) => step.tool === "schema.create_menu");
+  if (hasCreateMenu) return plan;
+  return {
+    ...plan,
+    title: plan.title || "添加菜单组件",
+    userGoal: plan.userGoal || message,
+    assumptions: [...plan.assumptions, "用户意图是新增菜单，使用确定性菜单工具，避免误改已有节点"],
+    steps: [
+      { tool: "page.get_schema", reason: "先读取当前页面 schema，确认页面结构。", input: {} },
+      { tool: "schema.create_menu", reason: "按用户要求新增菜单组件，而不是修改已有节点。", input: { position: /右侧|right/i.test(message) ? "right" : "left", title: "菜单" } },
+      { tool: "schema.validate", reason: "新增菜单后校验 schema。", input: {} }
+    ]
+  };
+}
+
+function routeDesignAgentTask(message: string) {
+  const text = message.toLowerCase();
+  const strongCreateUiIntent = isStrongCreateUiGenerationIntent(message);
+  const createUiIntent = strongCreateUiIntent || /根据需求|生成ui稿|生成 ui|新建ui|新建 ui|新增ui|新增 ui|生成交互稿|交互 ui|设计一组页面|做一个app|做一个 app|从需求|用户基础模块|页面清单|用户流|详情页|列表页|表单页|落地页|页面稿|(?:添加|新增|加一个|做一个).{0,24}(页|页面|详情|列表|表单|弹窗)/.test(text + message);
+  const explicitModifyIntent = /修改|调整|更新|改一下|改成|替换|删除|移动|重命名|缩放|update|change|delete|move|rename/i.test(message);
+  const explicitTarget = /当前页面|这个页面|选中|画布上|这里|此处|当前画布|修改当前|在当前|给当前|把这个|这个按钮|这个表格|指定区域|指定地方/.test(message);
+  if (strongCreateUiIntent && !explicitTarget) {
+    return "create_new_ui";
+  }
+  if (createUiIntent && !explicitTarget) {
+    return "create_new_ui";
+  }
+  const explicitEdit = explicitTarget || explicitModifyIntent;
+  if (explicitEdit) return "edit_existing_ui";
+  if (createUiIntent) {
+    return "create_new_ui";
+  }
+  if (/(新建|创建|生成|设计|添加|新增|做一个).*(页面|页|详情|列表|表单|弹窗)/.test(message) && !explicitEdit) {
+    return "create_new_ui";
+  }
+  return "edit_existing_ui";
+}
+
+function isStrongCreateUiGenerationIntent(message: string) {
+  return /根据.{0,20}需求.{0,20}生成.{0,20}(交互)?\s*ui\s*稿?|生成.{0,20}(交互)?\s*ui\s*稿?|输出.{0,20}(交互)?\s*ui\s*稿?|设计.{0,20}(交互)?\s*ui\s*稿?/i.test(message);
+}
+
+function isListSearchConditionIntent(message: string) {
+  const hasAddIntent = /(添加|新增|加一个|加入|放一个|插入|add|insert)/i.test(message);
+  const hasSearchIntent = /(搜索条件|筛选条件|查询条件|filter|search|query|筛选区|搜索区|查询区)/i.test(message);
+  const hasListContext = /(列表|表格|table|list|数据表|数据列表|主表格)/i.test(message);
+  return hasAddIntent && hasSearchIntent && hasListContext;
+}
+
+function isSchemaMutationTool(tool: DesignAgentToolCall["tool"]) {
+  return [
+    "schema.generate_ui_from_requirements",
+    "page.create",
+    "page.rename",
+    "page.delete",
+    "page.duplicate",
+    "layout.insert_above",
+    "layout.reflow",
+    "layout.update_spacing",
+    "schema.create_menu",
+    "schema.add_nodes",
+    "schema.add_child",
+    "schema.insert_before",
+    "schema.update_node",
+    "schema.delete_node",
+    "schema.duplicate_node",
+    "schema.generate_from_prompt"
+  ].includes(tool);
+}
+
+function inferSchemaPatchAction(tool: DesignAgentToolCall["tool"]): "add" | "update" | "delete" | "replace" {
+  if (tool.includes("delete")) return "delete";
+  if (tool.includes("update") || tool.includes("rename")) return "update";
+  if (tool.includes("duplicate") || tool.includes("create") || tool.includes("add") || tool.includes("generate") || tool.includes("insert")) return "add";
+  return "replace";
+}
+
+function buildDesignAgentRecoveryStep(message: string, failedStep: DesignAgentToolCall, result: DesignAgentToolResult, retryAttempt = 1): DesignAgentToolCall | undefined {
+  const isAddSearchCondition = isListSearchConditionIntent(message);
+  if (isAddSearchCondition && failedStep.tool === "schema.update_node" && /没有找到|not found|找不到|失败/i.test(result.message)) {
+    return {
+      tool: "layout.insert_above",
+      reason: "update_node 未找到可修改搜索区，降级为在主表格上方新增搜索条件区域并自动重排。",
+      input: { userRequest: message, insertKind: "filter_bar", spacing: 16, height: 96 }
+    };
+  }
+  if (isAddSearchCondition && (failedStep.tool === "schema.add_nodes" || failedStep.tool === "schema.insert_before") && /遮挡|重叠|spacing|layout|布局/i.test(result.message)) {
+    return {
+      tool: "layout.reflow",
+      reason: "插入后布局可能重叠，使用布局重排工具补偿。",
+      input: { spacing: 16 }
+    };
+  }
+  if (failedStep.tool === "layout.insert_above" && /没有找到可插入|未找到安全插入点|target/i.test(result.message)) {
+    const fallbackModes = ["largest_table_or_list", "largest_content", "first_frame_content"];
+    const fallbackMode = fallbackModes[retryAttempt - 1];
+    if (!fallbackMode) return undefined;
+    return {
+      tool: "layout.insert_above",
+      reason: `layout.insert_above 未找到目标节点，改用 fallbackMode=${fallbackMode} 重新寻找安全插入点。`,
+      input: {
+        ...failedStep.input,
+        fallbackMode,
+        retryAttempt
+      }
+    };
+  }
+  return undefined;
+}
+
+function formatRetryAttemptLabel(retryAttempt: number) {
+  return ["第一次", "第二次", "第三次"][retryAttempt - 1] ?? `第 ${retryAttempt} 次`;
+}
+
+function buildDesignReviewFixStep(data: unknown): DesignAgentToolCall | undefined {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return undefined;
+  const issues = (data as Record<string, unknown>).issues;
+  if (!Array.isArray(issues)) return undefined;
+  for (const issue of issues) {
+    if (!issue || typeof issue !== "object" || Array.isArray(issue)) continue;
+    const suggestedFix = (issue as Record<string, unknown>).suggestedFix;
+    if (!suggestedFix || typeof suggestedFix !== "object" || Array.isArray(suggestedFix)) continue;
+    const tool = (suggestedFix as Record<string, unknown>).tool;
+    const input = (suggestedFix as Record<string, unknown>).input;
+    const parsed = designAgentToolCallSchema.safeParse({
+      tool,
+      reason: `根据审核问题自动修复：${String((issue as Record<string, unknown>).message ?? "")}`,
+      input: input && typeof input === "object" && !Array.isArray(input) ? input : {}
+    });
+    if (parsed.success) return parsed.data;
+  }
+  return undefined;
 }
 
 function formatDesignToolPlanReply(plan: DesignAgentPlan, uiDesignPlan?: UiDesignerPlan) {
@@ -3552,14 +4351,25 @@ function formatDesignToolPlanAndExecutionReply(
 function formatUiDesignPlanReply(plan?: UiDesignerPlan) {
   if (!plan) return "";
   const components = plan.componentPlan.map((item) => `${item.type}${item.position ? `(${item.position})` : ""}`).join("、");
-  return [
+  const lines = [
     "UI 设计 Agent 判断：",
     plan.designGoal ? `设计目标：${plan.designGoal}` : "",
     plan.businessUnderstanding ? `业务理解：${plan.businessUnderstanding}` : "",
     plan.layoutPlan.type ? `布局：${plan.layoutPlan.type}${plan.layoutPlan.areas.length > 0 ? `，区域：${plan.layoutPlan.areas.join("、")}` : ""}` : "",
     plan.styleGuide.theme || plan.styleGuide.primaryColor ? `视觉规范：${plan.styleGuide.theme || "默认主题"}，主色 ${plan.styleGuide.primaryColor || "未指定"}，间距 ${plan.styleGuide.spacing}` : "",
-    components ? `组件选择：${components}` : ""
-  ].filter(Boolean).join("\n");
+    components ? `组件选择：${components}` : "",
+    plan.reviewChecklist.length > 0 ? `审查清单：${plan.reviewChecklist.join("、")}` : ""
+  ].filter(Boolean);
+  if (lines.length <= 1) {
+    return [
+      "UI 设计 Agent 判断：",
+      "设计目标：先生成可评审的第一版页面，而不是只给空计划。",
+      "布局：按平台选择移动端单列或 PC 分区布局，新增画板与已有画板顶对齐。",
+      "组件选择：标题、核心内容区、主操作、状态反馈和必要表单/卡片。",
+      "审查清单：需求覆盖、元素不遮挡、不越界、主操作明确、状态完整。"
+    ].join("\n");
+  }
+  return lines.join("\n");
 }
 
 function formatToolInputBrief(input: Record<string, unknown>) {
@@ -3577,6 +4387,42 @@ function formatDesignAgentError(error: unknown) {
     ].filter(Boolean).join("\n");
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+function getDesignAgentEventContent(event: DesignAgentStreamEvent) {
+  switch (event.type) {
+    case "message":
+      return event.content;
+    case "plan":
+      return [event.title, ...event.steps].join("\n");
+    case "tool_call_start":
+      return `准备执行：${event.toolName}`;
+    case "tool_call_result":
+      return `${event.success ? "成功" : "失败"} ${event.toolName}：${event.message}`;
+    case "schema_patch":
+      return `schema patch：${event.action}，节点数 ${event.nodeCount ?? "未知"}`;
+    case "review":
+      return event.message;
+    case "done":
+      return event.summary;
+    case "error":
+      return event.message;
+  }
+}
+
+function stripLargeDesignEventPayload(event: DesignAgentStreamEvent) {
+  if (event.type !== "schema_patch" && event.type !== "done") {
+    return event;
+  }
+  return {
+    ...event,
+    file: event.file ? { id: event.file.id, name: event.file.name, pageCount: event.file.pages.length } : undefined,
+    page: event.page ? { id: event.page.id, name: event.page.name, nodeCount: event.page.nodes.length } : undefined
+  };
+}
+
+function createAgentRunId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function extractJsonFromModelText(text: string) {

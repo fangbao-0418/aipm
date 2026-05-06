@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
@@ -44,12 +44,15 @@ import { getProject } from "../../utils/storage";
 import { toast } from "sonner";
 import {
   getAiDesignFile,
+  getAiDesignAgentMessages,
   getAiDesignPage,
   importAiDesignFile,
-  runAiDesignAgent,
+  streamAiDesignAgent,
   saveAiDesignFile,
   updateWorkspaceLlmSettings,
-  type WorkspaceDesignFile
+  type AiDesignAgentStreamEvent,
+  type WorkspaceDesignFile,
+  type WorkspaceDesignPage
 } from "../../utils/workspace-api";
 import { useStopWhellHook } from "../../utils/event";
 
@@ -207,6 +210,8 @@ interface AiDesignChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  agentRole?: string;
+  previewImages?: Array<{ label: string; dataUrl: string }>;
 }
 
 interface RectBounds {
@@ -237,10 +242,19 @@ interface DesignLayerTreeNode {
   depth: number;
 }
 
+interface DesignContextMenuState {
+  x: number;
+  y: number;
+  nodeId?: string;
+  source: "canvas" | "layer";
+}
+
 interface DesignRenderTreeNode {
   node: DesignNode;
   children: DesignRenderTreeNode[];
 }
+
+const LOCAL_COMPONENT_SOURCE_NAME = "本地组件集合";
 
 const componentPresets: Array<{
   type: DesignNodeType;
@@ -306,6 +320,9 @@ export function AiDesignView() {
   const [pan, setPan] = useState({ x: 240, y: 64 });
   const [layerQuery, setLayerQuery] = useState("");
   const [expandedLayerIds, setExpandedLayerIds] = useState<string[]>([]);
+  const [hoveredNodeId, setHoveredNodeId] = useState("");
+  const [contextMenu, setContextMenu] = useState<DesignContextMenuState | null>(null);
+  const [componentCollectionView, setComponentCollectionView] = useState<"all" | "local">("all");
   const [importingDesignFile, setImportingDesignFile] = useState(false);
   const [aiMessages, setAiMessages] = useState<AiDesignChatMessage[]>([
     {
@@ -316,7 +333,7 @@ export function AiDesignView() {
   ]);
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiSettingsOpen, setAiSettingsOpen] = useState(true);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiSystemPrompt, setAiSystemPrompt] = useState(project?.systemPrompt ?? "");
   const [aiPlanningMode, setAiPlanningMode] = useState<"auto" | "plan">("auto");
   const [aiProvider, setAiProvider] = useState<"openai" | "openai-compatible">(project?.llmSettings?.provider ?? "openai-compatible");
@@ -326,6 +343,31 @@ export function AiDesignView() {
   const [savingAiSettings, setSavingAiSettings] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [viewportSize, setViewportSize] = useState({ width: 1200, height: 800 });
+
+  useEffect(() => {
+    if (!projectId) {
+      return;
+    }
+    let cancelled = false;
+    void getAiDesignAgentMessages(projectId, `design-agent-${projectId}`, 200)
+      .then((messages) => {
+        if (cancelled || messages.length === 0) {
+          return;
+        }
+        setAiMessages(messages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          agentRole: message.agentRole
+        })));
+      })
+      .catch((error) => {
+        console.warn("[AIPM][AI Design] failed to load chat history", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
   const [selectionRect, setSelectionRect] = useState<{
     start: { x: number; y: number };
     current: { x: number; y: number };
@@ -334,6 +376,7 @@ export function AiDesignView() {
   const designImportInputRef = useRef<HTMLInputElement | null>(null);
   const applyingRemoteDesignRef = useRef(false);
   const saveDesignTimerRef = useRef<number | null>(null);
+  const selectedPageIdRef = useRef(selectedPageId);
   const loadedPageIdsRef = useRef<Set<string>>(new Set(file.pages.filter((page) => page.nodes.length > 0).map((page) => page.id)));
   const nodeDragRef = useRef<{
     nodeIds: string[];
@@ -356,6 +399,8 @@ export function AiDesignView() {
   const selectedNode = selectedPage.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedNodes = selectedPage.nodes.filter((node) => selectedNodeIds.includes(node.id));
   const selectionBounds = getNodesBoundsForSelection(selectedNodes);
+  const hoveredNode = hoveredNodeId ? selectedPage.nodes.find((node) => node.id === hoveredNodeId) ?? null : null;
+  const hoverBounds = hoveredNode && !selectedNodeIds.includes(hoveredNode.id) ? nodeToBounds(hoveredNode) : null;
   const visibleNodes = selectedPage.nodes.filter((node) => node.visible);
   const sceneContentBounds = useMemo(() => expandBounds(getNodesBounds(visibleNodes), 360), [visibleNodes]);
   const visibleSceneBounds = useMemo(() => ({
@@ -383,6 +428,9 @@ export function AiDesignView() {
   const canvasRenderedNodes = useMemo(() => renderedNodes.filter((node) => !shouldRenderNodeWithDomSvg(node)), [renderedNodes]);
   const domSvgRenderedNodes = useMemo(() => renderedNodes.filter(shouldRenderNodeWithDomSvg), [renderedNodes]);
   const layerTree = useMemo(() => buildDesignLayerTree(selectedPage.nodes, layerQuery), [layerQuery, selectedPage.nodes]);
+  const localComponents = useMemo(() => (file.importedComponents ?? []).filter((component) => component.sourceFileName === LOCAL_COMPONENT_SOURCE_NAME), [file.importedComponents]);
+  const externalImportedComponents = useMemo(() => (file.importedComponents ?? []).filter((component) => component.sourceFileName !== LOCAL_COMPONENT_SOURCE_NAME), [file.importedComponents]);
+  const contextMenuNode = contextMenu?.nodeId ? selectedPage.nodes.find((node) => node.id === contextMenu.nodeId) ?? null : null;
 
   const syncSelectedPageToQuery = (pageId: string, replace = true) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -400,6 +448,10 @@ export function AiDesignView() {
     selectNodes(pageNodes?.[0]?.id ? [pageNodes[0].id] : []);
     syncSelectedPageToQuery(pageId, options.replace ?? true);
   };
+
+  useEffect(() => {
+    selectedPageIdRef.current = selectedPageId;
+  }, [selectedPageId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -562,6 +614,21 @@ export function AiDesignView() {
     };
   });
 
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+    const closeMenu = () => setContextMenu(null);
+    window.addEventListener("pointerdown", closeMenu);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      window.removeEventListener("pointerdown", closeMenu);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [contextMenu]);
+
   const updateFile = (updater: (current: AiDesignFile) => AiDesignFile) => {
     setFile((current) => updater(current));
   };
@@ -683,29 +750,82 @@ export function AiDesignView() {
     const userMessage: AiDesignChatMessage = { id: createId("ai-message"), role: "user", content };
     setAiMessages((current) => [...current, userMessage]);
     try {
-      const response = await runAiDesignAgent(projectId, {
+      const requestPageId = selectedPageIdRef.current || selectedPageId;
+      let finalFile: WorkspaceDesignFile | undefined;
+      let finalPage: WorkspaceDesignPage | undefined;
+      let streamFile: WorkspaceDesignFile = file;
+      await streamAiDesignAgent(projectId, {
         message: content,
-        pageId: selectedPageId,
+        pageId: requestPageId,
         systemPrompt: aiSystemPrompt,
-        planningMode: aiPlanningMode
+        planningMode: aiPlanningMode,
+        conversationId: `design-agent-${projectId}`
+      }, (event: AiDesignAgentStreamEvent) => {
+        if (event.type === "message") {
+          setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: event.content, agentRole: event.agentRole }]);
+          return;
+        }
+        if (event.type === "plan") {
+          setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: [`执行计划：${event.title}`, ...event.steps].join("\n"), agentRole: event.agentRole ?? "负责人 Agent" }]);
+          return;
+        }
+        if (event.type === "tool_call_start") {
+          setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: `准备执行：${event.toolName}${event.reason ? `\n${event.reason}` : ""}`, agentRole: event.agentRole }]);
+          return;
+        }
+        if (event.type === "tool_call_result") {
+          setAiMessages((current) => [...current, {
+            id: createId("ai-message"),
+            role: "assistant",
+            content: `${event.success ? "已完成" : "执行失败"}：${event.toolName}\n${event.message}`,
+            agentRole: event.agentRole,
+            previewImages: extractAiPreviewImages(event.result)
+          }]);
+          return;
+        }
+        if (event.type === "schema_patch" && event.file) {
+          const eventPage = resolveAgentEventPage(requestPageId, event.page);
+          const nextFile = mergeAgentPageIntoFile(
+            preserveLoadedDesignPages(normalizeDesignFile(event.file, project?.name ?? "未命名设计"), streamFile),
+            eventPage
+          );
+          streamFile = nextFile;
+          finalFile = nextFile;
+          finalPage = eventPage;
+          setFile(nextFile);
+          if (eventPage) {
+            loadedPageIdsRef.current.add(eventPage.id);
+          }
+          if (selectedPageIdRef.current === requestPageId && event.selectedNodeIds?.length) {
+            selectNodes(event.selectedNodeIds);
+          }
+          return;
+        }
+        if (event.type === "review") {
+          setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: `审核结果：${event.message}`, agentRole: event.agentRole ?? "审核 Agent" }]);
+          return;
+        }
+        if (event.type === "error") {
+          setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: `执行失败：${event.message}`, agentRole: event.agentRole ?? "负责人 Agent" }]);
+          return;
+        }
+        if (event.type === "done") {
+          finalFile = preserveLoadedDesignPages(normalizeDesignFile(event.file, project?.name ?? "未命名设计"), streamFile);
+          finalPage = resolveAgentEventPage(requestPageId, event.page);
+          setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: event.summary, agentRole: event.agentRole ?? "负责人 Agent" }]);
+        }
       });
-      const nextFile = mergeAgentPageIntoFile(
-        preserveLoadedDesignPages(normalizeDesignFile(response.file, project?.name ?? "未命名设计"), file),
-        response.page
-      );
-      setFile(nextFile);
-      if (response.page) {
-        loadedPageIdsRef.current.add(response.page.id);
-      }
-      if (response.selectedPageId) {
-        const nextPage = response.page ?? nextFile.pages.find((page) => page.id === response.selectedPageId);
-        selectDesignPage(response.selectedPageId, nextPage?.nodes ?? [], { replace: false });
+      if (finalFile) {
+        const nextFile = mergeAgentPageIntoFile(
+          preserveLoadedDesignPages(finalFile, streamFile),
+          finalPage
+        );
+        setFile(nextFile);
+        if (finalPage) {
+          loadedPageIdsRef.current.add(finalPage.id);
+        }
       }
       setLeftTab("ai");
-      setAiMessages((current) => [
-        ...current,
-        { id: createId("ai-message"), role: "assistant", content: response.reply }
-      ]);
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "AI Design Agent 执行失败";
       setAiMessages((current) => [
@@ -763,6 +883,95 @@ export function AiDesignView() {
       nodes: [...page.nodes, ...nextNodes]
     }));
     selectNodes(nextNodes.map((node) => node.id));
+  };
+
+  const createContainerFromSelection = (anchorNodeId?: string) => {
+    const sourceIds = getContextActionNodeIds(anchorNodeId, selectedNodeIds);
+    const topLevelIds = getTopLevelNodeIds(sourceIds, selectedPage.nodes);
+    const sourceNodes = topLevelIds
+      .map((id) => selectedPage.nodes.find((node) => node.id === id))
+      .filter((node): node is DesignNode => Boolean(node));
+    if (sourceNodes.length === 0) {
+      toast.error("请先选择要放入容器的图层");
+      return;
+    }
+
+    const bounds = getNodesBoundsForSelection(sourceNodes);
+    if (!bounds) {
+      toast.error("无法计算选中图层范围");
+      return;
+    }
+
+    const minZIndex = Math.min(...sourceNodes.map((node) => node.zIndex ?? 0));
+    const container = createNode("container", {
+      name: `容器 ${selectedPage.nodes.filter((node) => node.type === "container").length + 1}`,
+      x: Math.round(bounds.x - 16),
+      y: Math.round(bounds.y - 16),
+      width: Math.round(bounds.width + 32),
+      height: Math.round(bounds.height + 32),
+      fill: "transparent",
+      stroke: "#7c3cff",
+      strokeWidth: 1,
+      strokeDashPattern: [6, 4],
+      zIndex: minZIndex - 1
+    });
+
+    const childIdSet = new Set(topLevelIds);
+    updateSelectedPage((page) => ({
+      ...page,
+      nodes: [
+        ...page.nodes.map((node) => childIdSet.has(node.id) ? { ...node, parentId: container.id } : node),
+        container
+      ]
+    }));
+    setExpandedLayerIds((current) => current.includes(container.id) ? current : [...current, container.id]);
+    selectNodes([container.id]);
+    setContextMenu(null);
+    toast.success(`已创建容器，并挂载 ${sourceNodes.length} 个图层`);
+  };
+
+  const createLocalComponentFromContainer = (containerId?: string) => {
+    const container = selectedPage.nodes.find((node) => node.id === containerId);
+    if (!container || container.type !== "container") {
+      toast.error("只有容器右击菜单可以创建组件");
+      return;
+    }
+
+    const nodeIds = [container.id, ...getDescendantNodeIds(container.id, selectedPage.nodes)];
+    const sourceNodes = selectedPage.nodes.filter((node) => nodeIds.includes(node.id));
+    if (sourceNodes.length === 0) {
+      toast.error("容器内没有可保存的图层");
+      return;
+    }
+
+    const bounds = getNodesBoundsForSelection(sourceNodes);
+    if (!bounds) {
+      toast.error("无法生成组件预览");
+      return;
+    }
+
+    const componentNodes = cloneDesignNodesWithNewIds(sourceNodes, (node) => ({
+      x: Math.round(node.x - bounds.x),
+      y: Math.round(node.y - bounds.y),
+      locked: false,
+      visible: true
+    }));
+    const component: ImportedDesignComponent = {
+      id: createId("component"),
+      name: `${container.name} 组件`,
+      sourceFileName: LOCAL_COMPONENT_SOURCE_NAME,
+      nodeCount: componentNodes.length,
+      nodes: componentNodes
+    };
+
+    updateFile((current) => ({
+      ...current,
+      importedComponents: [component, ...(current.importedComponents ?? [])]
+    }));
+    setLeftTab("components");
+    setComponentCollectionView("local");
+    setContextMenu(null);
+    toast.success(`已保存到本地组件集合：${component.name}`);
   };
 
   const insertImportedComponent = (component: ImportedDesignComponent) => {
@@ -900,6 +1109,78 @@ export function AiDesignView() {
     };
   };
 
+  const resolveInteractiveNodeAtPoint = (point: { x: number; y: number }) => {
+    const hitNode = findTopDesignNodeAtPoint(visibleNodes, point);
+    return hitNode ? getCanvasSelectionTarget(hitNode, selectedPage.nodes, selectedNodeIds) : null;
+  };
+
+  const resolveDrillNodeAtPoint = (point: { x: number; y: number }) => {
+    return findTopDesignNodeAtPoint(visibleNodes, point);
+  };
+
+  const getDragNodesForSelection = (selectionIds: string[]) => {
+    const dragIds = expandSelectionWithDescendants(selectionIds, selectedPage.nodes);
+    return dragIds
+      .map((id) => selectedPage.nodes.find((item) => item.id === id))
+      .filter((item): item is DesignNode => Boolean(item) && (!item.locked || hasSelectedAncestor(item, selectionIds, selectedPage.nodes)));
+  };
+
+  const startNodeDragSession = (selectionIds: string[], scenePoint: { x: number; y: number }) => {
+    const dragIds = getDragNodesForSelection(selectionIds);
+    nodeDragRef.current = {
+      nodeIds: dragIds.map((item) => item.id),
+      startX: scenePoint.x,
+      startY: scenePoint.y,
+      originals: dragIds.map((item) => ({ id: item.id, x: item.x, y: item.y }))
+    };
+  };
+
+  const openNodeContextMenu = (event: ReactMouseEvent<HTMLElement>, node: DesignNode, source: DesignContextMenuState["source"]) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedNodeIds.includes(node.id)) {
+      selectNodes([node.id]);
+    }
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: node.id,
+      source
+    });
+  };
+
+  const handleCanvasContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const scenePoint = getScenePoint(event.clientX, event.clientY);
+    const hitNode = resolveInteractiveNodeAtPoint(scenePoint);
+    if (!hitNode) {
+      setContextMenu(null);
+      return;
+    }
+    if (!selectedNodeIds.includes(hitNode.id)) {
+      selectNodes([hitNode.id]);
+    }
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: hitNode.id,
+      source: "canvas"
+    });
+  };
+
+  const handleCanvasDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (tool !== "select") {
+      return;
+    }
+    const scenePoint = getScenePoint(event.clientX, event.clientY);
+    const hitNode = resolveDrillNodeAtPoint(scenePoint);
+    if (!hitNode || hitNode.locked) {
+      return;
+    }
+    selectNodes([hitNode.id], hitNode.id);
+    setHoveredNodeId(hitNode.id);
+  };
+
   const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
       return;
@@ -932,26 +1213,24 @@ export function AiDesignView() {
     }
 
     const scenePoint = getScenePoint(event.clientX, event.clientY);
-    const hitNode = findTopDesignNodeAtPoint(visibleNodes, scenePoint);
+    const hitNode = resolveInteractiveNodeAtPoint(scenePoint);
     if (hitNode && !hitNode.locked) {
       const append = event.shiftKey || event.metaKey || event.ctrlKey;
       const nextSelection = append
         ? selectedNodeIds.includes(hitNode.id)
           ? selectedNodeIds.filter((id) => id !== hitNode.id)
           : [...selectedNodeIds, hitNode.id]
-        : selectedNodeIds.includes(hitNode.id)
-          ? selectedNodeIds
-          : [hitNode.id];
+          : selectedNodeIds.includes(hitNode.id)
+            ? selectedNodeIds
+            : [hitNode.id];
       selectNodes(nextSelection, hitNode.id);
-      const dragIds = (selectedNodeIds.includes(hitNode.id) && !append ? selectedNodeIds : nextSelection)
-        .map((id) => selectedPage.nodes.find((item) => item.id === id))
-        .filter((item): item is DesignNode => Boolean(item) && !item.locked);
-      nodeDragRef.current = {
-        nodeIds: dragIds.map((item) => item.id),
-        startX: scenePoint.x,
-        startY: scenePoint.y,
-        originals: dragIds.map((item) => ({ id: item.id, x: item.x, y: item.y }))
-      };
+      startNodeDragSession(selectedNodeIds.includes(hitNode.id) && !append ? selectedNodeIds : nextSelection, scenePoint);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    if (tool === "select" && selectionBounds && selectedNodeIds.length > 0 && rectContainsPoint(selectionBounds, scenePoint)) {
+      startNodeDragSession(selectedNodeIds, scenePoint);
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
@@ -994,6 +1273,12 @@ export function AiDesignView() {
       return;
     }
 
+    if (tool === "select") {
+      const scenePoint = getScenePoint(event.clientX, event.clientY);
+      const hitNode = resolveInteractiveNodeAtPoint(scenePoint);
+      setHoveredNodeId(hitNode?.id ?? "");
+    }
+
     if (resizeDragRef.current) {
       const scenePoint = getScenePoint(event.clientX, event.clientY);
       const patchByNodeId = resizeSelectionNodes(resizeDragRef.current, scenePoint);
@@ -1018,8 +1303,10 @@ export function AiDesignView() {
       if (rect.width > 3 || rect.height > 3) {
         const matchedIds = visibleNodes
           .filter((node) => rectsIntersect(rect, nodeToBounds(node)) && !node.locked)
-          .map((node) => node.id);
-        selectNodes(selectionDragRef.current.append ? [...selectedNodeIds, ...matchedIds] : matchedIds);
+          .map((node) => getCanvasSelectionTarget(node, selectedPage.nodes, selectedNodeIds)?.id)
+          .filter((id): id is string => Boolean(id));
+        const nextIds = normalizeSelectionIds(matchedIds, selectedPage.nodes);
+        selectNodes(selectionDragRef.current.append ? normalizeSelectionIds([...selectedNodeIds, ...nextIds], selectedPage.nodes) : nextIds);
       }
     }
     panDragRef.current = null;
@@ -1034,29 +1321,25 @@ export function AiDesignView() {
 
   const handleNodePointerDown = (event: ReactPointerEvent<HTMLDivElement>, node: DesignNode) => {
     event.stopPropagation();
-    if (node.locked) {
-      selectNodes([node.id]);
+    const scenePoint = getScenePoint(event.clientX, event.clientY);
+    const interactiveNode = getCanvasSelectionTarget(node, selectedPage.nodes, selectedNodeIds);
+    if (!interactiveNode) {
+      return;
+    }
+    if (interactiveNode.locked) {
+      selectNodes([interactiveNode.id]);
       return;
     }
     const append = event.shiftKey || event.metaKey || event.ctrlKey;
     const nextSelection = append
-      ? selectedNodeIds.includes(node.id)
-        ? selectedNodeIds.filter((id) => id !== node.id)
-        : [...selectedNodeIds, node.id]
-      : selectedNodeIds.includes(node.id)
+      ? selectedNodeIds.includes(interactiveNode.id)
+        ? selectedNodeIds.filter((id) => id !== interactiveNode.id)
+        : [...selectedNodeIds, interactiveNode.id]
+      : selectedNodeIds.includes(interactiveNode.id)
         ? selectedNodeIds
-        : [node.id];
-    selectNodes(nextSelection, node.id);
-    const dragIds = (selectedNodeIds.includes(node.id) && !append ? selectedNodeIds : nextSelection)
-      .map((id) => selectedPage.nodes.find((item) => item.id === id))
-      .filter((item): item is DesignNode => Boolean(item) && !item.locked);
-    const scenePoint = getScenePoint(event.clientX, event.clientY);
-    nodeDragRef.current = {
-      nodeIds: dragIds.map((item) => item.id),
-      startX: scenePoint.x,
-      startY: scenePoint.y,
-      originals: dragIds.map((item) => ({ id: item.id, x: item.x, y: item.y }))
-    };
+        : [interactiveNode.id];
+    selectNodes(nextSelection, interactiveNode.id);
+    startNodeDragSession(selectedNodeIds.includes(interactiveNode.id) && !append ? selectedNodeIds : nextSelection, scenePoint);
     canvasViewportRef.current?.setPointerCapture(event.pointerId);
   };
 
@@ -1189,6 +1472,54 @@ export function AiDesignView() {
         </div>
       </header>
 
+      {contextMenu && contextMenuNode ? (
+        <div
+          className="fixed z-[80] w-[220px] overflow-hidden rounded-2xl border border-[#e5e5e7] bg-white py-2 text-sm shadow-[0_18px_60px_rgba(0,0,0,0.22)]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-[#f6f6f7]"
+            onClick={() => {
+              duplicateSelectedNode();
+              setContextMenu(null);
+            }}
+          >
+            <span>复制</span>
+            <span className="text-xs text-[#999]">⌘D</span>
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center px-4 py-2.5 text-left hover:bg-[#f6f6f7]"
+            onClick={() => createContainerFromSelection(contextMenu.nodeId)}
+          >
+            创建容器
+          </button>
+          {contextMenuNode.type === "container" ? (
+            <button
+              type="button"
+              className="flex w-full items-center px-4 py-2.5 text-left hover:bg-[#f6f6f7]"
+              onClick={() => createLocalComponentFromContainer(contextMenu.nodeId)}
+            >
+              创建组件
+            </button>
+          ) : null}
+          <div className="my-2 h-px bg-[#eeeeef]" />
+          <button
+            type="button"
+            className="flex w-full items-center px-4 py-2.5 text-left text-red-600 hover:bg-red-50"
+            onClick={() => {
+              deleteSelectedNode();
+              setContextMenu(null);
+            }}
+          >
+            删除图层
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex min-h-0 flex-1">
         <aside className="flex w-[300px] shrink-0 flex-col border-r border-[#e6e6e8] bg-white">
           <div className="flex h-[54px] shrink-0 items-center border-b border-[#eeeeef] px-4">
@@ -1276,6 +1607,7 @@ export function AiDesignView() {
                           : [...selectedNodeIds, node.id]
                         : [node.id], node.id);
                     }}
+                    onContextMenu={(event, node) => openNodeContextMenu(event, node, "layer")}
                   />
                 </div>
               </div>
@@ -1305,6 +1637,61 @@ export function AiDesignView() {
                 <Import className="mr-2 size-4" />
                 {importingDesignFile ? "正在导入 Sketch / Figma..." : "导入 Sketch / Figma 文件"}
               </Button>
+              {componentCollectionView === "local" ? (
+                <div>
+                  <Button type="button" variant="ghost" size="sm" className="mb-3 px-0" onClick={() => setComponentCollectionView("all")}>
+                    <ArrowLeft className="mr-2 size-4" />
+                    返回组件
+                  </Button>
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">本地组件集合</div>
+                      <div className="mt-1 text-xs text-[#777]">从容器右键创建的组件会保存在这里。</div>
+                    </div>
+                    <Badge variant="secondary">{localComponents.length}</Badge>
+                  </div>
+                  {localComponents.length ? (
+                    <div className="space-y-2">
+                      {localComponents.map((component) => (
+                        <button
+                          key={component.id}
+                          type="button"
+                          draggable
+                          onDragStart={(event) => startDragPayload(event, { kind: "component", component })}
+                          onClick={() => insertImportedComponent(component)}
+                          className="w-full rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
+                        >
+                          <DesignMiniPreview nodes={component.nodes} className="mb-3 h-[132px]" />
+                          <div className="flex items-center gap-2">
+                            <Component className="size-4 text-[#6d35d8]" />
+                            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{component.name}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-[#777]">{component.nodeCount} 个节点，点击插入画布</div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-[#d8d8dd] bg-[#fafafa] p-5 text-sm leading-6 text-[#777]">
+                      现在还没有本地组件。请在图层或画布里右击一个容器，然后选择“创建组件”。
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+              <button
+                type="button"
+                onClick={() => setComponentCollectionView("local")}
+                className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
+              >
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#ede7ff] text-[#6d35d8]">
+                  <Component className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold">本地组件集合</div>
+                  <div className="mt-1 truncate text-xs text-[#777]">{localComponents.length} 个已创建组件</div>
+                </div>
+                <ChevronDown className="-rotate-90 size-4 text-[#999]" />
+              </button>
               <div className="grid grid-cols-2 gap-3">
                 {componentPresets.map((item) => {
                   const Icon = item.icon;
@@ -1322,11 +1709,11 @@ export function AiDesignView() {
                   );
                 })}
               </div>
-              {file.importedComponents?.length ? (
+              {externalImportedComponents.length ? (
                 <div className="mt-6">
                   <div className="mb-3 text-sm font-semibold">导入组件</div>
                   <div className="space-y-2">
-                    {file.importedComponents.map((component) => (
+                    {externalImportedComponents.map((component) => (
                       <button
                         key={component.id}
                         type="button"
@@ -1376,6 +1763,8 @@ export function AiDesignView() {
                   ))}
                 </div>
               </div>
+              </>
+              )}
             </div>
           ) : null}
 
@@ -1518,8 +1907,18 @@ export function AiDesignView() {
                 <div className="space-y-3">
                   {aiMessages.map((message) => (
                     <div key={message.id} className={`rounded-2xl px-3 py-2 text-sm leading-6 ${message.role === "user" ? "ml-6 bg-[#246bfe] text-white" : "mr-6 border border-[#ececef] bg-white text-[#333]"}`}>
-                      <div className="mb-1 text-[11px] font-semibold opacity-70">{message.role === "user" ? "你" : "AI Design Agent"}</div>
+                      <div className="mb-1 text-[11px] font-semibold opacity-70">{message.role === "user" ? "你" : message.agentRole ?? "AI Design Agent"}</div>
                       <div className="whitespace-pre-wrap">{message.content}</div>
+                      {message.previewImages?.length ? (
+                        <div className="mt-2 grid gap-2">
+                          {message.previewImages.map((image) => (
+                            <figure key={image.dataUrl} className="overflow-hidden rounded-xl border border-[#ececef] bg-[#f7f8fb]">
+                              <img src={image.dataUrl} alt={image.label} className="block max-h-72 w-full object-contain" />
+                              <figcaption className="border-t border-[#ececef] px-2 py-1 text-[11px] text-[#777]">{image.label}</figcaption>
+                            </figure>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                   {aiBusy ? (
@@ -1562,6 +1961,9 @@ export function AiDesignView() {
             onPointerMove={handleCanvasPointerMove}
             onPointerUp={handleCanvasPointerEnd}
             onPointerCancel={handleCanvasPointerEnd}
+            onContextMenu={handleCanvasContextMenu}
+            onDoubleClick={handleCanvasDoubleClick}
+            onPointerLeave={() => setHoveredNodeId("")}
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleCanvasDrop}
             onWheel={handleCanvasWheel}
@@ -1579,6 +1981,9 @@ export function AiDesignView() {
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`
               }}
             >
+              {hoverBounds ? (
+                <CanvasOutlineBoundsView bounds={hoverBounds} tone="hover" />
+              ) : null}
               {showSelectionBounds ? (
                 <SelectionBoundsView
                   bounds={selectionBounds}
@@ -1851,6 +2256,22 @@ function SelectionBoundsView({
   );
 }
 
+function CanvasOutlineBoundsView({ bounds, tone }: { bounds: RectBounds; tone: "hover" }) {
+  return (
+    <div
+      className="pointer-events-none absolute border border-dashed border-[#8b5cf6] bg-[#8b5cf6]/5"
+      style={{
+        left: bounds.x,
+        top: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        zIndex: 999998
+      }}
+      data-tone={tone}
+    />
+  );
+}
+
 const canvasImageCache = new Map<string, { image: HTMLImageElement; loaded: boolean; failed: boolean }>();
 
 function CanvasDesignRenderer({
@@ -2025,6 +2446,7 @@ function DesignNodeView({
 }) {
   const importedSketchNode = Boolean(node.sourceLayerClass);
   const importedSketchText = importedSketchNode && node.type === "text";
+  const allowOverflow = shouldAllowDesignNodeOverflow(node);
   const baseStyle: CSSProperties = {
     left: node.x,
     top: node.y,
@@ -2049,8 +2471,8 @@ function DesignNodeView({
     transformOrigin: "center center",
     boxShadow: node.shadow || undefined,
     zIndex: node.zIndex,
-    clipPath: getNodeClipPath(node),
-    overflow: node.type === "text" && importedSketchNode ? "visible" : undefined
+    clipPath: allowOverflow ? undefined : getNodeClipPath(node),
+    overflow: allowOverflow || (node.type === "text" && importedSketchNode) ? "visible" : undefined
   };
 
   return (
@@ -2059,7 +2481,7 @@ function DesignNodeView({
       style={baseStyle}
       onPointerDown={onPointerDown}
     >
-      <div className={`pointer-events-none flex h-full w-full items-center justify-center text-center font-medium ${importedSketchText ? "overflow-visible" : "overflow-hidden"} ${node.type === "image" || importedSketchNode ? "p-0" : "p-3"}`}>
+      <div className={`pointer-events-none flex h-full w-full items-center justify-center text-center font-medium ${importedSketchText || allowOverflow ? "overflow-visible" : "overflow-hidden"} ${node.type === "image" || importedSketchNode ? "p-0" : "p-3"}`}>
         {node.svgPath ? (
           <svg
             className="h-full w-full overflow-visible"
@@ -2102,7 +2524,7 @@ function DesignNodeView({
             <div className="flex h-full w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,#f0f4ff,#fff)] text-[#6b7280]">Image</div>
           )
         ) : (
-          <span className={`${importedSketchText ? "overflow-visible" : "max-h-full overflow-hidden"} w-full whitespace-pre-wrap break-words ${importedSketchNode ? "px-0.5" : ""}`}>{node.text || (importedSketchNode ? "" : node.name)}</span>
+          <span className={`${importedSketchText || allowOverflow ? "overflow-visible" : "max-h-full overflow-hidden"} w-full whitespace-pre-wrap break-words ${importedSketchNode ? "px-0.5" : ""}`}>{node.text || (importedSketchNode ? "" : node.name)}</span>
         )}
       </div>
       {selected ? (
@@ -2214,6 +2636,7 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
   const { node, children } = treeNode;
   const textNode = node.type === "text";
   const imageNode = node.type === "image";
+  const allowOverflow = shouldAllowDesignNodeOverflow(node);
   const imageClip = getImageVisualClip(node);
   const visualX = imageClip ? imageClip.x : node.x;
   const visualY = imageClip ? imageClip.y : node.y;
@@ -2228,7 +2651,7 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
     width: visualWidth,
     height: textNode ? "auto" : visualHeight,
     minHeight: textNode ? node.height : undefined,
-    overflow: imageNode || node.fillImageUrl || node.clipPath || node.clipBounds || visualRadius > 0 ? "hidden" : "visible",
+    overflow: allowOverflow ? "visible" : imageNode || node.fillImageUrl || node.clipPath || node.clipBounds || visualRadius > 0 ? "hidden" : "visible",
     ...backgroundStyle,
     borderColor: node.stroke,
     borderStyle: node.stroke !== "transparent" && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? "solid" : undefined,
@@ -2239,7 +2662,7 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
     transform: getDesignNodeCssTransform(node),
     transformOrigin: "center center",
     zIndex: node.zIndex,
-    clipPath: imageClip ? undefined : getNodeClipPath(node),
+    clipPath: allowOverflow || imageClip ? undefined : getNodeClipPath(node),
     color: node.textColor,
     fontFamily: getCssFontFamily(node),
     fontWeight: node.fontWeight ?? 400,
@@ -3720,6 +4143,13 @@ function renderSvgRadialGradient(id: string, value: string) {
   );
 }
 
+function shouldAllowDesignNodeOverflow(node: DesignNode) {
+  if (node.type === "image" || node.fillImageUrl || node.imageUrl) {
+    return false;
+  }
+  return node.type === "frame" || node.type === "container" || node.type === "card";
+}
+
 function getNodeClipPath(node: DesignNode) {
   if (node.clipPath?.svgPath) {
     const translatedPath = translateSvgPath(node.clipPath.svgPath, node.clipPath.x - node.x, node.clipPath.y - node.y);
@@ -3761,6 +4191,111 @@ function pointInDesignNode(node: DesignNode, point: { x: number; y: number }) {
     return false;
   }
   return true;
+}
+
+function getCanvasSelectionTarget(hitNode: DesignNode, nodes: DesignNode[], selectedIds: string[]) {
+  const selectedNode = selectedIds[0] ? nodes.find((node) => node.id === selectedIds[0]) : undefined;
+  if (selectedNode) {
+    if (hitNode.id === selectedNode.id || getAncestorNodes(hitNode, nodes).some((ancestor) => ancestor.id === selectedNode.id)) {
+      return selectedNode;
+    }
+    if (hitNode.parentId === selectedNode.parentId && !isHiddenRootNode(hitNode, nodes)) {
+      return hitNode;
+    }
+  }
+  return getHiddenRootAdjacentTarget(hitNode, nodes);
+}
+
+function getAncestorNodes(node: DesignNode, nodes: DesignNode[]) {
+  const nodeById = new Map(nodes.map((item) => [item.id, item]));
+  const ancestors: DesignNode[] = [];
+  const visited = new Set<string>();
+  let parentId = node.parentId;
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    const parent = nodeById.get(parentId);
+    if (!parent) {
+      break;
+    }
+    ancestors.push(parent);
+    parentId = parent.parentId;
+  }
+  return ancestors;
+}
+
+function getDescendantNodeIds(nodeId: string, nodes: DesignNode[]) {
+  const childrenByParentId = new Map<string, DesignNode[]>();
+  nodes.forEach((node) => {
+    if (!node.parentId) {
+      return;
+    }
+    const children = childrenByParentId.get(node.parentId) ?? [];
+    children.push(node);
+    childrenByParentId.set(node.parentId, children);
+  });
+
+  const result: string[] = [];
+  const visit = (parentId: string) => {
+    (childrenByParentId.get(parentId) ?? []).forEach((child) => {
+      result.push(child.id);
+      visit(child.id);
+    });
+  };
+  visit(nodeId);
+  return result;
+}
+
+function getHiddenRootAdjacentTarget(hitNode: DesignNode, nodes: DesignNode[]) {
+  const ancestors = getAncestorNodes(hitNode, nodes);
+  const root = ancestors[ancestors.length - 1] ?? hitNode;
+  if (hitNode.id === root.id && isHiddenRootNode(hitNode, nodes)) {
+    return null;
+  }
+  const pathFromHitToRoot = [hitNode, ...ancestors];
+  return pathFromHitToRoot.find((node) => node.parentId === root.id) ?? (isHiddenRootNode(hitNode, nodes) ? null : hitNode);
+}
+
+function isHiddenRootNode(node: DesignNode, nodes: DesignNode[]) {
+  return !node.parentId && nodes.some((candidate) => candidate.parentId === node.id);
+}
+
+function expandSelectionWithDescendants(selectionIds: string[], nodes: DesignNode[]) {
+  const ids = new Set(selectionIds);
+  selectionIds.forEach((id) => {
+    getDescendantNodeIds(id, nodes).forEach((descendantId) => ids.add(descendantId));
+  });
+  return Array.from(ids);
+}
+
+function normalizeSelectionIds(ids: string[], nodes: DesignNode[]) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  const idSet = new Set(uniqueIds);
+  return uniqueIds.filter((id) => {
+    const node = nodes.find((item) => item.id === id);
+    return Boolean(node)
+      && !isHiddenRootNode(node!, nodes)
+      && !getAncestorNodes(node!, nodes).some((ancestor) => idSet.has(ancestor.id));
+  });
+}
+
+function hasSelectedAncestor(node: DesignNode, selectedIds: string[], nodes: DesignNode[]) {
+  const selectedIdSet = new Set(selectedIds);
+  return getAncestorNodes(node, nodes).some((ancestor) => selectedIdSet.has(ancestor.id));
+}
+
+function getContextActionNodeIds(anchorNodeId: string | undefined, selectedIds: string[]) {
+  if (!anchorNodeId) {
+    return selectedIds;
+  }
+  return selectedIds.includes(anchorNodeId) ? selectedIds : [anchorNodeId];
+}
+
+function getTopLevelNodeIds(ids: string[], nodes: DesignNode[]) {
+  const idSet = new Set(ids);
+  return ids.filter((id) => {
+    const node = nodes.find((item) => item.id === id);
+    return Boolean(node) && !getAncestorNodes(node!, nodes).some((ancestor) => idSet.has(ancestor.id));
+  });
 }
 
 function rectContainsPoint(rect: RectBounds, point: { x: number; y: number }) {
@@ -4009,13 +4544,15 @@ function DesignLayerTree({
   expandedIds,
   selectedIds,
   onToggle,
-  onSelect
+  onSelect,
+  onContextMenu
 }: {
   nodes: DesignLayerTreeNode[];
   expandedIds: string[];
   selectedIds: string[];
   onToggle: (nodeId: string) => void;
   onSelect: (node: DesignNode, append: boolean) => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>, node: DesignNode) => void;
 }) {
   if (nodes.length === 0) {
     return <div className="rounded-xl px-3 py-4 text-xs text-[#888]">没有匹配到图层。</div>;
@@ -4033,6 +4570,7 @@ function DesignLayerTree({
             const append = event.shiftKey || event.metaKey || event.ctrlKey;
             onSelect(node, append);
           }}
+          onContextMenu={(event) => onContextMenu(event, node)}
           className={`group flex w-full items-center gap-1 rounded-xl py-2 pr-2 text-left text-sm ${selectedIds.includes(node.id) ? "bg-[#ede7ff] text-[#6d35d8]" : "hover:bg-[#f7f7f8]"}`}
           style={{ paddingLeft: 8 + Math.min(treeNode.depth, 8) * 14 }}
         >
@@ -4105,7 +4643,9 @@ function buildDesignLayerTree(nodes: DesignNode[], query: string): DesignLayerTr
     };
   };
 
-  return sortDesignLayerPanelNodes(roots)
+  const visibleRoots = roots.flatMap((node) => isHiddenRootNode(node, nodes) ? childrenByParentId.get(node.id) ?? [] : [node]);
+
+  return sortDesignLayerPanelNodes(visibleRoots)
     .map((node) => buildNode(node, 0))
     .filter((node): node is DesignLayerTreeNode => Boolean(node));
 }
@@ -4163,6 +4703,35 @@ function mergeAgentPageIntoFile(file: AiDesignFile, page?: DesignPage): AiDesign
       ? file.pages.map((item) => item.id === page.id ? { ...page, schemaLoaded: true, nodeCount: page.nodes.length } : item)
       : [...file.pages, { ...page, schemaLoaded: true, nodeCount: page.nodes.length }]
   };
+}
+
+function resolveAgentEventPage(requestPageId: string, page?: DesignPage) {
+  if (!page) {
+    return undefined;
+  }
+  return page.id === requestPageId ? page : undefined;
+}
+
+function extractAiPreviewImages(result: unknown): Array<{ label: string; dataUrl: string }> | undefined {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    return undefined;
+  }
+  const previews = (result as { previews?: unknown }).previews;
+  if (!Array.isArray(previews)) {
+    return undefined;
+  }
+  const images = previews
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const record = item as { label?: unknown; dataUrl?: unknown };
+      if (typeof record.dataUrl !== "string" || !record.dataUrl.startsWith("data:image/")) return null;
+      return {
+        label: typeof record.label === "string" ? record.label : "画板预览",
+        dataUrl: record.dataUrl
+      };
+    })
+    .filter((item): item is { label: string; dataUrl: string } => Boolean(item));
+  return images.length > 0 ? images : undefined;
 }
 
 function preserveLoadedDesignPages(nextFile: AiDesignFile, currentFile: AiDesignFile): AiDesignFile {

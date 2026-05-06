@@ -1,1 +1,1 @@
-{"provider":"openai-compatible","modelProfile":"balanced","apiKeyConfigured":true,"stageModelRouting":{"capture":"gpt-5-mini","structure":"gpt-5.2","design":"glm-5.1"},"baseUrl":"https://open.bigmodel.cn/api/paas/v4"}
+{"provider":"openai-compatible","modelProfile":"balanced","apiKeyConfigured":true,"stageModelRouting":{"capture":"gpt-5-mini","structure":"gpt-5.2","design":"qwen3.6-max-preview"},"baseUrl":"https://dashscope.aliyuncs.com/compatible-mode/v1"}
