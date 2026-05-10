@@ -4,6 +4,7 @@ import { basename, extname, join } from "node:path";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import XLSX from "xlsx";
+import type { AnyLayer } from "../../../node_modules/@sketch-hq/sketch-file-format-ts/dist/cjs/types.js";
 // @ts-expect-error no bundled types
 import WordExtractor from "word-extractor";
 import { z } from "zod";
@@ -18,8 +19,11 @@ import {
   uiSchemaDraftSchema,
   type DesignAgentPlan,
   type DesignAgentToolCall,
-  type DesignAgentToolResult
+  type DesignAgentToolResult,
+  type UiSchemaDraft
 } from "./design-agent-tool-service.js";
+import { getDesignReferenceContext } from "./design-reference-catalog.js";
+import { getCapabilityPrompt, getDesignCapabilityProfile } from "./design-capability-registry.js";
 import { MainAgentOrchestratorService } from "./main-agent-orchestrator-service.js";
 import type {
   WorkspaceBundle,
@@ -88,6 +92,10 @@ const designAgentSchema = z.object({
 const uiDesignerPlanSchema = z.object({
   designGoal: z.string().default(""),
   businessUnderstanding: z.string().default(""),
+  platform: z.enum(["pc_web", "wechat_mini_program", "mobile_app", "responsive_web"]).default("pc_web"),
+  industry: z.string().default("通用业务"),
+  interactionTypes: z.array(z.string()).default([]),
+  referenceSystems: z.array(z.string()).default([]),
   layoutPlan: z.object({
     type: z.string().default(""),
     areas: z.array(z.string()).default([])
@@ -105,18 +113,47 @@ const uiDesignerPlanSchema = z.object({
     position: z.string().default(""),
     reason: z.string().default("")
   })).default([]),
+  pageSpecs: z.array(z.object({
+    name: z.string(),
+    goal: z.string().default(""),
+    keyBlocks: z.array(z.string()).default([]),
+    primaryAction: z.string().default(""),
+    states: z.array(z.string()).default([])
+  })).default([]),
   executionPlan: z.array(z.object({
     action: z.string(),
     target: z.string().default(""),
     component: z.string().default(""),
     reason: z.string().default("")
   })).default([]),
+  qualityBar: z.array(z.string()).default([]),
   reviewChecklist: z.array(z.string()).default([])
+});
+const visualDesignReviewSchema = z.object({
+  passed: z.boolean(),
+  platformFit: z.object({
+    expected: z.string().default(""),
+    actual: z.string().default(""),
+    ok: z.boolean(),
+    reason: z.string().default("")
+  }),
+  visualQualityScore: z.number().min(0).max(100).default(0),
+  findings: z.array(z.object({
+    severity: z.enum(["blocking", "warning", "info"]).default("warning"),
+    pageLabel: z.string().default(""),
+    issue: z.string(),
+    evidence: z.string().default(""),
+    fixSuggestion: z.string().default("")
+  })).default([]),
+  strengths: z.array(z.string()).default([]),
+  nextAction: z.enum(["pass", "local_fix", "regenerate"]).default("pass"),
+  summary: z.string().default("")
 });
 type LlmChatDecision = z.infer<typeof captureChatSchema>;
 type RuntimeChatDecision = ChatDecision & { model?: string };
 type DesignAgentDecision = z.infer<typeof designAgentSchema>;
 type UiDesignerPlan = z.infer<typeof uiDesignerPlanSchema>;
+type VisualDesignReview = z.infer<typeof visualDesignReviewSchema>;
 type DesignAgentRoleName =
   | "负责人 Agent"
   | "产品经理 Agent"
@@ -132,6 +169,7 @@ type DesignAgentRoleName =
   | "记忆 Agent";
 export type DesignAgentStreamEvent =
   | { type: "message"; content: string; agentRole?: DesignAgentRoleName }
+  | { type: "llm_delta"; source: "ui-designer" | "schema-draft" | "json-repair" | "visual-review"; delta: string; agentRole?: DesignAgentRoleName }
   | { type: "plan"; title: string; steps: string[]; plan: DesignAgentPlan; uiDesignPlan?: UiDesignerPlan; agentRole?: DesignAgentRoleName }
   | { type: "tool_call_start"; toolName: string; params?: unknown; reason?: string; toolCallId: string; agentRole?: DesignAgentRoleName }
   | { type: "tool_call_result"; toolName: string; success: boolean; result?: unknown; error?: string; message: string; toolCallId?: string; agentRole?: DesignAgentRoleName }
@@ -635,6 +673,10 @@ export class WorkspaceProjectService {
     }
 
     let toolPlan: DesignAgentPlan;
+    let selectedPageId = selectedPage?.id;
+    let latestFile = file;
+    let latestPage = selectedPage;
+
     try {
       toolPlan = await this.planDesignAgentTools(project, llmForPlan, file, selectedPage, message, input.systemPrompt, {
         taskProfile,
@@ -729,6 +771,8 @@ export class WorkspaceProjectService {
     systemPrompt?: string;
     planningMode?: "auto" | "plan";
     conversationId?: string;
+    onDeltaEvent?: (event: Extract<DesignAgentStreamEvent, { type: "llm_delta" }>) => void | Promise<void>;
+    signal?: AbortSignal;
   }): AsyncGenerator<DesignAgentStreamEvent> {
     const project = await this.repository.getProject(projectId);
     const conversationId = input.conversationId || `design-agent-${projectId}`;
@@ -780,7 +824,23 @@ export class WorkspaceProjectService {
       return;
     }
 
+    let selectedPageId = selectedPage?.id;
+    let latestFile = file;
+    let latestPage = selectedPage;
+
     try {
+      throwIfAborted(input.signal);
+      const recentConversationMessages = (await this.repository.listAgentMessages({
+        projectId,
+        conversationId,
+        limit: 40
+      })).map((message) => ({
+        role: message.role,
+        eventType: message.eventType,
+        toolName: message.toolName,
+        content: message.content.slice(0, 1200),
+        createdAt: message.createdAt
+      }));
       const routedTaskType = routeDesignAgentTask(message);
       yield await emit({
         type: "message",
@@ -790,16 +850,34 @@ export class WorkspaceProjectService {
           : "任务判断：这是对当前页面/画布的操作，我会先读取必要上下文再执行。"
       });
       const taskProfile = classifyDesignAgentTask(message);
+      const qualityContext = buildDesignQualityContext(message);
+      yield await emit({
+        type: "message",
+        agentRole: "负责人 Agent",
+        content: [
+          "决策原因：我会先把需求归类为平台、行业和交互类型，再决定是否读取当前页面或直接生成新 UI。",
+          `质量上下文：平台=${qualityContext.platformLabel}，行业=${qualityContext.industry}，交互类型=${qualityContext.interactionTypes.join("、") || "待识别"}。`,
+          `参考系统：${qualityContext.referenceSystems.join("、")}。`,
+          qualityContext.designReferences.matchedReferenceIds.length > 0
+            ? `已命中参考数据：${qualityContext.designReferences.matchedReferenceIds.join("、")}。`
+            : "本次没有命中本地参考 schema 数据。"
+        ].join("\n")
+      });
       let uiDesignPlan: UiDesignerPlan | undefined;
       if (taskProfile.needUIAgent) {
-        yield await emit({ type: "message", agentRole: "UI 设计师 Agent", content: "我会先做页面结构、布局风格和组件选择判断，再交给执行 Agent 落 schema。" });
-        uiDesignPlan = await this.createUiDesignerPlan(project, llmForPlan, selectedPage, message, input.systemPrompt);
+        yield await emit({ type: "message", agentRole: "UI 设计师 Agent", content: "ReAct 思考：我先输出设计判断，不直接画 schema。重点确认平台规范、页面信息架构、组件粒度和审核标准。" });
+        uiDesignPlan = await this.createUiDesignerPlan(project, llmForPlan, selectedPage, message, input.systemPrompt, qualityContext, recentConversationMessages, async (delta) => {
+          const event: Extract<DesignAgentStreamEvent, { type: "llm_delta" }> = { type: "llm_delta", source: "ui-designer", delta, agentRole: "UI 设计师 Agent" };
+          await emit(event);
+          await input.onDeltaEvent?.(event);
+        }, input.signal);
         yield await emit({ type: "message", agentRole: "UI 设计师 Agent", content: formatUiDesignPlanReply(uiDesignPlan) || "UI 设计判断已完成。" });
       }
 
       let toolPlan = await this.planDesignAgentTools(project, llmForPlan, file, selectedPage, message, input.systemPrompt, {
         taskProfile,
-        uiDesignPlan
+        uiDesignPlan,
+        recentConversationMessages
       });
       toolPlan = normalizeDesignAgentPlanForIntent(message, toolPlan);
       validateDesignAgentPlanForIntent(message, toolPlan);
@@ -839,16 +917,176 @@ export class WorkspaceProjectService {
         }
       }
 
-      let selectedPageId = selectedPage?.id;
-      let latestFile = file;
-      let latestPage = selectedPage;
       let latestGeneratedFrameIds: string[] = [];
+      let visualReviewFailure: DesignAgentToolResult | undefined;
+      let didInitialPreviewReview = false;
 
       for (const step of toolPlan.steps.slice(0, 8)) {
+        throwIfAborted(input.signal);
+        if (routeDesignAgentTask(message) === "create_new_ui" && (step.tool === "canvas.capture" || step.tool === "ui.critic_review" || step.tool === "ui.review_design" || step.tool === "ui.review")) {
+          yield await emit({
+            type: "message",
+            agentRole: "负责人 Agent",
+            content: `流程调整：${step.tool} 延后到 UI 稿落盘并截图之后执行，避免在用户看到首版稿之前内部修复。`
+          });
+          continue;
+        }
         let executableStep = step;
+        if (step.tool === "schema.generate_ui_from_requirements" && !isRecordLike(step.input.schemaDraft) && routeDesignAgentTask(message) === "create_new_ui") {
+          const draftRequests = buildSequentialUiDraftRequests(message, uiDesignPlan);
+          yield await emit({
+            type: "message",
+            agentRole: "Schema 执行 Agent",
+            content: `制作 UI 稿改为增量推进：本次识别到 ${draftRequests.length} 个页面；每个页面先创建画板外框，再按区块逐块落盘、校验和截图观察。`
+          });
+          for (const draftRequest of draftRequests) {
+            const pageSections = buildIncrementalUiSectionRequests(draftRequest, String(step.input.platform ?? ""), message);
+            yield await emit({
+              type: "message",
+              agentRole: "Schema 执行 Agent",
+              content: `正在生成页面「${draftRequest.name}」：先创建空画板，再分 ${pageSections.length} 个区块输出。`
+            });
+            throwIfAborted(input.signal);
+            const shellDraft = createUiPageShellDraft(draftRequest, String(step.input.platform ?? ""), message);
+            const shellStep: DesignAgentToolCall = {
+              ...step,
+              input: {
+                ...step.input,
+                userRequest: draftRequest.prompt,
+                schemaDraft: shellDraft
+              }
+            };
+            const agentRole = getDesignAgentRoleForTool(shellStep.tool);
+            const shellToolCallId = createAgentRunId("tool");
+            yield await emit({ type: "tool_call_start", agentRole, toolName: shellStep.tool, params: shellStep.input, reason: `${draftRequest.name} 创建画板外框`, toolCallId: shellToolCallId });
+            const shellResult = await this.executeDesignToolStep(projectId, selectedPageId, shellStep, conversationId);
+            yield await emit({
+              type: "tool_call_result",
+              agentRole,
+              toolName: shellStep.tool,
+              success: shellResult.ok,
+              result: shellResult.data,
+              error: shellResult.ok ? undefined : shellResult.message,
+              message: shellResult.message,
+              toolCallId: shellToolCallId
+            });
+            if (!shellResult.ok) {
+              yield await emit({ type: "error", agentRole, message: shellResult.message });
+              yield await emit({
+                type: "done",
+                agentRole: "负责人 Agent",
+                summary: `创建「${draftRequest.name}」画板失败，已停止后续页面，保留前面已完成页面。`,
+                file: latestFile,
+                page: latestPage,
+                selectedPageId
+              });
+              return;
+            }
+            if (shellResult.file) latestFile = shellResult.file;
+            if (shellResult.page) latestPage = shellResult.page;
+            if (shellResult.selectedPageId) selectedPageId = shellResult.selectedPageId;
+            const generatedFrameIds = getGeneratedFrameIds(shellResult.data);
+            const targetFrameId = generatedFrameIds[0];
+            if (generatedFrameIds.length > 0) {
+              latestGeneratedFrameIds = [...latestGeneratedFrameIds, ...generatedFrameIds];
+            }
+            yield await emit({
+              type: "schema_patch",
+              agentRole,
+              action: inferSchemaPatchAction(shellStep.tool),
+              file: latestFile,
+              page: latestPage,
+              pageId: selectedPageId,
+              nodeCount: latestPage?.nodes.length,
+              selectedNodeIds: generatedFrameIds
+            });
+            if (!targetFrameId) {
+              yield await emit({ type: "error", agentRole, message: `创建「${draftRequest.name}」后没有返回画板 ID，无法继续增量追加区块。` });
+              return;
+            }
+            for (const section of pageSections) {
+              throwIfAborted(input.signal);
+              yield await emit({
+                type: "message",
+                agentRole: "Schema 执行 Agent",
+                content: [
+                  `边做边想：准备生成「${draftRequest.name} / ${section.name}」。`,
+                  "行动策略：只输出本区块节点，追加到刚创建的画板内；追加后马上校验 schema 并截图观察接口是否正确。"
+                ].join("\n")
+              });
+              const sectionDraft = await this.createUiSchemaDraft(project, llmForPlan, latestPage ?? selectedPage, section.prompt, input.systemPrompt, uiDesignPlan, String(step.input.platform ?? ""), qualityContext, async (delta) => {
+                const event: Extract<DesignAgentStreamEvent, { type: "llm_delta" }> = { type: "llm_delta", source: "schema-draft", delta, agentRole: "Schema 执行 Agent" };
+                await emit(event);
+                await input.onDeltaEvent?.(event);
+              }, input.signal);
+              const sectionStep: DesignAgentToolCall = {
+                ...step,
+                input: {
+                  ...step.input,
+                  userRequest: section.prompt,
+                  targetFrameId,
+                  schemaDraft: {
+                    ...sectionDraft,
+                    artboards: sectionDraft.artboards.slice(0, 1)
+                  }
+                }
+              };
+              const sectionToolCallId = createAgentRunId("tool");
+              yield await emit({ type: "tool_call_start", agentRole, toolName: sectionStep.tool, params: sectionStep.input, reason: `${draftRequest.name} / ${section.name} 增量落盘`, toolCallId: sectionToolCallId });
+              const sectionResult = await this.executeDesignToolStep(projectId, selectedPageId, sectionStep, conversationId);
+              yield await emit({
+                type: "tool_call_result",
+                agentRole,
+                toolName: sectionStep.tool,
+                success: sectionResult.ok,
+                result: sectionResult.data,
+                error: sectionResult.ok ? undefined : sectionResult.message,
+                message: sectionResult.message,
+                toolCallId: sectionToolCallId
+              });
+              if (!sectionResult.ok) {
+                yield await emit({ type: "error", agentRole, message: sectionResult.message });
+                yield await emit({
+                  type: "done",
+                  agentRole: "负责人 Agent",
+                  summary: `生成「${draftRequest.name} / ${section.name}」失败，已停止后续区块，保留已完成区块。`,
+                  file: latestFile,
+                  page: latestPage,
+                  selectedPageId
+                });
+                return;
+              }
+              if (sectionResult.file) latestFile = sectionResult.file;
+              if (sectionResult.page) latestPage = sectionResult.page;
+              if (sectionResult.selectedPageId) selectedPageId = sectionResult.selectedPageId;
+              yield await emit({
+                type: "schema_patch",
+                agentRole,
+                action: inferSchemaPatchAction(sectionStep.tool),
+                file: latestFile,
+                page: latestPage,
+                pageId: selectedPageId,
+                nodeCount: latestPage?.nodes.length,
+                selectedNodeIds: getGeneratedFrameIds(sectionResult.data)
+              });
+              const validateToolCallId = createAgentRunId("tool");
+              const validateResult = await this.executeDesignToolStep(projectId, selectedPageId, { tool: "schema.validate", reason: `${section.name} 落盘后校验 schema 接口`, input: {} }, conversationId);
+              yield await emit({ type: "tool_call_result", agentRole: "审核 Agent", toolName: "schema.validate", success: validateResult.ok, result: validateResult.data, error: validateResult.ok ? undefined : validateResult.message, message: `${draftRequest.name} / ${section.name}：${validateResult.message}`, toolCallId: validateToolCallId });
+              const captureToolCallId = createAgentRunId("tool");
+              const captureResult = await this.executeDesignToolStep(projectId, selectedPageId, { tool: "canvas.capture", reason: `${section.name} 落盘后观察画板预览`, input: { nodeIds: [targetFrameId], limit: 1 } }, conversationId);
+              yield await emit({ type: "tool_call_result", agentRole: "审核 Agent", toolName: "canvas.capture", success: captureResult.ok, result: captureResult.data, error: captureResult.ok ? undefined : captureResult.message, message: `${draftRequest.name} / ${section.name}：${captureResult.message}`, toolCallId: captureToolCallId });
+            }
+          }
+          continue;
+        }
         if (step.tool === "schema.generate_ui_from_requirements" && !isRecordLike(step.input.schemaDraft)) {
           yield await emit({ type: "message", agentRole: "Schema 执行 Agent", content: "我先让 Schema Agent 根据产品/设计上下文生成 aipm.design.schema.v1 草案，再执行落盘。" });
-          const schemaDraft = await this.createUiSchemaDraft(project, llmForPlan, selectedPage, message, input.systemPrompt, uiDesignPlan, String(step.input.platform ?? ""));
+          const schemaDraftUserRequest = String(step.input.userRequest ?? message);
+          const schemaDraft = await this.createUiSchemaDraft(project, llmForPlan, selectedPage, schemaDraftUserRequest, input.systemPrompt, uiDesignPlan, String(step.input.platform ?? ""), qualityContext, async (delta) => {
+            const event: Extract<DesignAgentStreamEvent, { type: "llm_delta" }> = { type: "llm_delta", source: "schema-draft", delta, agentRole: "Schema 执行 Agent" };
+            await emit(event);
+            await input.onDeltaEvent?.(event);
+          }, input.signal);
           executableStep = {
             ...step,
             input: {
@@ -878,6 +1116,14 @@ export class WorkspaceProjectService {
         }
         const toolCallId = createAgentRunId("tool");
         const agentRole = getDesignAgentRoleForTool(executableStep.tool);
+        yield await emit({
+          type: "message",
+          agentRole,
+          content: [
+            `ReAct 思考：${executableStep.reason || "我需要执行这一步来推进任务。"}`,
+            `ReAct 行动：调用 ${executableStep.tool}。`
+          ].join("\n")
+        });
         yield await emit({ type: "tool_call_start", agentRole, toolName: executableStep.tool, params: executableStep.input, reason: executableStep.reason, toolCallId });
         await this.repository.upsertAgentToolCall({
           id: toolCallId,
@@ -912,6 +1158,11 @@ export class WorkspaceProjectService {
           message: result.message,
           toolCallId
         });
+        yield await emit({
+          type: "message",
+          agentRole,
+          content: `ReAct 观察：${result.ok ? "成功" : "失败"}，${result.message}`
+        });
 
         if (result.file) latestFile = result.file;
         if (result.page) latestPage = result.page;
@@ -941,26 +1192,51 @@ export class WorkspaceProjectService {
             const recoveryStep = buildDesignAgentRecoveryStep(message, executableStep, failedResult, retryAttempt);
             if (!recoveryStep) break;
             recoveryAttemptCount = retryAttempt;
+            let executableRecoveryStep = recoveryStep;
+            if (recoveryStep.tool === "schema.generate_ui_from_requirements" && !isRecordLike(recoveryStep.input.schemaDraft)) {
+              yield await emit({
+                type: "message",
+                agentRole: "Schema 执行 Agent",
+                content: `${formatRetryAttemptLabel(retryAttempt)}重试：我会根据失败原因重新生成 schemaDraft，再追加一版修复稿。`
+              });
+              const schemaDraft = await this.createUiSchemaDraft(
+                project,
+                llmForPlan,
+                selectedPage,
+                String(recoveryStep.input.userRequest ?? message),
+                input.systemPrompt,
+                uiDesignPlan,
+                String(recoveryStep.input.platform ?? ""),
+                qualityContext
+              );
+              executableRecoveryStep = {
+                ...recoveryStep,
+                input: {
+                  ...recoveryStep.input,
+                  schemaDraft
+                }
+              };
+            }
             const recoveryToolCallId = createAgentRunId("tool");
-            const recoveryAgentRole = getDesignAgentRoleForTool(recoveryStep.tool);
-            yield await emit({ type: "message", agentRole: "负责人 Agent", content: `${formatRetryAttemptLabel(retryAttempt)}重试：${recoveryStep.reason}` });
-            yield await emit({ type: "tool_call_start", agentRole: recoveryAgentRole, toolName: recoveryStep.tool, params: recoveryStep.input, reason: recoveryStep.reason, toolCallId: recoveryToolCallId });
+            const recoveryAgentRole = getDesignAgentRoleForTool(executableRecoveryStep.tool);
+            yield await emit({ type: "message", agentRole: "负责人 Agent", content: `${formatRetryAttemptLabel(retryAttempt)}重试：${executableRecoveryStep.reason}` });
+            yield await emit({ type: "tool_call_start", agentRole: recoveryAgentRole, toolName: executableRecoveryStep.tool, params: executableRecoveryStep.input, reason: executableRecoveryStep.reason, toolCallId: recoveryToolCallId });
             await this.repository.upsertAgentToolCall({
               id: recoveryToolCallId,
               conversationId,
               projectId,
-              toolName: recoveryStep.tool,
-              arguments: recoveryStep.input,
+              toolName: executableRecoveryStep.tool,
+              arguments: executableRecoveryStep.input,
               status: "running",
               startedAt: nowIso()
             });
-            const recoveryResult = await this.executeDesignToolStep(projectId, selectedPageId, recoveryStep, conversationId);
+            const recoveryResult = await this.executeDesignToolStep(projectId, selectedPageId, executableRecoveryStep, conversationId);
             await this.repository.upsertAgentToolCall({
               id: recoveryToolCallId,
               conversationId,
               projectId,
-              toolName: recoveryStep.tool,
-              arguments: recoveryStep.input,
+              toolName: executableRecoveryStep.tool,
+              arguments: executableRecoveryStep.input,
               result: recoveryResult.data,
               status: recoveryResult.ok ? "success" : "failed",
               error: recoveryResult.ok ? undefined : recoveryResult.message,
@@ -970,7 +1246,7 @@ export class WorkspaceProjectService {
             yield await emit({
               type: "tool_call_result",
               agentRole: recoveryAgentRole,
-              toolName: recoveryStep.tool,
+              toolName: executableRecoveryStep.tool,
               success: recoveryResult.ok,
               result: recoveryResult.data,
               error: recoveryResult.ok ? undefined : recoveryResult.message,
@@ -985,11 +1261,11 @@ export class WorkspaceProjectService {
               if (recoveryGeneratedFrameIds.length > 0) {
                 latestGeneratedFrameIds = recoveryGeneratedFrameIds;
               }
-              if (isSchemaMutationTool(recoveryStep.tool)) {
+              if (isSchemaMutationTool(executableRecoveryStep.tool)) {
                 yield await emit({
                   type: "schema_patch",
                   agentRole: recoveryAgentRole,
-                  action: inferSchemaPatchAction(recoveryStep.tool),
+                  action: inferSchemaPatchAction(executableRecoveryStep.tool),
                   file: latestFile,
                   page: latestPage,
                   pageId: selectedPageId,
@@ -1018,7 +1294,89 @@ export class WorkspaceProjectService {
         }
       }
 
-      const reviewToolName: DesignAgentToolCall["tool"] = /搜索|筛选|查询|filter|search|query/i.test(message) ? "ui.review_design" : "ui.review";
+      if (routeDesignAgentTask(message) === "create_new_ui" || latestGeneratedFrameIds.length > 0) {
+        didInitialPreviewReview = true;
+        const captureToolCallId = createAgentRunId("tool");
+        yield await emit({
+          type: "message",
+          agentRole: "审核 Agent",
+          content: "首版 UI 稿已落到画布。现在先截取本次生成的画板，让你能看到稿子，再基于截图做产品/交互/视觉审查。"
+        });
+        yield await emit({
+          type: "tool_call_start",
+          agentRole: "审核 Agent",
+          toolName: "canvas.capture",
+          params: latestGeneratedFrameIds.length > 0 ? { nodeIds: latestGeneratedFrameIds, limit: 6 } : { mode: "rightmost_artboards", limit: 6 },
+          reason: "先输出首版 UI 截图，再进入审查和修复。",
+          toolCallId: captureToolCallId
+        });
+        const captureResult = await this.executeDesignToolStep(projectId, selectedPageId, {
+          tool: "canvas.capture",
+          reason: "先输出首版 UI 截图，再进入审查和修复。",
+          input: latestGeneratedFrameIds.length > 0 ? { nodeIds: latestGeneratedFrameIds, limit: 6 } : { mode: "rightmost_artboards", limit: 6 }
+        }, conversationId);
+        yield await emit({
+          type: "tool_call_result",
+          agentRole: "审核 Agent",
+          toolName: "canvas.capture",
+          success: captureResult.ok,
+          result: captureResult.data,
+          error: captureResult.ok ? undefined : captureResult.message,
+          message: captureResult.message,
+          toolCallId: captureToolCallId
+        });
+        const previews = extractVisualPreviewImages(captureResult.data);
+        if (captureResult.ok && previews.length > 0) {
+          const visualToolCallId = createAgentRunId("tool");
+          yield await emit({
+            type: "tool_call_start",
+            agentRole: "审核 Agent",
+            toolName: "ui.visual_review",
+            params: { previewCount: previews.length, platform: qualityContext.platformLabel, industry: qualityContext.industry },
+            reason: "基于首版截图审查产品要求、交互规范和视觉美观度。",
+            toolCallId: visualToolCallId
+          });
+          try {
+            const rawVisualReview = await this.createVisualDesignReview(project, llmForPlan, message, qualityContext, previews);
+            const visualReview = enforceVisualQualityGate(rawVisualReview);
+            const visualReviewMessage = formatVisualDesignReviewMessage(visualReview);
+            yield await emit({
+              type: "tool_call_result",
+              agentRole: "审核 Agent",
+              toolName: "ui.visual_review",
+              success: visualReview.passed,
+              result: { visualReview, previews },
+              error: visualReview.passed ? undefined : visualReviewMessage,
+              message: visualReviewMessage,
+              toolCallId: visualToolCallId
+            });
+            if (!visualReview.passed) {
+              visualReviewFailure = {
+                ok: false,
+                message: visualReviewMessage,
+                data: { visualReview, previews },
+                file: latestFile,
+                page: latestPage,
+                selectedPageId
+              };
+            }
+          } catch (error) {
+            const visualError = error instanceof Error ? error.message : String(error);
+            yield await emit({
+              type: "tool_call_result",
+              agentRole: "审核 Agent",
+              toolName: "ui.visual_review",
+              success: false,
+              result: { previews },
+              error: visualError,
+              message: `视觉审核调用失败：${visualError}`,
+              toolCallId: visualToolCallId
+            });
+          }
+        }
+      }
+
+      const reviewToolName: DesignAgentToolCall["tool"] = routeDesignAgentTask(message) === "create_new_ui" || /搜索|筛选|查询|filter|search|query|页面|ui|UI|设计|小程序|app/i.test(message) ? "ui.review_design" : "ui.review";
       const reviewAgentRole = getDesignAgentRoleForTool(reviewToolName);
       const reviewToolCallId = createAgentRunId("tool");
       yield await emit({ type: "message", agentRole: reviewAgentRole, content: "工具执行完成，我现在做一次 UI/schema 审核。" });
@@ -1026,7 +1384,7 @@ export class WorkspaceProjectService {
       let reviewResult = await this.executeDesignToolStep(projectId, selectedPageId, {
         tool: reviewToolName,
         reason: "执行完成后由审核 Agent 做一次 UI/schema 综合检查。",
-        input: { userRequest: message }
+        input: { userRequest: message, generatedFrameIds: latestGeneratedFrameIds }
       }, conversationId);
       yield await emit({
         type: "tool_call_result",
@@ -1038,44 +1396,107 @@ export class WorkspaceProjectService {
         message: reviewResult.message,
         toolCallId: reviewToolCallId
       });
+      if (visualReviewFailure && reviewResult.ok) {
+        reviewResult = visualReviewFailure;
+      }
       if (!reviewResult.ok) {
-        const fixStep = buildDesignReviewFixStep(reviewResult.data);
-        if (fixStep) {
+        for (let reviewFixAttempt = 1; reviewFixAttempt <= 3 && !reviewResult.ok; reviewFixAttempt += 1) {
+          const fixStep = buildDesignReviewFixStep(reviewResult.data, message, reviewFixAttempt);
+          if (!fixStep) {
+            yield await emit({
+              type: "message",
+              agentRole: "负责人 Agent",
+              content: "ReAct 观察：审核失败，但当前问题没有安全的自动修复动作，我会保留现状并把问题交给你确认。"
+            });
+            break;
+          }
+          let executableFixStep = fixStep;
+          if (fixStep.tool === "schema.generate_ui_from_requirements" && !isRecordLike(fixStep.input.schemaDraft)) {
+            yield await emit({
+              type: "message",
+              agentRole: "Schema 执行 Agent",
+              content: `${formatRetryAttemptLabel(reviewFixAttempt)}审核修复：这是结构性问题，我会重新生成一版更严格的 UI Schema，而不是继续在坏稿上小修。`
+            });
+            const schemaDraft = await this.createUiSchemaDraft(
+              project,
+              llmForPlan,
+              selectedPage,
+              String(fixStep.input.userRequest ?? message),
+              input.systemPrompt,
+              uiDesignPlan,
+              String(fixStep.input.platform ?? ""),
+              qualityContext
+            );
+            executableFixStep = {
+              ...fixStep,
+              input: {
+                ...fixStep.input,
+                schemaDraft
+              }
+            };
+            yield await emit({
+              type: "message",
+              agentRole: "Schema 执行 Agent",
+              content: [
+                `修复 Schema Draft 已生成：${schemaDraft.artboards.length} 个画板。`,
+                schemaDraft.designRationale.length > 0 ? `修复依据：${schemaDraft.designRationale.join("；")}` : "",
+                `画板：${schemaDraft.artboards.map((artboard) => `${artboard.name}(${artboard.width}x${artboard.height}, ${artboard.nodes.length} nodes)`).join("、")}`
+              ].filter(Boolean).join("\n")
+            });
+          }
           const fixToolCallId = createAgentRunId("tool");
-          const fixAgentRole = getDesignAgentRoleForTool(fixStep.tool);
-          yield await emit({ type: "tool_call_start", agentRole: fixAgentRole, toolName: fixStep.tool, params: fixStep.input, reason: fixStep.reason, toolCallId: fixToolCallId });
-          const fixResult = await this.executeDesignToolStep(projectId, selectedPageId, fixStep, conversationId);
+          const fixAgentRole = getDesignAgentRoleForTool(executableFixStep.tool);
+          yield await emit({
+            type: "message",
+            agentRole: fixAgentRole,
+            content: [
+              `ReAct 思考：${executableFixStep.reason || "根据审核问题执行自动修复。"}`,
+              `ReAct 行动：调用 ${executableFixStep.tool}。`
+            ].join("\n")
+          });
+          yield await emit({ type: "tool_call_start", agentRole: fixAgentRole, toolName: executableFixStep.tool, params: executableFixStep.input, reason: executableFixStep.reason, toolCallId: fixToolCallId });
+          const fixResult = await this.executeDesignToolStep(projectId, selectedPageId, executableFixStep, conversationId);
           yield await emit({
             type: "tool_call_result",
             agentRole: fixAgentRole,
-            toolName: fixStep.tool,
+            toolName: executableFixStep.tool,
             success: fixResult.ok,
             result: fixResult.data,
             error: fixResult.ok ? undefined : fixResult.message,
             message: fixResult.message,
             toolCallId: fixToolCallId
           });
+          yield await emit({
+            type: "message",
+            agentRole: fixAgentRole,
+            content: `ReAct 观察：${fixResult.ok ? "修复动作成功" : "修复动作失败"}，${fixResult.message}`
+          });
           if (fixResult.ok) {
             if (fixResult.file) latestFile = fixResult.file;
             if (fixResult.page) latestPage = fixResult.page;
             if (fixResult.selectedPageId) selectedPageId = fixResult.selectedPageId;
-            if (isSchemaMutationTool(fixStep.tool)) {
+            const fixGeneratedFrameIds = getGeneratedFrameIds(fixResult.data);
+            if (fixGeneratedFrameIds.length > 0) {
+              latestGeneratedFrameIds = fixGeneratedFrameIds;
+            }
+            if (isSchemaMutationTool(executableFixStep.tool)) {
               yield await emit({
                 type: "schema_patch",
                 agentRole: fixAgentRole,
-                action: inferSchemaPatchAction(fixStep.tool),
+                action: inferSchemaPatchAction(executableFixStep.tool),
                 file: latestFile,
                 page: latestPage,
                 pageId: selectedPageId,
-                nodeCount: latestPage?.nodes.length
+                nodeCount: latestPage?.nodes.length,
+                selectedNodeIds: fixGeneratedFrameIds
               });
             }
             const secondReviewToolCallId = createAgentRunId("tool");
-            yield await emit({ type: "tool_call_start", agentRole: reviewAgentRole, toolName: reviewToolName, params: {}, reason: "自动修复后再次审核", toolCallId: secondReviewToolCallId });
+            yield await emit({ type: "tool_call_start", agentRole: reviewAgentRole, toolName: reviewToolName, params: {}, reason: `${formatRetryAttemptLabel(reviewFixAttempt)}自动修复后再次审核`, toolCallId: secondReviewToolCallId });
             reviewResult = await this.executeDesignToolStep(projectId, selectedPageId, {
               tool: reviewToolName,
-              reason: "自动修复后由审核 Agent 复查。",
-              input: { userRequest: message }
+              reason: `${formatRetryAttemptLabel(reviewFixAttempt)}自动修复后由审核 Agent 复查。`,
+              input: { userRequest: message, generatedFrameIds: latestGeneratedFrameIds }
             }, conversationId);
             yield await emit({
               type: "tool_call_result",
@@ -1086,6 +1507,94 @@ export class WorkspaceProjectService {
               error: reviewResult.ok ? undefined : reviewResult.message,
               message: reviewResult.message,
               toolCallId: secondReviewToolCallId
+            });
+            yield await emit({
+              type: "message",
+              agentRole: reviewAgentRole,
+              content: `ReAct 观察：${formatRetryAttemptLabel(reviewFixAttempt)}复审${reviewResult.ok ? "通过" : "仍未通过"}，${reviewResult.message}`
+            });
+          } else {
+            break;
+          }
+        }
+      }
+      const shouldRunVisualReview = routeDesignAgentTask(message) === "create_new_ui" || latestGeneratedFrameIds.length > 0;
+      if (shouldRunVisualReview && !didInitialPreviewReview) {
+        const captureToolCallId = createAgentRunId("tool");
+        yield await emit({
+          type: "message",
+          agentRole: "审核 Agent",
+          content: "ReAct 思考：schema 规则审核只能看坐标和节点，我现在截取本次画板，让视觉模型从截图判断是否真的遮挡、是否符合平台风格。"
+        });
+        yield await emit({
+          type: "tool_call_start",
+          agentRole: "审核 Agent",
+          toolName: "canvas.capture",
+          params: latestGeneratedFrameIds.length > 0 ? { nodeIds: latestGeneratedFrameIds, limit: 6 } : { mode: "rightmost_artboards", limit: 6 },
+          reason: "生成画板截图，供视觉审核和人工放大查看。",
+          toolCallId: captureToolCallId
+        });
+        const captureResult = await this.executeDesignToolStep(projectId, selectedPageId, {
+          tool: "canvas.capture",
+          reason: "生成画板截图，供视觉审核和人工放大查看。",
+          input: latestGeneratedFrameIds.length > 0 ? { nodeIds: latestGeneratedFrameIds, limit: 6 } : { mode: "rightmost_artboards", limit: 6 }
+        }, conversationId);
+        yield await emit({
+          type: "tool_call_result",
+          agentRole: "审核 Agent",
+          toolName: "canvas.capture",
+          success: captureResult.ok,
+          result: captureResult.data,
+          error: captureResult.ok ? undefined : captureResult.message,
+          message: captureResult.message,
+          toolCallId: captureToolCallId
+        });
+        const previews = extractVisualPreviewImages(captureResult.data);
+        if (captureResult.ok && previews.length > 0) {
+          const visualToolCallId = createAgentRunId("tool");
+          yield await emit({
+            type: "tool_call_start",
+            agentRole: "审核 Agent",
+            toolName: "ui.visual_review",
+            params: { previewCount: previews.length, platform: qualityContext.platformLabel, industry: qualityContext.industry },
+            reason: "使用视觉模型审核截图质量、平台匹配、遮挡和交互专业度。",
+            toolCallId: visualToolCallId
+          });
+          try {
+            const rawVisualReview = await this.createVisualDesignReview(project, llmForPlan, message, qualityContext, previews);
+            const visualReview = enforceVisualQualityGate(rawVisualReview);
+            const visualReviewMessage = formatVisualDesignReviewMessage(visualReview);
+            yield await emit({
+              type: "tool_call_result",
+              agentRole: "审核 Agent",
+              toolName: "ui.visual_review",
+              success: visualReview.passed,
+              result: { visualReview, previews },
+              error: visualReview.passed ? undefined : visualReviewMessage,
+              message: visualReviewMessage,
+              toolCallId: visualToolCallId
+            });
+            if (!visualReview.passed && reviewResult.ok) {
+              reviewResult = {
+                ok: false,
+                message: visualReviewMessage,
+                data: { visualReview, previews },
+                file: latestFile,
+                page: latestPage,
+                selectedPageId
+              };
+            }
+          } catch (error) {
+            const visualError = error instanceof Error ? error.message : String(error);
+            yield await emit({
+              type: "tool_call_result",
+              agentRole: "审核 Agent",
+              toolName: "ui.visual_review",
+              success: false,
+              result: { previews },
+              error: visualError,
+              message: `视觉审核调用失败：${visualError}`,
+              toolCallId: visualToolCallId
             });
           }
         }
@@ -1106,7 +1615,7 @@ export class WorkspaceProjectService {
     } catch (error) {
       const messageText = formatDesignAgentError(error);
       yield await emit({ type: "error", agentRole: "负责人 Agent", message: messageText });
-      yield await emit({ type: "done", agentRole: "负责人 Agent", summary: "执行失败，已停止。", file, page: selectedPage, selectedPageId: selectedPage?.id });
+      yield await emit({ type: "done", agentRole: "负责人 Agent", summary: "执行失败，已停止。已保留本次运行中已经成功落盘的 UI，不做回滚或清空。", file: latestFile, page: latestPage, selectedPageId });
     }
   }
 
@@ -1121,10 +1630,24 @@ export class WorkspaceProjectService {
       conversationId,
       limit: input?.limit ?? 200
     });
-    const visibleEventTypes = new Set(["message", "plan", "tool_call_start", "tool_call_result", "review", "done", "error"]);
-    return messages
+    const visibleEventTypes = new Set(["message", "llm_delta", "plan", "tool_call_start", "tool_call_result", "schema_patch", "review", "done", "error"]);
+    const visibleMessages = messages
       .filter((message) => message.content.trim())
-      .filter((message) => !message.eventType || visibleEventTypes.has(message.eventType))
+      .filter((message) => !message.eventType || visibleEventTypes.has(message.eventType));
+    const compacted = visibleMessages.reduce<typeof visibleMessages>((result, message) => {
+      const previous = result[result.length - 1];
+      if (message.eventType === "llm_delta" && previous?.eventType === "llm_delta") {
+        result[result.length - 1] = {
+          ...previous,
+          content: `${previous.content}${message.content}`,
+          metadata: message.metadata ?? previous.metadata
+        };
+        return result;
+      }
+      result.push(message);
+      return result;
+    }, []);
+    return compacted
       .map((message, index) => {
         const metadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
           ? message.metadata as Record<string, unknown>
@@ -1132,13 +1655,49 @@ export class WorkspaceProjectService {
         return {
           id: `${conversationId}-${message.createdAt}-${index}`,
           role: message.role === "user" ? "user" : "assistant",
-          content: message.content,
+          content: message.eventType === "llm_delta" ? `模型推理中：\n${message.content}` : message.content,
           eventType: message.eventType,
           toolName: message.toolName,
           agentRole: typeof metadata.agentRole === "string" ? metadata.agentRole : undefined,
+          previewImages: extractPreviewImagesFromEventMetadata(metadata),
           createdAt: message.createdAt
         };
       });
+  }
+
+  async getDesignAgentCurrent(projectId: string, input?: {
+    conversationId?: string;
+    limit?: number;
+    running?: boolean;
+  }) {
+    const conversationId = input?.conversationId || `design-agent-${projectId}`;
+    const messages = await this.listDesignAgentMessages(projectId, {
+      conversationId,
+      limit: input?.limit ?? 300
+    });
+    const lastEvent = messages[messages.length - 1];
+    return {
+      conversationId,
+      running: Boolean(input?.running),
+      canResume: messages.length > 0,
+      lastEventType: lastEvent?.eventType,
+      messages
+    };
+  }
+
+  async recordDesignAgentCancellation(projectId: string, conversationId: string, cancelled: boolean) {
+    await this.repository.saveAgentMessage({
+      id: createAgentRunId("msg"),
+      conversationId,
+      projectId,
+      role: "assistant",
+      content: cancelled
+        ? "已中断当前会话的执行。你可以点击继续会话，根据上下文续接未完成步骤。"
+        : "当前没有正在运行的会话。你可以点击继续会话，根据上下文续接未完成步骤。",
+      eventType: "message",
+      metadata: { agentRole: "负责人 Agent", cancelled },
+      createdAt: nowIso()
+    });
   }
 
   private async getDesignAgentSelectedPage(projectId: string, file: WorkspaceDesignFile, pageId?: string) {
@@ -1161,6 +1720,7 @@ export class WorkspaceProjectService {
     options?: {
       taskProfile?: ReturnType<typeof classifyDesignAgentTask>;
       uiDesignPlan?: UiDesignerPlan;
+      recentConversationMessages?: Array<{ role: string; eventType?: string; toolName?: string; content: string; createdAt: string }>;
     }
   ) {
     return this.generateJsonWithRepair(llm, designAgentPlanSchema, {
@@ -1200,6 +1760,7 @@ export class WorkspaceProjectService {
         userMessage: message,
         taskProfile: options?.taskProfile,
         uiDesignPlan: options?.uiDesignPlan ?? null,
+        recentConversationMessages: options?.recentConversationMessages?.slice(-24) ?? [],
         selectedPageId: selectedPage?.id,
         selectedPage: selectedPage ? summarizeDesignPageForPrompt(selectedPage) : null,
         pages: file.pages.map((page) => ({ id: page.id, name: page.name, nodeCount: page.nodeCount ?? page.nodes.length }))
@@ -1213,7 +1774,11 @@ export class WorkspaceProjectService {
     llm: OpenAIClient,
     selectedPage: WorkspaceDesignPage | undefined,
     message: string,
-    systemPrompt?: string
+    systemPrompt?: string,
+    qualityContext?: ReturnType<typeof buildDesignQualityContext>,
+    recentConversationMessages?: Array<{ role: string; eventType?: string; toolName?: string; content: string; createdAt: string }>,
+    onToken?: (delta: string) => void | Promise<void>,
+    signal?: AbortSignal
   ) {
     return this.generateJsonWithRepair(llm, uiDesignerPlanSchema, {
       systemPrompt: [
@@ -1221,11 +1786,19 @@ export class WorkspaceProjectService {
         systemPrompt || "",
         "你是一个高级 UI 设计师 Agent，只负责设计决策，不直接修改 schema，不调用工具。",
         "你需要理解业务目标、页面结构、组件选择、视觉规范和可编辑性要求。",
+        "你必须像一个独立设计师一样输出自己的专业判断：平台、行业、交互类型、信息架构、视觉参考、组件粒度、页面状态和审核清单。",
+        "架构原则：AI 只负责组织信息和语义结构，不要把每个 x/y 当成设计质量来源；后续 Layout Compiler 会负责位置、尺寸、gap、组件展开和 Scene Graph 生成。",
+        "输出 pageSpecs/keyBlocks 时要接近 Semantic Tree：Page、Toolbar、SearchBar、Tabs、CardList、Form、ActionBar、StatusPanel 等语义组件，而不是直接描述一堆绝对坐标。",
+        "不要泛泛说“好看/简洁”，要说明采用哪类成熟交互范式，例如 Ant Design 后台、微信小程序单列卡片、App 原生表单、Tailwind SaaS 仪表盘。",
+        "如果目标是小程序/移动端，禁止规划 PC dashboard、宽表格和横向统计大屏。",
         "输出必须结构化 JSON，供主 Agent 转成 schema tool 调用。",
+        "如果 qualityContext.designReferences 命中本地参考数据，要把它作为设计基准：学习布局密度、间距、颜色、层级和组件构成，不要照抄业务文案和节点 ID。",
         "不要输出代码、不要输出 markdown、不要直接生成完整 schema。"
       ].filter(Boolean).join("\n\n"),
       userPrompt: JSON.stringify({
         userRequest: message,
+        qualityContext,
+        recentConversationMessages: recentConversationMessages?.slice(-24) ?? [],
         currentPageSchemaSummary: selectedPage ? summarizeDesignPageForPrompt(selectedPage) : null,
         constraints: {
           outputSchema: true,
@@ -1234,7 +1807,9 @@ export class WorkspaceProjectService {
           supportedNodeTypes: ["frame", "container", "text", "button", "input", "table", "card", "image"]
         }
       }, null, 2),
-      temperature: 0.25
+      temperature: 0.25,
+      onToken,
+      signal
     });
   }
 
@@ -1245,33 +1820,58 @@ export class WorkspaceProjectService {
     message: string,
     systemPrompt?: string,
     uiDesignPlan?: UiDesignerPlan,
-    platformOverride?: string
+    platformOverride?: string,
+    qualityContext?: ReturnType<typeof buildDesignQualityContext>,
+    onToken?: (delta: string) => void | Promise<void>,
+    signal?: AbortSignal
   ) {
     const targetPlatform = platformOverride === "mobile_app" || /小程序|移动端|手机|app/i.test(message) ? "mobile_app" : "web";
-    return this.generateJsonWithRepair(llm, uiSchemaDraftSchema, {
-      systemPrompt: [
+    const schemaPromptQualityContext = qualityContext ? compactDesignQualityContextForSchema(qualityContext) : undefined;
+    const capabilityProfile = getDesignCapabilityProfile(targetPlatform === "mobile_app" ? (/小程序|微信/.test(message) ? "wechat_mini_program" : "mobile_app") : "pc_web", message);
+    const schemaSystemPrompt = [
         project.systemPrompt || "",
         systemPrompt || "",
         "你是 AIPM Schema Agent，负责把产品需求和 UI 设计方案转换成 aipm.design.schema.v1。",
         "你不是关键词模板引擎，必须基于需求语义、页面目标、用户动作和设计规范推理出可编辑 UI Schema Draft。",
+        "重要架构：你输出的是 Semantic/Layout Draft，不是最终设计稿；系统会用 Layout Compiler 计算位置、尺寸、gap，并用 Component Renderer 展开按钮、卡片、列表等组件。不要依赖手写像素微调掩盖结构问题。",
         "输出只能是 JSON，必须符合 schemaVersion=aipm.design.schema.v1。",
         "artboards 是要追加到当前画布右侧的新 UI 画板；不要输出已有页面内容。",
         "web/PC 画板推荐 1440x1024 或按需求调整；mobile_app 画板使用 375x812 逻辑尺寸。",
         `本次目标平台：${targetPlatform}。如果目标平台是 mobile_app 或小程序，必须生成 375x812 左右的移动端单列页面，禁止生成 PC dashboard、PC 表格页、横向统计面板。`,
+        schemaPromptQualityContext ? `本次质量上下文：${JSON.stringify(schemaPromptQualityContext)}` : "",
+        `本次设计能力注册表：${getCapabilityPrompt(capabilityProfile)}`,
+        "必须先选择组件库能力，再落 schema：PC 后台优先 Ant Design + Tailwind SaaS；小程序/移动端优先微信小程序组件范式 + Tailwind 卡片范式。后续新增组件库时按注册表扩展，不要写死页面模板。",
+        "每个画板必须体现页面风格：背景层、内容面、主色、弱文本、边框、圆角、层级阴影/色块至少 3 种可识别视觉 token。",
+        "每个画板必须包含 icon 或 demo 图片/插画资产；如没有真实图片，先使用 image 节点表达可替换 demo 图，不允许纯文字大白页。",
+        "图片资产策略：优先使用 asset.resolve 返回的真实搜索图片或图像生成图片 URL；没有真实 URL 时才允许 generated-placeholder，占位也必须是 image 节点。",
+        "按钮必须使用 button 节点，textAlign=center，lineHeight 接近按钮高度，文字垂直/水平居中；不要把按钮做成 card/text。",
+        "文本排版必须拆分层级：标题、副标题、说明、字段、状态分别用独立 text 节点；禁止把多字段塞进一个 text/card 的 text。",
+        "所有页面必须满足 qualityRubric.minimums；低于最小节点数、文本层级、视觉资产、主操作、颜色层级会被审核拒绝。",
+        "设计参考必须落实到 schema：Ant Design 后台用于 PC 管理台；微信小程序用于小程序/移动端；Tailwind/SaaS 卡片用于现代 Web；App 原生用于移动 App。",
+        "制作或编辑 UI 稿时必须按页面逐个完成；如果 userRequest 明确限定单个页面，本次 artboards 只能返回 1 个画板。",
+        "行业约束必须落实到信息架构：电商要有商品/订单/交易状态；IoT 要有设备状态/告警/趋势；用户账号要有登录、实名、安全、地址、隐私提示。",
+        "交互类型要细分：登录注册、表单录入、列表卡片、详情查看、上传认证、地图选址、支付/收益、设置管理都要用对应组件结构。",
         "所有 node 坐标都必须是相对 artboard 左上角的局部坐标，不是全局画布坐标。",
+        "坐标只表达区块大致顺序和归属：优先保证语义节点、父子关系、组件类型、文案层级正确；不要输出互相压住的绝对定位。Layout Compiler 会对齐、clamp 和 reflow。",
         "node.type 只能使用 frame/container/text/button/input/table/card/image。",
         "高保真原则：不要用一个大 card/table 承载整块信息；必须拆成可编辑的 container/text/button/input/image 等颗粒节点。",
         "移动端原则：列表/记录/订单/消息/收益明细必须用多张卡片或行容器表达，禁止使用 table 节点；按钮、文字、金额、状态必须独立节点。",
+        "间距原则：移动端左右安全边距 16-24，卡片内边距 12-16，按钮高度 44-52；PC 内容区栅格和卡片间距 16-24。",
+        "字体原则：移动端正文不小于 13，主标题 20-24；PC 正文不小于 13，标题层级清楚；同一行文字不能互相压住。",
+        "列表原则：移动端列表必须是卡片/行容器 + 独立文本，不允许把多列内容塞进一行导致重叠；PC 才允许表格结构。",
         "文本排版：中文长文案要拆成多行 text 节点或给足高度，禁止文字互相遮挡、溢出、被截断。",
         "每个 artboard 至少包含：页面标题、核心内容区、主操作或关键状态反馈。",
         "如果需求是详情页，要输出能表达详情页信息架构的 schema，而不是泛化卡片。",
-        "避免元素重叠、越界；所有节点必须在 artboard 范围内。"
-      ].filter(Boolean).join("\n\n"),
-      userPrompt: JSON.stringify({
+        "允许正常 UI 层叠：容器/卡片/背景/图片可以承载内部文字、按钮、输入框；禁止的是功能交互控件互相遮挡、文字与文字/控件互相压住、内容越界或被剪切。",
+        "如果无法一次覆盖全部功能，优先输出最关键的 3-6 个页面，但每个页面必须达到可评审质量。"
+      ].filter(Boolean).join("\n\n");
+    const userPrompt = JSON.stringify({
         userRequest: message,
         targetPlatform,
+        qualityContext: schemaPromptQualityContext,
+        capabilityProfile,
         uiDesignPlan: uiDesignPlan ?? null,
-        currentCanvasSummary: selectedPage ? summarizeDesignPageForPrompt(selectedPage) : null,
+        currentCanvasSummary: selectedPage ? summarizeDesignPageForSchemaPrompt(selectedPage) : null,
         schemaContract: {
           schemaVersion: "aipm.design.schema.v1",
           nodeTypes: ["frame", "container", "text", "button", "input", "table", "card", "image"],
@@ -1279,8 +1879,78 @@ export class WorkspaceProjectService {
           requiredArtboardFields: ["refId", "name", "width", "height", "nodes"],
           requiredNodeFields: ["refId", "type", "name", "x", "y", "width", "height"]
         }
+      }, null, 2);
+    try {
+      const result = await this.generateJsonWithRepair(llm, uiSchemaDraftSchema, {
+        systemPrompt: schemaSystemPrompt,
+        userPrompt,
+        temperature: 0.35,
+        onToken,
+        signal
+      });
+      await this.repository.saveLlmLog(project.id, {
+        stage: "ui-draft",
+        step: "design-schema-draft",
+        model: llm.model,
+        baseUrl: llm.resolvedBaseUrl,
+        systemPrompt: schemaSystemPrompt,
+        userPrompt,
+        parsedOutput: result
+      });
+      return result;
+    } catch (error) {
+      await this.repository.saveLlmLog(project.id, {
+        stage: "ui-draft",
+        step: "design-schema-draft-error",
+        model: llm.model,
+        baseUrl: llm.resolvedBaseUrl,
+        systemPrompt: schemaSystemPrompt,
+        userPrompt,
+        error: error instanceof Error ? `${error.message}\n${error.stack ?? ""}` : String(error)
+      });
+      throw error;
+    }
+  }
+
+  private async createVisualDesignReview(
+    project: WorkspaceProject,
+    llm: OpenAIClient,
+    message: string,
+    qualityContext: ReturnType<typeof buildDesignQualityContext>,
+    previews: Array<{ label: string; dataUrl: string; width?: number; height?: number; nodeId?: string }>
+  ) {
+    return llm.generateJsonWithImages(visualDesignReviewSchema, {
+      systemPrompt: [
+        project.systemPrompt || "",
+        "你是 AIPM 的视觉审核 Agent。你必须根据截图本身做判断，不要只根据 schema 文本猜。",
+        "审核重点：是否有文字遮挡/挤压/截断，是否有元素越界或显示不全，是否符合目标平台和行业常见交互范式，是否像正式产品 UI，而不是 demo 拼图。",
+        "基础通过线：视觉质量低于 75 必须判失败；按钮文字不居中、文本排版混乱、文字/交互控件互相遮挡、缺少图标/图片、缺少组件库风格、页面过于简陋，任一出现都应给 blocking。容器、卡片、背景、图片与内部内容的正常层叠不要判失败。",
+        "如果目标是小程序/移动端：应是 375 左右单列、卡片/表单/列表行，不应出现 PC 宽表格、dashboard 横向大面板。",
+        "如果目标是 PC 后台：应接近 Ant Design Pro/Tailwind SaaS，信息区、筛选区、表格/卡片和操作层级清楚。",
+        "如果 qualityContext.designReferences 命中参考数据，要把截图和参考摘要对比：布局密度、区域层级、平台范式是否接近参考。",
+        "发现阻塞问题时 nextAction=regenerate；小修小补时 nextAction=local_fix；没有明显问题时 nextAction=pass。",
+        "输出必须是 JSON。"
+      ].filter(Boolean).join("\n\n"),
+      userPrompt: JSON.stringify({
+        userRequest: message,
+        qualityContext,
+        screenshots: previews.map((preview, index) => ({
+          index: index + 1,
+          label: preview.label,
+          nodeId: preview.nodeId,
+          width: preview.width,
+          height: preview.height
+        })),
+        reviewCriteria: [
+          "截图中是否存在文字互相覆盖、挤压、换行异常或看不清。",
+          "截图中是否存在元素被画板裁剪、超出边界、按钮不可点击感。",
+          "平台是否匹配：小程序/移动端不能像 PC 后台，PC 后台不能像移动端卡片堆。",
+          "行业是否匹配：用户账号、电商、IoT、出行等是否出现对应信息结构。",
+          "是否是颗粒化 UI 稿，而不是一张表/一张大卡片/一个占位块。"
+        ]
       }, null, 2),
-      temperature: 0.35
+      images: previews.slice(0, 6).map((preview) => ({ dataUrl: preview.dataUrl, label: preview.label })),
+      temperature: 0.1
     });
   }
 
@@ -1291,11 +1961,15 @@ export class WorkspaceProjectService {
       systemPrompt: string;
       userPrompt: string;
       temperature?: number;
+      onToken?: (delta: string) => void | Promise<void>;
+      signal?: AbortSignal;
     }
   ): Promise<z.output<S>> {
     try {
-      return await llm.generateJson(schema, args);
+      // return await llm.generateJson(schema, args);
+      return await llm.generateJsonStreamEarly(schema, args);
     } catch (error) {
+      throwIfAborted(args.signal);
       if (!(error instanceof StructuredOutputParseError)) {
         throw error;
       }
@@ -3192,87 +3866,50 @@ async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<
     const assetByRef = new Map(assets.map((asset) => [asset.sourceRef, asset]));
     const symbolById = buildSketchSymbolMap(sourcePages, document);
     const sharedStyleMaps = buildSketchSharedStyleMaps(document);
-    const pages = sourcePages.flatMap((pageLike, pageIndex) => {
-      const pageName = getStringProp(pageLike, "name") || `Sketch 页面 ${pageIndex + 1}`;
-      const pageCandidates = getSketchTopLevelPageCandidates(pageLike);
-      const pageLayers = pageCandidates.length > 0 ? pageCandidates : [pageLike];
-
-      return pageLayers.map((layer, layerIndex) => {
-        const zIndexRef = { current: 0 };
-        const rawNodes = (pageCandidates.length > 0 ? [layer] : getSketchRenderableLayers(layer)).flatMap((renderLayer, renderIndex) => (
-          convertSketchLayer(renderLayer, {
-            depth: 0,
-            index: renderIndex,
-            zIndexRef,
-            parentX: 0,
-            parentY: 0,
-            scaleX: 1,
-            scaleY: 1,
-            assetByRef,
-            symbolById,
-            sharedStyleMaps
-          })
-        ));
-        const normalizedNodes = normalizeDesignNodesToLocalCanvas(rawNodes);
-        const layerName = pageCandidates.length > 0 ? getStringProp(layer, "name") : pageName;
-
-        return {
-          id: createDesignId("import-page"),
-          name: layerName || (pageCandidates.length > 0 ? `${pageName} ${layerIndex + 1}` : pageName),
-          nodes: normalizedNodes.length > 0 ? normalizedNodes : [
-            createDesignNode("frame", {
-              name: layerName || pageName || file.filename,
-              text: "已读取 Sketch 页面，但没有识别到可展示图层",
-              x: 420,
-              y: 280,
-              width: 420,
-              height: 220,
-              fill: "#f4f4f5"
-            })
-          ]
-        } satisfies WorkspaceDesignPage;
-      });
-    });
-
-    const symbolMasters = [
-      ...sourcePages.flatMap((pageLike) => collectSketchSymbolMasters(getSketchLayers(pageLike))),
-      ...toArray(document.foreignSymbols).flatMap((foreignSymbol) => {
-        const symbol = safeObject(foreignSymbol).symbolMaster ?? safeObject(foreignSymbol).originalMaster;
-        return symbol ? [symbol] : [];
-      })
-    ];
-    const components = (symbolMasters.length > 0
-      ? symbolMasters
-      : sourcePages.flatMap((pageLike) => getSketchLayers(pageLike).filter((layer) => isSketchComponentCandidate(layer)))
-    ).map((layer, index) => {
+    const pages = sourcePages.map((pageLike, pageIndex) => {
       const zIndexRef = { current: 0 };
-      const nodes = convertSketchLayer(layer, {
-        depth: 0,
-        index,
-        zIndexRef,
-        parentX: 0,
-        parentY: 0,
-        scaleX: 1,
-        scaleY: 1,
-        assetByRef,
-        symbolById,
-        sharedStyleMaps
-      });
+      const pageName = getStringProp(pageLike, "name") || `Sketch 页面 ${pageIndex + 1}`;
+      const rawNodes = getSketchRenderableLayers(pageLike).flatMap((renderLayer, renderIndex) => (
+        convertSketchLayer(renderLayer, {
+          depth: 0,
+          index: renderIndex,
+          zIndexRef,
+          parentX: 0,
+          parentY: 0,
+          scaleX: 1,
+          scaleY: 1,
+          assetByRef,
+          symbolById,
+          sharedStyleMaps
+        })
+      ));
+      const normalizedNodes = normalizeDesignNodesToLocalCanvas(rawNodes);
 
       return {
-        id: createDesignId("import-component"),
-        name: getStringProp(layer, "name") || `Sketch 组件 ${index + 1}`,
-        sourceFileName: file.filename,
-        nodeCount: nodes.length,
-        nodes
-      } satisfies WorkspaceDesignComponent;
-    }).filter((component) => component.nodes.length > 0);
+        id: createDesignId("import-page"),
+        name: pageName,
+        nodes: normalizedNodes.length > 0 ? normalizedNodes : [
+          createDesignNode("frame", {
+            name: pageName || file.filename,
+            text: "已读取 Sketch 页面，但没有识别到可展示图层",
+            x: 420,
+            y: 280,
+            width: 420,
+            height: 220,
+            fill: "#f4f4f5",
+            sourceLayerClass: getStringProp(pageLike, "_class"),
+            sourceLayerId: getStringProp(pageLike, "do_objectID"),
+            sourceMeta: readSketchSourceMeta(safeObject(pageLike))
+          })
+        ]
+      } satisfies WorkspaceDesignPage;
+    });
 
     if (pages.length === 0) {
       throw new Error("Sketch 文件已读取，但没有识别到页面");
     }
 
-    return { pages, components, assets };
+    return { pages, components: [], assets };
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -3401,7 +4038,7 @@ function convertVextraShape(
 }
 
 function convertSketchLayer(
-  layer: unknown,
+  layer: AnyLayer,
   context: {
     depth: number;
     index: number;
@@ -3461,6 +4098,7 @@ function convertSketchLayer(
     fontSize: readSketchFontSize(layerObject, nodeType),
     lineHeight: readSketchLineHeight(layerObject),
     textAlign: readSketchTextAlign(layerObject),
+    textVerticalAlign: readSketchTextVerticalAlign(layerObject),
     fontFamily: readSketchFontFamily(layerObject),
     fontWeight: readSketchFontWeight(layerObject),
     letterSpacing: readSketchLetterSpacing(layerObject),
@@ -3468,7 +4106,9 @@ function convertSketchLayer(
     strikethrough: readSketchTextStrikethrough(layerObject),
     visible: layerObject.isVisible !== false,
     locked: layerObject.isLocked === true,
+    sourceLayerId: getStringProp(layerObject, "do_objectID"),
     sourceLayerClass: layerClass,
+    sourceMeta: readSketchSourceMeta(layerObject, context.assetByRef),
     opacity: readSketchOpacity(layerObject),
     rotation: toNumber(layerObject.rotation, 0),
     blendMode: readSketchBlendMode(layerObject),
@@ -3477,13 +4117,16 @@ function convertSketchLayer(
     flippedVertical: layerObject.isFlippedVertical === true,
     shadow: readSketchShadow(layerObject),
     innerShadow: readSketchInnerShadow(layerObject),
-    zIndex: nextSketchRenderZIndex(context),
     clipBounds: context.clipBounds,
     clipPath: context.clipPath,
-    ...readSketchVectorMeta(layerObject, nodeWidth, nodeHeight),
+    ...readSketchVectorMeta(layerObject, nodeWidth, nodeHeight, {
+      scaleX: context.scaleX,
+      scaleY: context.scaleY
+    }),
     ...readSketchFillImageMeta(layerObject, context.assetByRef),
     ...readSketchImageMeta(layerObject, context.assetByRef)
   });
+  node.zIndex = nextSketchRenderZIndex(context);
   const renderNode = suppressSketchContainerPaint(layerObject, node);
   const shouldRenderShapeGroupAsVector = isSketchVectorContainerLayer(layerObject) && Boolean(renderNode.svgPath);
 
@@ -3505,23 +4148,21 @@ function convertSketchLayer(
     parentNodeId: nodeId,
     inheritedShapeStyle: getSketchChildInheritedShapeStyle(layerObject, context.inheritedShapeStyle)
   });
-
   return [renderNode, ...symbolChildren, ...children];
 }
 
 function nextSketchRenderZIndex(context: { depth: number; index: number; zIndexRef?: { current: number } }) {
-  if (!context.zIndexRef) {
-    return context.depth * 1000 + context.index;
+  const zIndex = context.zIndexRef?.current ?? context.index;
+  if (context.zIndexRef) {
+    context.zIndexRef.current = zIndex + 1;
   }
-  const zIndex = context.zIndexRef.current;
-  context.zIndexRef.current += 1;
   return zIndex;
 }
 
 function shouldSkipSketchLayer(layer: Record<string, unknown>) {
   const layerClass = getStringProp(layer, "_class").toLowerCase();
   const layerName = getStringProp(layer, "name").toLowerCase();
-  const ignoredTokens = ["guide", "slice", "hotspot", "prototype", "flow", "selection"];
+  const ignoredTokens = ["guide", "prototype", "flow", "selection"];
   return ignoredTokens.some((token) => layerClass.includes(token) || layerName.includes(token));
 }
 
@@ -3555,7 +4196,7 @@ function convertSketchChildLayers(
         height: Math.max(1, Math.round(parentFrame.height * context.scaleY))
       }
     : context.parentShapeGroupBounds;
-  return getSketchLayers(parentLayer).flatMap((child, index) => {
+  return getSketchRenderableLayers(parentLayer).flatMap((child, index) => {
     const childObject = safeObject(child);
     if (shouldSkipSketchLayer(childObject)) {
       return [];
@@ -3613,7 +4254,10 @@ function readSketchLayerClip(
     width,
     height
   };
-  const vector = readSketchVectorMeta(layer, width, height);
+  const vector = readSketchVectorMeta(layer, width, height, {
+    scaleX: context.scaleX,
+    scaleY: context.scaleY
+  });
   return {
     bounds,
     path: vector.svgPath ? {
@@ -3658,6 +4302,7 @@ function createDesignNode(type: WorkspaceDesignNodeType, overrides: Partial<Work
     text: type === "text" ? "Text" : type === "button" ? "Button" : "",
     textColor: type === "button" ? "#ffffff" : "#171717",
     fontSize: type === "text" ? 22 : 14,
+    textVerticalAlign: type === "text" ? "top" : "middle",
     visible: true,
     locked: false
   };
@@ -4272,6 +4917,24 @@ function buildDesignAgentRecoveryStep(message: string, failedStep: DesignAgentTo
       }
     };
   }
+  if (failedStep.tool === "ui.critic_review" && routeDesignAgentTask(message) === "create_new_ui") {
+    return {
+      tool: "schema.generate_ui_from_requirements",
+      reason: `${formatRetryAttemptLabel(retryAttempt)}重试：Critic 审核未通过，重新生成一版覆盖缺失主题并去掉无关内容的 UI 稿。`,
+      input: {
+        userRequest: [
+          message,
+          "",
+          "Critic 审核失败，需要重新生成：",
+          result.message,
+          "",
+          "要求：严格覆盖用户原始需求，不引入订单/商品/搜索筛选等无关业务；移动端/小程序必须单列卡片化。"
+        ].join("\n"),
+        platform: /小程序|移动端|手机|app/i.test(message) ? "mobile_app" : "web",
+        gap: 40
+      }
+    };
+  }
   return undefined;
 }
 
@@ -4279,9 +4942,49 @@ function formatRetryAttemptLabel(retryAttempt: number) {
   return ["第一次", "第二次", "第三次"][retryAttempt - 1] ?? `第 ${retryAttempt} 次`;
 }
 
-function buildDesignReviewFixStep(data: unknown): DesignAgentToolCall | undefined {
+function buildDesignReviewFixStep(data: unknown, userRequest = "", retryAttempt = 1): DesignAgentToolCall | undefined {
   if (!data || typeof data !== "object" || Array.isArray(data)) return undefined;
-  const issues = (data as Record<string, unknown>).issues;
+  const record = data as Record<string, unknown>;
+  const issues = record.issues;
+  const issueMessages = Array.isArray(issues)
+    ? issues
+      .map((issue) => issue && typeof issue === "object" && !Array.isArray(issue) ? String((issue as Record<string, unknown>).message ?? "") : "")
+      .filter(Boolean)
+    : [];
+  const missingTopics = Array.isArray(record.missingTopics) ? record.missingTopics.map(String).filter(Boolean) : [];
+  const irrelevantContent = Array.isArray(record.irrelevantContent) ? record.irrelevantContent.map(String).filter(Boolean) : [];
+  const visualFindings = isRecordLike(record.visualReview) && Array.isArray(record.visualReview.findings)
+    ? record.visualReview.findings
+      .map((finding) => isRecordLike(finding) ? [
+        finding.issue ? String(finding.issue) : "",
+        finding.evidence ? String(finding.evidence) : "",
+        finding.fixSuggestion ? String(finding.fixSuggestion) : ""
+      ].filter(Boolean).join("：") : "")
+      .filter(Boolean)
+    : [];
+  const allMessages = [...issueMessages, ...visualFindings, ...missingTopics.map((item) => `缺失主题：${item}`), ...irrelevantContent.map((item) => `无关内容：${item}`)];
+  const combined = allMessages.join("\n");
+  if (routeDesignAgentTask(userRequest) === "create_new_ui" && shouldRegenerateDesignFromReview(combined)) {
+    return {
+      tool: "schema.generate_ui_from_requirements",
+      reason: [
+        `${formatRetryAttemptLabel(retryAttempt)}审核修复：发现结构性质量问题，重新生成一版更符合平台/行业/交互规范的 UI 稿。`,
+        "不会使用 table/大图/大卡片糊弄，会要求颗粒化节点、移动端单列、文字不遮挡。"
+      ].join(" "),
+      input: {
+        userRequest: [
+          userRequest,
+          "",
+          "上一次 UI 审核失败，必须修复以下问题：",
+          combined || "审核未通过。",
+          "",
+          "修复要求：如果是小程序/移动端，必须使用 375x812 单列卡片/表单布局；禁止 PC dashboard、禁止 table；所有文字必须独立节点且不能和文字/交互控件互相遮挡；容器/卡片/背景与内部内容可以正常层叠；每个页面必须有主操作和状态反馈。"
+        ].join("\n"),
+        platform: /小程序|移动端|手机|app/i.test(userRequest) ? "mobile_app" : "web",
+        gap: 40
+      }
+    };
+  }
   if (!Array.isArray(issues)) return undefined;
   for (const issue of issues) {
     if (!issue || typeof issue !== "object" || Array.isArray(issue)) continue;
@@ -4296,7 +4999,18 @@ function buildDesignReviewFixStep(data: unknown): DesignAgentToolCall | undefine
     });
     if (parsed.success) return parsed.data;
   }
+  if (/文字|文本|遮挡|重叠|越界|剪切|显示不全|间距|布局/.test(combined)) {
+    return {
+      tool: "layout.reflow",
+      reason: `${formatRetryAttemptLabel(retryAttempt)}审核修复：检测到布局/文字/越界类问题，先执行局部重排和文本高度修正。`,
+      input: { spacing: 16, fixTextOverflow: true, expandFrames: true }
+    };
+  }
   return undefined;
+}
+
+function shouldRegenerateDesignFromReview(reviewText: string) {
+  return /PC 尺寸|移动端\/小程序|table 节点|禁止 table|缺少可交互|没有明确主操作|缺失主题|无关内容|大图|大表格|结构性|粗糙|风格|视觉资产|图标|图片|按钮文字|文本层级|质量门槛|颜色\/层级/.test(reviewText);
 }
 
 function formatDesignToolPlanReply(plan: DesignAgentPlan, uiDesignPlan?: UiDesignerPlan) {
@@ -4351,13 +5065,19 @@ function formatDesignToolPlanAndExecutionReply(
 function formatUiDesignPlanReply(plan?: UiDesignerPlan) {
   if (!plan) return "";
   const components = plan.componentPlan.map((item) => `${item.type}${item.position ? `(${item.position})` : ""}`).join("、");
+  const pageSpecs = plan.pageSpecs.map((page) => `${page.name}${page.primaryAction ? `(${page.primaryAction})` : ""}`).join("、");
   const lines = [
     "UI 设计 Agent 判断：",
     plan.designGoal ? `设计目标：${plan.designGoal}` : "",
     plan.businessUnderstanding ? `业务理解：${plan.businessUnderstanding}` : "",
+    `平台/行业：${plan.platform} / ${plan.industry || "通用业务"}`,
+    plan.interactionTypes.length > 0 ? `交互类型：${plan.interactionTypes.join("、")}` : "",
+    plan.referenceSystems.length > 0 ? `参考系统：${plan.referenceSystems.join("、")}` : "",
     plan.layoutPlan.type ? `布局：${plan.layoutPlan.type}${plan.layoutPlan.areas.length > 0 ? `，区域：${plan.layoutPlan.areas.join("、")}` : ""}` : "",
     plan.styleGuide.theme || plan.styleGuide.primaryColor ? `视觉规范：${plan.styleGuide.theme || "默认主题"}，主色 ${plan.styleGuide.primaryColor || "未指定"}，间距 ${plan.styleGuide.spacing}` : "",
     components ? `组件选择：${components}` : "",
+    pageSpecs ? `页面规划：${pageSpecs}` : "",
+    plan.qualityBar.length > 0 ? `质量门槛：${plan.qualityBar.join("、")}` : "",
     plan.reviewChecklist.length > 0 ? `审查清单：${plan.reviewChecklist.join("、")}` : ""
   ].filter(Boolean);
   if (lines.length <= 1) {
@@ -4370,6 +5090,176 @@ function formatUiDesignPlanReply(plan?: UiDesignerPlan) {
     ].join("\n");
   }
   return lines.join("\n");
+}
+
+function buildSequentialUiDraftRequests(message: string, plan?: UiDesignerPlan) {
+  const pageSpecs = plan?.pageSpecs?.length ? plan.pageSpecs : [];
+  const fallbackPages = inferRequestedPageNames(message);
+  const pages = pageSpecs.length > 0
+    ? pageSpecs.map((page) => ({
+      name: page.name,
+      goal: page.goal,
+      keyBlocks: page.keyBlocks,
+      primaryAction: page.primaryAction,
+      states: page.states
+    }))
+    : fallbackPages.map((name) => ({
+      name,
+      goal: `${name} UI 稿`,
+      keyBlocks: [] as string[],
+      primaryAction: "",
+      states: [] as string[]
+    }));
+  return pages.slice(0, 8).map((page, index) => ({
+    name: page.name || `页面 ${index + 1}`,
+    prompt: [
+      message,
+      "",
+      `本次只生成第 ${index + 1} 个页面：「${page.name || `页面 ${index + 1}`}」。`,
+      page.goal ? `页面目标：${page.goal}` : "",
+      page.keyBlocks.length > 0 ? `关键区块：${page.keyBlocks.join("、")}` : "",
+      page.primaryAction ? `主操作：${page.primaryAction}` : "",
+      page.states.length > 0 ? `必须覆盖状态：${page.states.join("、")}` : "",
+      "严格要求：本次 schemaDraft.artboards 只能包含 1 个 artboard；不要顺手生成其他页面。"
+    ].filter(Boolean).join("\n")
+  }));
+}
+
+function createUiPageShellDraft(
+  draftRequest: ReturnType<typeof buildSequentialUiDraftRequests>[number],
+  platformOverride: string,
+  userRequest: string
+): UiSchemaDraft {
+  const platform: "web" | "mobile_app" = platformOverride === "mobile_app" || /小程序|移动端|手机|app/i.test(userRequest) ? "mobile_app" : "web";
+  const size = platform === "mobile_app" ? { width: 375, height: 812 } : { width: 1440, height: 1024 };
+  return {
+    schemaVersion: "aipm.design.schema.v1",
+    intent: `${draftRequest.name} 页面外框`,
+    platform,
+    designRationale: ["先创建空画板外框，再按区块增量追加内容，便于边做边校验。"],
+    artboards: [{
+      refId: "page-root",
+      name: draftRequest.name,
+      width: size.width,
+      height: size.height,
+      layout: platform === "mobile_app" ? "mobile single column incremental canvas" : "web incremental canvas",
+      nodes: []
+    }]
+  };
+}
+
+function buildIncrementalUiSectionRequests(
+  draftRequest: ReturnType<typeof buildSequentialUiDraftRequests>[number],
+  platformOverride: string,
+  userRequest: string
+) {
+  const isMobile = platformOverride === "mobile_app" || /小程序|移动端|手机|app/i.test(userRequest);
+  const sections = isMobile
+    ? [
+      { name: "顶部导航与页面标题", bounds: "x=0,y=0,width=375,height=120", focus: "状态栏/导航标题/返回或辅助入口/页面主标题" },
+      { name: "核心内容与数据卡片", bounds: "x=16,y=120,width=343,height=430", focus: "主要信息、卡片列表、图片或图标资产、状态标签，禁止 table" },
+      { name: "表单输入与交互控件", bounds: "x=16,y=550,width=343,height=170", focus: "输入框、选择项、上传/搜索/筛选/操作控件，按钮文字居中" },
+      { name: "底部主操作与反馈", bounds: "x=16,y=720,width=343,height=76", focus: "主按钮、次操作、提示/错误/安全区反馈" }
+    ]
+    : [
+      { name: "页面框架与顶部区域", bounds: "x=0,y=0,width=1440,height=160", focus: "顶部导航、面包屑、页面标题、主操作、用户区" },
+      { name: "筛选/摘要/工具栏区域", bounds: "x=240,y=160,width=1120,height=180", focus: "筛选条件、摘要指标、工具按钮、状态说明" },
+      { name: "主内容区域", bounds: "x=240,y=340,width=1120,height=520", focus: "表格/卡片/详情内容、图标/图片资产、状态标签、空态/加载态" },
+      { name: "页脚/分页/辅助反馈", bounds: "x=240,y=860,width=1120,height=120", focus: "分页、批量操作、底部说明、错误/成功反馈" }
+    ];
+  return sections.map((section, index) => ({
+    ...section,
+    prompt: [
+      draftRequest.prompt,
+      "",
+      `本次只生成页面「${draftRequest.name}」的第 ${index + 1} 个区块：「${section.name}」。`,
+      `区块建议范围：${section.bounds}。`,
+      `区块职责：${section.focus}。`,
+      "重要：schemaDraft.artboards 只能包含 1 个 artboard；不要生成完整页面；不要重复已完成区块；nodes 坐标必须仍然相对 artboard 左上角。",
+      "输出必须只包含本区块需要新增的 container/text/button/input/table/card/image 节点。需要背景承载时可输出区块 container，但不要输出 frame。",
+      "每个区块落盘后系统会立即 schema.validate 和 canvas.capture，因此你要让本区块单独也能被观察和校验。"
+    ].join("\n")
+  }));
+}
+
+function inferRequestedPageNames(message: string) {
+  const names = [
+    /登录|注册|验证码/.test(message) ? "登录注册页" : "",
+    /首页|工作台|概览|dashboard/i.test(message) ? "首页" : "",
+    /列表|管理|记录|订单|消息/.test(message) ? "列表管理页" : "",
+    /详情|资料|个人信息/.test(message) ? "详情页" : "",
+    /表单|填写|编辑|新增|设置/.test(message) ? "表单编辑页" : "",
+    /实名|上传|认证/.test(message) ? "认证上传页" : "",
+    /支付|收益|提现/.test(message) ? "支付收益页" : ""
+  ].filter(Boolean);
+  return names.length > 0 ? Array.from(new Set(names)).slice(0, 6) : ["核心页面"];
+}
+
+function formatVisualDesignReviewMessage(review: VisualDesignReview) {
+  const blocking = review.findings.filter((finding) => finding.severity === "blocking");
+  const warnings = review.findings.filter((finding) => finding.severity === "warning");
+  return [
+    `视觉审核${review.passed ? "通过" : "未通过"}：${review.summary || `评分 ${review.visualQualityScore}/100`}`,
+    `平台匹配：${review.platformFit.ok ? "通过" : "不匹配"}，期望 ${review.platformFit.expected || "未指定"}，实际 ${review.platformFit.actual || "未识别"}。${review.platformFit.reason}`,
+    `质量评分：${review.visualQualityScore}/100，建议动作：${review.nextAction}`,
+    blocking.length > 0 ? `阻塞问题：${blocking.map((item) => `${item.pageLabel ? `${item.pageLabel}：` : ""}${item.issue}${item.evidence ? `（${item.evidence}）` : ""}`).join("；")}` : "",
+    warnings.length > 0 ? `警告：${warnings.map((item) => `${item.pageLabel ? `${item.pageLabel}：` : ""}${item.issue}`).join("；")}` : "",
+    review.strengths.length > 0 ? `做得还可以的点：${review.strengths.join("；")}` : ""
+  ].filter(Boolean).join("\n");
+}
+
+function enforceVisualQualityGate(review: VisualDesignReview): VisualDesignReview {
+  if (review.visualQualityScore >= 75 && review.platformFit.ok && review.findings.every((finding) => finding.severity !== "blocking")) {
+    return review;
+  }
+  const findings = [...review.findings];
+  if (review.visualQualityScore < 75) {
+    findings.push({
+      severity: "blocking",
+      pageLabel: "",
+      issue: `视觉质量分 ${review.visualQualityScore}/100，低于基础门槛 75。`,
+      evidence: "页面仍可能存在风格弱、粗糙、排版差、缺少视觉资产或组件层级的问题。",
+      fixSuggestion: "重新生成或局部修复：补充组件库结构、图标/图片、按钮居中、文本层级和间距。"
+    });
+  }
+  if (!review.platformFit.ok) {
+    findings.push({
+      severity: "blocking",
+      pageLabel: "",
+      issue: "平台范式不匹配。",
+      evidence: review.platformFit.reason,
+      fixSuggestion: "按目标平台组件库重新生成。"
+    });
+  }
+  return {
+    ...review,
+    passed: false,
+    findings,
+    nextAction: review.nextAction === "pass" ? "regenerate" : review.nextAction,
+    summary: review.summary || "视觉审核未达到基础质量门槛。"
+  };
+}
+
+function extractVisualPreviewImages(data: unknown): Array<{ label: string; dataUrl: string; width?: number; height?: number; nodeId?: string }> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return [];
+  const previews = (data as Record<string, unknown>).previews;
+  if (!Array.isArray(previews)) return [];
+  return previews
+    .map((item): { label: string; dataUrl: string; width?: number; height?: number; nodeId?: string } | null => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const record = item as Record<string, unknown>;
+      const dataUrl = typeof record.dataUrl === "string" ? record.dataUrl : "";
+      if (!dataUrl.startsWith("data:image/")) return null;
+      const preview: { label: string; dataUrl: string; width?: number; height?: number; nodeId?: string } = {
+        label: typeof record.label === "string" ? record.label : "画板预览",
+        dataUrl
+      };
+      if (typeof record.width === "number") preview.width = record.width;
+      if (typeof record.height === "number") preview.height = record.height;
+      if (typeof record.nodeId === "string") preview.nodeId = record.nodeId;
+      return preview;
+    })
+    .filter((item): item is { label: string; dataUrl: string; width?: number; height?: number; nodeId?: string } => Boolean(item));
 }
 
 function formatToolInputBrief(input: Record<string, unknown>) {
@@ -4393,6 +5283,8 @@ function getDesignAgentEventContent(event: DesignAgentStreamEvent) {
   switch (event.type) {
     case "message":
       return event.content;
+    case "llm_delta":
+      return event.delta;
     case "plan":
       return [event.title, ...event.steps].join("\n");
     case "tool_call_start":
@@ -4411,6 +5303,12 @@ function getDesignAgentEventContent(event: DesignAgentStreamEvent) {
 }
 
 function stripLargeDesignEventPayload(event: DesignAgentStreamEvent) {
+  if (event.type === "tool_call_result") {
+    return {
+      ...event,
+      result: stripLargePreviewPayload(event.result)
+    };
+  }
   if (event.type !== "schema_patch" && event.type !== "done") {
     return event;
   }
@@ -4419,6 +5317,49 @@ function stripLargeDesignEventPayload(event: DesignAgentStreamEvent) {
     file: event.file ? { id: event.file.id, name: event.file.name, pageCount: event.file.pages.length } : undefined,
     page: event.page ? { id: event.page.id, name: event.page.name, nodeCount: event.page.nodes.length } : undefined
   };
+}
+
+function stripLargePreviewPayload(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record.previews)) return value;
+  return {
+    ...record,
+    previews: record.previews.map((preview) => {
+      if (!preview || typeof preview !== "object" || Array.isArray(preview)) return preview;
+      const previewRecord = preview as Record<string, unknown>;
+      return {
+        ...previewRecord,
+        dataUrl: typeof previewRecord.dataUrl === "string" && previewRecord.dataUrl.length > 1_200_000
+          ? `[data-url ${previewRecord.dataUrl.length} chars]`
+          : previewRecord.dataUrl
+      };
+    })
+  };
+}
+
+function extractPreviewImagesFromEventMetadata(metadata: Record<string, unknown>) {
+  const eventResult = metadata.result;
+  if (!eventResult || typeof eventResult !== "object" || Array.isArray(eventResult)) {
+    return undefined;
+  }
+  const previews = (eventResult as Record<string, unknown>).previews;
+  if (!Array.isArray(previews)) {
+    return undefined;
+  }
+  const images = previews
+    .map((preview) => {
+      if (!preview || typeof preview !== "object" || Array.isArray(preview)) return null;
+      const record = preview as Record<string, unknown>;
+      const dataUrl = typeof record.dataUrl === "string" ? record.dataUrl : "";
+      if (!dataUrl.startsWith("data:image/")) return null;
+      return {
+        label: typeof record.label === "string" ? record.label : "画板预览",
+        dataUrl
+      };
+    })
+    .filter((preview): preview is { label: string; dataUrl: string } => Boolean(preview));
+  return images.length > 0 ? images : undefined;
 }
 
 function createAgentRunId(prefix: string) {
@@ -4465,6 +5406,96 @@ function classifyDesignAgentTask(message: string) {
   };
 }
 
+function buildDesignQualityContext(message: string) {
+  const platform = /小程序|微信/.test(message)
+    ? "wechat_mini_program"
+    : /app|移动端|手机|ios|android/i.test(message)
+      ? "mobile_app"
+      : /响应式|responsive/i.test(message)
+        ? "responsive_web"
+        : "pc_web";
+  const platformLabel = {
+    pc_web: "PC Web",
+    wechat_mini_program: "微信小程序",
+    mobile_app: "移动 App",
+    responsive_web: "响应式 Web"
+  }[platform];
+  const industry = /电商|商品|订单|购物|支付|优惠券|营销/.test(message)
+    ? "电商/交易"
+    : /iot|设备|物联|传感器|告警|能耗|监控/i.test(message)
+      ? "IoT/设备管理"
+      : /司机|乘客|路线|收益|出行|地图/.test(message)
+        ? "出行/本地服务"
+        : /任务|项目|协作|团队/.test(message)
+          ? "协作/项目管理"
+          : /用户|登录|注册|实名|地址|账号/.test(message)
+            ? "用户账号体系"
+            : "通用业务";
+  const interactionTypes = [
+    /登录|注册|验证码|绑定/.test(message) ? "登录注册" : "",
+    /表单|填写|编辑|新增|保存|设置/.test(message) ? "表单录入" : "",
+    /列表|记录|订单|消息|管理/.test(message) ? "列表管理" : "",
+    /详情|资料|个人信息|产品详情/.test(message) ? "详情查看" : "",
+    /上传|身份证|人脸|实名/.test(message) ? "上传认证" : "",
+    /地图|地址|选址|定位/.test(message) ? "地图选址" : "",
+    /支付|收益|提现|优惠券|营销/.test(message) ? "交易/收益" : "",
+    /设备|告警|监控|趋势/.test(message) ? "状态监控" : ""
+  ].filter(Boolean);
+  const referenceSystems = platform === "wechat_mini_program"
+    ? ["微信小程序官方组件", "iOS/Android 移动端表单模式", "Tailwind 卡片层级"]
+    : platform === "mobile_app"
+      ? ["iOS Human Interface Guidelines", "Material Design", "移动端卡片/表单模式"]
+      : ["Ant Design Pro", "Tailwind SaaS Dashboard", "企业后台信息密度规范"];
+  const qualityBar = platform === "pc_web"
+    ? [
+      "PC 以 1440x1024 或 1920 宽屏信息架构为基准",
+      "表格/筛选/操作区必须分层，不允许遮挡",
+      "主按钮、次按钮、状态标签和空状态必须明确"
+    ]
+    : [
+      "移动端逻辑宽度 375，单列布局，不允许 PC 表格",
+      "卡片与表单必须有 16-24px 安全边距",
+      "列表项内容必须拆成独立文本，禁止多字段挤压重叠",
+      "底部主操作避开安全区，状态/错误/空态必须可见"
+    ];
+  const referenceContext = getDesignReferenceContext(message, platform);
+  return {
+    platform,
+    platformLabel,
+    industry,
+    interactionTypes: interactionTypes.length > 0 ? interactionTypes : ["信息浏览", "主操作"],
+    referenceSystems,
+    qualityBar,
+    designReferences: referenceContext
+  };
+}
+
+function compactDesignQualityContextForSchema(context: ReturnType<typeof buildDesignQualityContext>) {
+  return {
+    platform: context.platform,
+    platformLabel: context.platformLabel,
+    industry: context.industry,
+    interactionTypes: context.interactionTypes,
+    referenceSystems: context.referenceSystems,
+    qualityBar: context.qualityBar,
+    designReferences: {
+      matchedReferenceIds: context.designReferences.matchedReferenceIds,
+      rules: context.designReferences.rules.slice(0, 8),
+      references: context.designReferences.references.map((reference) => ({
+        id: reference.id,
+        name: reference.name,
+        category: reference.category,
+        page: reference.page,
+        layout: reference.layout,
+        styleTokens: reference.styleTokens,
+        nodeStats: reference.nodeStats,
+        keyTexts: reference.keyTexts.slice(0, 12),
+        guidance: reference.guidance.slice(0, 4)
+      }))
+    }
+  };
+}
+
 function extractPathLikeText(message: string) {
   return /(?:path|文件|图片|imagePath)[:：]?\s*([^\s，。]+)/i.exec(message)?.[1];
 }
@@ -4502,6 +5533,28 @@ function summarizeDesignPageForPrompt(page: WorkspaceDesignPage) {
       height: node.height,
       text: node.text
     }))
+  };
+}
+
+function summarizeDesignPageForSchemaPrompt(page: WorkspaceDesignPage) {
+  const topLevelNodes = page.nodes.filter((node) => !node.parentId).slice(0, 12);
+  return {
+    id: page.id,
+    name: page.name,
+    nodeCount: page.nodes.length,
+    topLevelNodes: topLevelNodes.map((node) => ({
+      id: node.id,
+      type: node.type,
+      name: node.name,
+      x: node.x,
+      y: node.y,
+      width: node.width,
+      height: node.height
+    })),
+    nodeTypeStats: page.nodes.reduce<Record<string, number>>((result, node) => {
+      result[node.type] = (result[node.type] ?? 0) + 1;
+      return result;
+    }, {})
   };
 }
 
@@ -4611,15 +5664,16 @@ function getChildShapes(shape: unknown) {
   return toArray((shape as { childs?: unknown }).childs);
 }
 
-function getSketchLayers(layer: unknown) {
+function getSketchLayers(layer: unknown): AnyLayer[] {
   if (!layer || typeof layer !== "object") {
     return [];
   }
-  return toArray((layer as { layers?: unknown }).layers);
+  return toArray((layer as { layers?: unknown }).layers)
+    .filter((child): child is AnyLayer => Boolean(child) && typeof child === "object");
 }
 
-function getSketchRenderableLayers(layer: unknown) {
-  return [...getSketchLayers(layer)].reverse();
+function getSketchRenderableLayers(layer: unknown): AnyLayer[] {
+  return getSketchLayers(layer);
 }
 
 function getSketchTopLevelPageCandidates(pageLike: unknown) {
@@ -4829,16 +5883,20 @@ function convertSketchSymbolInstance(
   }
   const symbolObject = safeObject(symbol);
   const symbolFrame = readSketchFrame(symbolObject);
-  const scaleX = symbolFrame.width > 0 ? context.nodeWidth / symbolFrame.width : 1;
-  const scaleY = symbolFrame.height > 0 ? context.nodeHeight / symbolFrame.height : 1;
+  // const scaleX = symbolFrame.width > 0 ? context.nodeWidth / symbolFrame.width : 1;
+  // const scaleY = symbolFrame.height > 0 ? context.nodeHeight / symbolFrame.height : 1;
+  const scaleX = symbolFrame.width > 0 ? (instance.frame?.width || 0) / symbolFrame.width : 1;
+  const scaleY = symbolFrame.height > 0 ? (instance.frame?.height || 0) / symbolFrame.height : 1;
   const layers = applySketchSymbolOverrides(getSketchRenderableLayers(symbolObject), overrideValues, context.sharedStyleMaps);
   return layers.flatMap((layer, index) => (
     convertSketchLayer(layer, {
       depth: context.depth + 1,
       index,
       zIndexRef: context.zIndexRef,
-      parentX: context.nodeX - symbolFrame.x * scaleX,
-      parentY: context.nodeY - symbolFrame.y * scaleY,
+      // parentX: context.nodeX - symbolFrame.x * scaleX,
+      // parentY: context.nodeY - symbolFrame.y * scaleY,
+      parentX: context.nodeX,
+      parentY: context.nodeY,
       scaleX,
       scaleY,
       assetByRef: context.assetByRef,
@@ -4851,7 +5909,7 @@ function convertSketchSymbolInstance(
   ));
 }
 
-function applySketchSymbolOverrides(layers: unknown[], overrideValues: unknown[], sharedStyleMaps?: SketchSharedStyleMaps) {
+function applySketchSymbolOverrides(layers: AnyLayer[], overrideValues: unknown[], sharedStyleMaps?: SketchSharedStyleMaps): AnyLayer[] {
   if (overrideValues.length === 0) {
     return layers;
   }
@@ -4914,7 +5972,7 @@ function applySketchSymbolOverrides(layers: unknown[], overrideValues: unknown[]
     }
   });
 
-  const cloneWithOverrides = (layer: unknown): unknown => {
+  const cloneWithOverrides = (layer: AnyLayer): AnyLayer => {
     const layerObject = safeObject(layer);
     const layerId = getStringProp(layerObject, "do_objectID");
     const textOverride = textOverrideByLayerId.get(layerId);
@@ -4960,7 +6018,7 @@ function applySketchSymbolOverrides(layers: unknown[], overrideValues: unknown[]
     if (imageOverride) {
       nextLayer.image = imageOverride;
     }
-    return nextLayer;
+    return nextLayer as AnyLayer;
   };
 
   return layers.map(cloneWithOverrides);
@@ -5182,6 +6240,89 @@ function readSketchImageMeta(layer: Record<string, unknown>, assetByRef?: Map<st
   };
 }
 
+function readSketchSourceMeta(
+  layer: Record<string, unknown>,
+  assetByRef?: Map<string | undefined, WorkspaceDesignAsset>
+): WorkspaceDesignNode["sourceMeta"] {
+  const layerClass = getStringProp(layer, "_class");
+  const imageRef = layerClass === "bitmap"
+    ? normalizeSketchImageRef(layer.image)
+    : normalizeSketchImageRef(toArray(safeObject(layer.style).fills).map(safeObject).find((fill) => normalizeSketchImageRef(fill.image))?.image);
+  return stripUndefinedObject({
+    provider: "sketch",
+    layerClass,
+    layerListExpandedType: numberOrUndefined(layer.layerListExpandedType),
+    nameIsFixed: booleanOrUndefined(layer.nameIsFixed),
+    isTemplate: booleanOrUndefined(layer.isTemplate),
+    isFixedToViewport: booleanOrUndefined(layer.isFixedToViewport),
+    maintainScrollPosition: booleanOrUndefined(layer.maintainScrollPosition),
+    booleanOperation: numberOrUndefined(layer.booleanOperation),
+    resizingConstraint: numberOrUndefined(layer.resizingConstraint),
+    resizingType: numberOrUndefined(layer.resizingType),
+    sharedStyleID: getStringProp(layer, "sharedStyleID") || undefined,
+    symbolID: getStringProp(layer, "symbolID") || undefined,
+    overrideValues: readSketchOverrideValues(layer),
+    groupLayout: sanitizeSketchRecord(layer.groupLayout),
+    points: readSketchSourcePoints(layer),
+    numberOfPoints: numberOrUndefined(layer.numberOfPoints),
+    shapeRadius: numberOrUndefined(layer.radius),
+    isClosed: booleanOrUndefined(layer.isClosed),
+    pointRadiusBehaviour: numberOrUndefined(layer.pointRadiusBehaviour),
+    textBehaviour: numberOrUndefined(layer.textBehaviour),
+    lineSpacingBehaviour: numberOrUndefined(layer.lineSpacingBehaviour),
+    glyphBounds: getStringProp(layer, "glyphBounds") || undefined,
+    imageRef: imageRef || undefined,
+    clippingMask: getStringProp(layer, "clippingMask") || undefined,
+    flow: sanitizeSketchRecord(layer.flow),
+    exportOptions: sanitizeSketchExportOptions(layer.exportOptions),
+    userInfo: sanitizeSketchRecord(layer.userInfo)
+  });
+}
+
+function readSketchOverrideValues(layer: Record<string, unknown>) {
+  const values = toArray(layer.overrideValues)
+    .map(safeObject)
+    .map((override) => ({
+      overrideName: getStringProp(override, "overrideName") || undefined,
+      value: stringifySketchScalar(override.value)
+    }))
+    .filter((override) => override.overrideName || override.value);
+  return values.length > 0 ? values : undefined;
+}
+
+function readSketchSourcePoints(layer: Record<string, unknown>) {
+  const points = toArray(layer.points)
+    .map(safeObject)
+    .map((point) => stripUndefinedObject({
+      point: getStringProp(point, "point") || undefined,
+      curveFrom: getStringProp(point, "curveFrom") || undefined,
+      curveTo: getStringProp(point, "curveTo") || undefined,
+      hasCurveFrom: booleanOrUndefined(point.hasCurveFrom),
+      hasCurveTo: booleanOrUndefined(point.hasCurveTo),
+      cornerRadius: numberOrUndefined(point.cornerRadius),
+      curveMode: numberOrUndefined(point.curveMode)
+    }));
+  return points.length > 0 ? points : undefined;
+}
+
+function sanitizeSketchExportOptions(value: unknown) {
+  const options = sanitizeSketchRecord(value);
+  if (!options) return undefined;
+  const exportFormats = toArray(options.exportFormats)
+    .map(safeObject)
+    .map((format) => stripUndefinedObject({
+      fileFormat: getStringProp(format, "fileFormat") || undefined,
+      name: getStringProp(format, "name") || undefined,
+      scale: numberOrUndefined(format.scale),
+      visibleScaleType: numberOrUndefined(format.visibleScaleType),
+      absoluteSize: numberOrUndefined(format.absoluteSize)
+    }));
+  return stripUndefinedObject({
+    ...options,
+    exportFormats: exportFormats.length > 0 ? exportFormats : undefined
+  });
+}
+
 function readSketchFillImageMeta(layer: Record<string, unknown>, assetByRef?: Map<string | undefined, WorkspaceDesignAsset>): Partial<WorkspaceDesignNode> {
   const enabledFills = toArray(safeObject(layer.style).fills).map(safeObject).filter((fill) => fill.isEnabled !== false);
   const imageFill = enabledFills.find((fill) => normalizeSketchImageRef(fill.image));
@@ -5201,10 +6342,15 @@ function sketchPatternFillTypeToMode(patternFillType: number): WorkspaceDesignNo
   return "stretch";
 }
 
-function readSketchVectorMeta(layer: Record<string, unknown>, width: number, height: number): Partial<WorkspaceDesignNode> {
+function readSketchVectorMeta(
+  layer: Record<string, unknown>,
+  width: number,
+  height: number,
+  scale: { scaleX: number; scaleY: number } = { scaleX: 1, scaleY: 1 }
+): Partial<WorkspaceDesignNode> {
   const layerClass = getStringProp(layer, "_class");
   if (isSketchVectorContainerLayer(layer)) {
-    return readSketchShapeGroupVectorMeta(layer, width, height);
+    return readSketchShapeGroupVectorMeta(layer, width, height, scale);
   }
   if (!["shapePath", "rectangle", "oval", "polygon", "star", "triangle", "line"].includes(layerClass)) {
     return {};
@@ -5223,30 +6369,38 @@ function readSketchVectorMeta(layer: Record<string, unknown>, width: number, hei
   };
 }
 
-function readSketchShapeGroupVectorMeta(layer: Record<string, unknown>, width: number, height: number): Partial<WorkspaceDesignNode> {
+function readSketchShapeGroupVectorMeta(
+  layer: Record<string, unknown>,
+  width: number,
+  height: number,
+  scale: { scaleX: number; scaleY: number }
+): Partial<WorkspaceDesignNode> {
   const children = getSketchLayers(layer).map(safeObject).filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child));
   if (children.length === 0 || !children.every(isSketchShapeVectorChild)) {
     return {};
   }
 
-  const svgTree = buildSketchSvgTree(layer, { root: true });
+  const svgTree = buildSketchSvgTree(layer, { root: true, ...scale });
   const paths = svgTree ? flattenSketchSvgTreePaths(svgTree) : [];
-  if (paths.length === 0) {
+  const visiblePaths = paths.filter((path) => !isInvisibleSketchSvgPath(path));
+  if (visiblePaths.length === 0) {
     return {};
   }
 
-  const combinedPath = paths.map((path) => path.d).join(" ");
-  const hasBooleanPath = paths.some((path) => path.booleanOperation === 1 || path.booleanOperation === 3);
+  const hasPathTransform = visiblePaths.some((path) => path.transform);
+  const combinedPath = visiblePaths.map((path) => path.d).join(" ");
+  const hasBooleanPath = visiblePaths.some((path) => path.booleanOperation === 1 || path.booleanOperation === 3);
   const windingRule = toNumber(safeObject(layer.style).windingRule, 0);
   const fillRule = windingRule === 1 || hasBooleanPath ? "evenodd" : "nonzero";
+  const svgPaths = [{
+    d: combinedPath,
+    // fillRule
+  }]
   return {
     svgPath: combinedPath,
     svgFillRule: fillRule,
     svgTree,
-    svgPaths: paths.map(({ booleanOperation: _booleanOperation, ...path }) => ({
-      ...path,
-      fillRule: path.fillRule ?? fillRule
-    }))
+    svgPaths: svgPaths
   };
 }
 
@@ -5257,7 +6411,10 @@ type SketchShapeGroupPath = NonNullable<WorkspaceDesignNode["svgPaths"]>[number]
 type SketchSvgTreeNode = NonNullable<WorkspaceDesignNode["svgTree"]>;
 type SketchSvgAttributes = Omit<Extract<SketchSvgTreeNode, { type: "path" }>, "type" | "d">;
 
-function buildSketchSvgTree(layer: Record<string, unknown>, context: { root: boolean }): SketchSvgTreeNode | undefined {
+function buildSketchSvgTree(
+  layer: Record<string, unknown>,
+  context: { root: boolean; scaleX: number; scaleY: number }
+): SketchSvgTreeNode | undefined {
   if (!isSketchVectorContainerLayer(layer)) {
     return undefined;
   }
@@ -5268,11 +6425,17 @@ function buildSketchSvgTree(layer: Record<string, unknown>, context: { root: boo
     .filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child))
     .map((child) => {
       if (isSketchVectorContainerLayer(child)) {
-        return buildSketchSvgTree(child, { root: false });
+        return buildSketchSvgTree(child, { ...context, root: false });
       }
-      return convertSketchShapeChildToSvgPath(child);
+      return convertSketchShapeChildToSvgPath(child, context);
     })
-    .filter((child): child is SketchSvgTreeNode => Boolean(child));
+    .filter((child): child is SketchSvgTreeNode => {
+      if (!child) {
+        return false;
+      }
+      // return !isInvisibleSketchSvgNode(child);
+      return true
+    });
 
   if (children.length === 0) {
     return undefined;
@@ -5289,7 +6452,7 @@ function buildSketchSvgTree(layer: Record<string, unknown>, context: { root: boo
   return {
     type: "g",
     ...readSketchSvgStyleAttributes(layer, { defaultFill: getStringProp(layer, "_class") === "group" ? "none" : undefined }),
-    transform: context.root ? undefined : sketchTranslate(frame.x, frame.y),
+    transform: context.root ? undefined : sketchTranslate(frame.x * context.scaleX, frame.y * context.scaleY),
     children
   };
 }
@@ -5307,10 +6470,14 @@ function shouldCollapseSketchCompoundShapeGroup(layer: Record<string, unknown>, 
     && child.fill === undefined
     && child.stroke === undefined
     && child.opacity === undefined
+    && child.transform === undefined
   ));
 }
 
-function convertSketchShapeChildToSvgPath(child: Record<string, unknown>): SketchSvgTreeNode | undefined {
+function convertSketchShapeChildToSvgPath(
+  child: Record<string, unknown>,
+  context: { scaleX: number; scaleY: number }
+): SketchSvgTreeNode | undefined {
   if (!isSketchShapePrimitive(child)) {
     return undefined;
   }
@@ -5321,9 +6488,10 @@ function convertSketchShapeChildToSvgPath(child: Record<string, unknown>): Sketc
     return undefined;
   }
 
-  const width = Math.max(1, childFrame.width);
-  const height = Math.max(1, childFrame.height);
-  const d = readSketchSvgPath(child, width, height, childFrame.x, childFrame.y);
+  const scaledFrame = scaleSketchFrame(childFrame, context.scaleX, context.scaleY);
+  const width = Math.max(1, scaledFrame.width);
+  const height = Math.max(1, scaledFrame.height);
+  const d = readSketchSvgPath(child, width, height, scaledFrame.x, scaledFrame.y);
   if (!d) {
     return undefined;
   }
@@ -5331,7 +6499,21 @@ function convertSketchShapeChildToSvgPath(child: Record<string, unknown>): Sketc
   return {
     type: "path",
     d,
+    transform: readSketchLayerSvgTransform(child, scaledFrame),
     ...readSketchSvgStyleAttributes(child)
+  };
+}
+
+function scaleSketchFrame(
+  frame: { x: number; y: number; width: number; height: number },
+  scaleX: number,
+  scaleY: number
+) {
+  return {
+    x: frame.x * scaleX,
+    y: frame.y * scaleY,
+    width: frame.width * scaleX,
+    height: frame.height * scaleY
   };
 }
 
@@ -5370,11 +6552,16 @@ function readSketchSvgStyleAttributes(
 
 function flattenSketchSvgTreePaths(
   node: SketchSvgTreeNode,
-  inherited: Partial<SketchShapeGroupPath> = {}
+  inherited: Partial<SketchShapeGroupPath> & { offsetX?: number; offsetY?: number } = {}
 ): SketchShapeGroupPath[] {
+  const inheritedOpacity = inherited.opacity ?? 1;
   if (node.type === "path") {
+    const offsetX = inherited.offsetX ?? 0;
+    const offsetY = inherited.offsetY ?? 0;
+    const opacity = node.opacity !== undefined ? inheritedOpacity * node.opacity : inherited.opacity;
+    const transform = offsetX || offsetY ? translateSketchSvgTransform(node.transform, offsetX, offsetY) : node.transform;
     return [{
-      d: node.d,
+      d: offsetX || offsetY ? translateSketchSvgPath(node.d, offsetX, offsetY) : node.d,
       fill: node.fill ?? inherited.fill,
       stroke: node.stroke ?? inherited.stroke,
       strokeWidth: node.strokeWidth ?? inherited.strokeWidth,
@@ -5382,10 +6569,13 @@ function flattenSketchSvgTreePaths(
       strokeLineCap: node.strokeLineCap ?? inherited.strokeLineCap,
       strokeLineJoin: node.strokeLineJoin ?? inherited.strokeLineJoin,
       fillRule: node.fillRule ?? inherited.fillRule,
-      opacity: node.opacity ?? inherited.opacity
+      opacity,
+      transform: composeSketchSvgTransforms(transform)
     }];
   }
 
+  const translate = parseSketchTranslateTransform(node.transform);
+  const nodeOpacity = node.opacity !== undefined ? inheritedOpacity * node.opacity : inherited.opacity;
   const nextInherited = {
     fill: node.fill ?? inherited.fill,
     stroke: node.stroke ?? inherited.stroke,
@@ -5394,7 +6584,9 @@ function flattenSketchSvgTreePaths(
     strokeLineCap: node.strokeLineCap ?? inherited.strokeLineCap,
     strokeLineJoin: node.strokeLineJoin ?? inherited.strokeLineJoin,
     fillRule: node.fillRule ?? inherited.fillRule,
-    opacity: node.opacity ?? inherited.opacity
+    opacity: nodeOpacity,
+    offsetX: (inherited.offsetX ?? 0) + translate.x,
+    offsetY: (inherited.offsetY ?? 0) + translate.y
   };
   return node.children.flatMap((child) => flattenSketchSvgTreePaths(child, nextInherited));
 }
@@ -5402,7 +6594,144 @@ function flattenSketchSvgTreePaths(
 function sketchTranslate(x: number, y: number) {
   const tx = formatPathNumber(x);
   const ty = formatPathNumber(y);
-  return tx || ty ? `translate(${tx} ${ty})` : undefined;
+  return x || y ? `translate(${tx} ${ty})` : undefined;
+}
+
+function parseSketchTranslateTransform(transform: string | undefined) {
+  const match = /translate\(([^)]+)\)/i.exec(transform ?? "");
+  if (!match) {
+    return { x: 0, y: 0 };
+  }
+  const [x = 0, y = 0] = match[1].split(/[\s,]+/).map(Number).filter(Number.isFinite);
+  return { x, y };
+}
+
+function isInvisibleSketchSvgNode(node: SketchSvgTreeNode): boolean {
+  if (node.opacity !== undefined && node.opacity <= 0) {
+    return true;
+  }
+  if (node.type === "path") {
+    // return isInvisibleSketchSvgPath(node);
+  }
+  return false;
+}
+
+function readSketchLayerSvgTransform(layer: Record<string, unknown>, frame: { x: number; y: number; width: number; height: number }) {
+  const transforms: string[] = [];
+  const centerX = frame.x + frame.width / 2;
+  const centerY = frame.y + frame.height / 2;
+  const rotation = toNumber(layer.rotation, 0);
+  const flippedHorizontal = layer.isFlippedHorizontal === true;
+  const flippedVertical = layer.isFlippedVertical === true;
+
+  if (rotation) {
+    transforms.push(`rotate(${formatPathNumber(rotation)} ${formatPathNumber(centerX)} ${formatPathNumber(centerY)})`);
+  }
+  if (flippedHorizontal || flippedVertical) {
+    transforms.push([
+      `translate(${formatPathNumber(centerX)} ${formatPathNumber(centerY)})`,
+      `scale(${flippedHorizontal ? -1 : 1} ${flippedVertical ? -1 : 1})`,
+      `translate(${formatPathNumber(-centerX)} ${formatPathNumber(-centerY)})`
+    ].join(" "));
+  }
+
+  return composeSketchSvgTransforms(...transforms);
+}
+
+function composeSketchSvgTransforms(...transforms: Array<string | undefined>) {
+  const value = transforms.map((transform) => transform?.trim()).filter(Boolean).join(" ");
+  return value || undefined;
+}
+
+function translateSketchSvgTransform(transform: string | undefined, offsetX: number, offsetY: number) {
+  if (!transform) {
+    return undefined;
+  }
+  return transform.replace(/(translate|rotate)\(([^)]*)\)/gi, (full, command: string, args: string) => {
+    const values = args.split(/[\s,]+/).map(Number).filter(Number.isFinite);
+    if (command.toLowerCase() === "translate" && values.length >= 2) {
+      const isInverseCenterTranslate = values[0] < 0 || values[1] < 0;
+      return `translate(${formatPathNumber(values[0] + (isInverseCenterTranslate ? -offsetX : offsetX))} ${formatPathNumber(values[1] + (isInverseCenterTranslate ? -offsetY : offsetY))})`;
+    }
+    if (command.toLowerCase() === "rotate" && values.length >= 3) {
+      return `rotate(${formatPathNumber(values[0])} ${formatPathNumber(values[1] + offsetX)} ${formatPathNumber(values[2] + offsetY)})`;
+    }
+    return full;
+  });
+}
+
+function isInvisibleSketchSvgPath(path: Partial<SketchShapeGroupPath>) {
+  if (path.opacity !== undefined && path.opacity <= 0) {
+    return true;
+  }
+  return isTransparentSketchPaint(path.fill) && (!path.stroke || isTransparentSketchPaint(path.stroke) || (path.strokeWidth ?? 0) <= 0);
+}
+
+function isTransparentSketchPaint(value: string | undefined) {
+  const paint = value?.trim().toLowerCase();
+  return !paint
+    || paint === "transparent"
+    || paint === "none"
+    || /rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(paint);
+}
+
+function translateSketchSvgPath(path: string, offsetX: number, offsetY: number) {
+  const tokens = path.match(/[AaCcHhLlMmQqSsTtVvZz]|[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?/g) ?? [];
+  const coordinateCounts: Record<string, number> = {
+    A: 7,
+    C: 6,
+    H: 1,
+    L: 2,
+    M: 2,
+    Q: 4,
+    S: 4,
+    T: 2,
+    V: 1,
+    Z: 0
+  };
+  const output: string[] = [];
+  let command = "";
+  let numberIndex = 0;
+
+  tokens.forEach((token) => {
+    if (/^[AaCcHhLlMmQqSsTtVvZz]$/.test(token)) {
+      command = token;
+      numberIndex = 0;
+      output.push(token);
+      return;
+    }
+
+    const numeric = Number(token);
+    const upperCommand = command.toUpperCase();
+    const coordinateCount = coordinateCounts[upperCommand] ?? 0;
+    const isRelative = command !== upperCommand;
+    const commandIndex = coordinateCount > 0 ? numberIndex % coordinateCount : numberIndex;
+    const translated = isRelative
+      ? numeric
+      : numeric + getSketchSvgPathCoordinateOffset(upperCommand, commandIndex, offsetX, offsetY);
+    output.push(String(formatPathNumber(translated)));
+    numberIndex += 1;
+  });
+
+  return output.join(" ");
+}
+
+function getSketchSvgPathCoordinateOffset(command: string, index: number, offsetX: number, offsetY: number) {
+  if (command === "H") {
+    return offsetX;
+  }
+  if (command === "V") {
+    return offsetY;
+  }
+  if (command === "A") {
+    if (index === 5) return offsetX;
+    if (index === 6) return offsetY;
+    return 0;
+  }
+  if (command === "C" || command === "S" || command === "Q" || command === "M" || command === "L" || command === "T") {
+    return index % 2 === 0 ? offsetX : offsetY;
+  }
+  return 0;
 }
 
 function collectSketchShapeGroupPaths(
@@ -5677,7 +7006,13 @@ function ovalSvgPath(x: number, y: number, width: number, height: number) {
 }
 
 function formatPathNumber(value: number) {
-  return Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
+  if (!Number.isFinite(value)) {
+    return "0";
+  }
+  if (Math.abs(value) < 1e-12) {
+    return "0";
+  }
+  return Number(value.toPrecision(15)).toString();
 }
 
 function mimeTypeFromSketchImageRef(ref: string) {
@@ -5773,7 +7108,8 @@ function readSketchFill(
   if (["group", "shapeGroup", "symbolMaster", "symbolInstance"].includes(layerClass)) {
     return "transparent";
   }
-  return "#f8f8fa";
+  // return "#f8f8fa";
+  return "transparent";
 }
 
 function sketchFillToCss(fill: Record<string, unknown>, assetByRef?: Map<string | undefined, WorkspaceDesignAsset>) {
@@ -6116,7 +7452,9 @@ function readSketchFontSize(layer: Record<string, unknown>, nodeType: WorkspaceD
 
 function readSketchLineHeight(layer: Record<string, unknown>) {
   const paragraphStyle = readSketchParagraphStyle(layer);
-  const lineHeight = toNumber(paragraphStyle.minimumLineHeight, toNumber(paragraphStyle.maximumLineHeight, 0));
+  const minimumLineHeight = toNumber(paragraphStyle.minimumLineHeight, 0);
+  const maximumLineHeight = toNumber(paragraphStyle.maximumLineHeight, 0);
+  const lineHeight = minimumLineHeight > 0 ? minimumLineHeight : maximumLineHeight;
   return lineHeight > 0 ? Math.round(lineHeight) : undefined;
 }
 
@@ -6126,6 +7464,23 @@ function readSketchTextAlign(layer: Record<string, unknown>): WorkspaceDesignNod
   if (alignment === 2) return "center";
   if (alignment === 3) return "justify";
   return "left";
+}
+
+function readSketchTextVerticalAlign(layer: Record<string, unknown>): WorkspaceDesignNode["textVerticalAlign"] {
+  if (getStringProp(layer, "_class") !== "text") {
+    return undefined;
+  }
+  const textStyle = safeObject(safeObject(layer.style).textStyle);
+  const encodedAttributes = safeObject(textStyle.encodedAttributes);
+  const firstAttribute = safeObject(toArray(safeObject(layer.attributedString).attributes)[0]);
+  const firstAttributeAttrs = safeObject(firstAttribute.attributes);
+  const verticalAlignment = toNumber(
+    encodedAttributes.textStyleVerticalAlignmentKey,
+    toNumber(firstAttributeAttrs.textStyleVerticalAlignmentKey, toNumber(textStyle.verticalAlignment, 0))
+  );
+  if (verticalAlignment === 1) return "middle";
+  if (verticalAlignment === 2) return "bottom";
+  return "top";
 }
 
 function readSketchParagraphStyle(layer: Record<string, unknown>) {
@@ -6173,9 +7528,10 @@ function mapSketchLayerType(layerClass: string, name: string): WorkspaceDesignNo
   if (layerClass === "text") return "text";
   if (normalizedName.includes("table") || normalizedName.includes("表格")) return "table";
   if (layerClass === "bitmap" || normalizedName.includes("image") || normalizedName.includes("图片")) return "image";
-  if (layerClass === "artboard") return "frame";
-  if (layerClass === "symbolMaster" || layerClass === "symbolInstance") return "card";
+  if (layerClass === "artboard" || layerClass === "symbolMaster") return "frame";
+  if (layerClass === "symbolInstance") return "card";
   if (layerClass === "group" || layerClass === "shapeGroup") return "card";
+  if (layerClass === "slice" || layerClass === "MSImmutableHotspotLayer") return "container";
   return "container";
 }
 
@@ -6197,6 +7553,38 @@ function tryCallArray(target: Record<string, unknown>, method: string) {
 
 function safeObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function stripUndefinedObject<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+}
+
+function numberOrUndefined(value: unknown) {
+  const numberValue = toNumber(value, Number.NaN);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function booleanOrUndefined(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function stringifySketchScalar(value: unknown) {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (!value || typeof value !== "object") return undefined;
+  const ref = normalizeSketchImageRef(value);
+  if (ref) return ref;
+  return getStringProp(value, "do_objectID") || getStringProp(value, "_ref") || undefined;
+}
+
+function sanitizeSketchRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const allowedEntries = Object.entries(record)
+    .filter(([, item]) => item === null || ["string", "number", "boolean"].includes(typeof item));
+  return allowedEntries.length > 0 ? Object.fromEntries(allowedEntries) : undefined;
 }
 
 function getStringProp(value: unknown, key: string) {

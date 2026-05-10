@@ -22,6 +22,7 @@ interface WorkspaceServerOptions {
 export async function startWorkspaceServer(options: WorkspaceServerOptions = {}) {
   const app = Fastify({ logger: true, bodyLimit: 100 * 1024 * 1024 });
   const activeBundleStreams = new Map<string, AbortController>();
+  const activeDesignAgentStreams = new Map<string, AbortController>();
   const runtime = createAppRuntime();
   const {
     context,
@@ -567,6 +568,31 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
     });
   });
 
+  app.get("/api/workspace/projects/:id/design/agent/current", async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { conversationId?: string; limit?: string };
+    const conversationId = query.conversationId || `design-agent-${params.id}`;
+    return workspaceProjectService.getDesignAgentCurrent(params.id, {
+      conversationId,
+      limit: query.limit ? Number(query.limit) : undefined,
+      running: activeDesignAgentStreams.has(`${params.id}:${conversationId}`)
+    });
+  });
+
+  app.post("/api/workspace/projects/:id/design/agent/conversations/:conversationId/cancel", async (request) => {
+    const params = request.params as { id: string; conversationId: string };
+    const streamKey = `${params.id}:${params.conversationId}`;
+    const controller = activeDesignAgentStreams.get(streamKey);
+    if (!controller) {
+      await workspaceProjectService.recordDesignAgentCancellation(params.id, params.conversationId, false);
+      return { ok: true, conversationId: params.conversationId, cancelled: false };
+    }
+    controller.abort(new Error("User cancelled design agent stream"));
+    activeDesignAgentStreams.delete(streamKey);
+    await workspaceProjectService.recordDesignAgentCancellation(params.id, params.conversationId, true);
+    return { ok: true, conversationId: params.conversationId, cancelled: true };
+  });
+
   app.post("/api/workspace/projects/:id/design/agent/stream", { bodyLimit: 4 * 1024 * 1024 }, async (request, reply) => {
     const params = request.params as { id: string };
     const body = request.body as {
@@ -576,6 +602,11 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
       planningMode?: "auto" | "plan";
       conversationId?: string;
     };
+    const conversationId = body?.conversationId || `design-agent-${params.id}`;
+    const streamKey = `${params.id}:${conversationId}`;
+    activeDesignAgentStreams.get(streamKey)?.abort(new Error("Superseded by a new design agent stream"));
+    const controller = new AbortController();
+    activeDesignAgentStreams.set(streamKey, controller);
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
@@ -588,7 +619,11 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
         pageId: body?.pageId,
         systemPrompt: body?.systemPrompt,
         planningMode: body?.planningMode,
-        conversationId: body?.conversationId
+        conversationId,
+        signal: controller.signal,
+        onDeltaEvent: (event) => {
+          writeSseEvent(reply.raw, event.type, event);
+        }
       })) {
         writeSseEvent(reply.raw, event.type, event);
       }
@@ -598,7 +633,12 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
         message: error instanceof Error ? error.message : String(error)
       });
     } finally {
-      reply.raw.end();
+      if (activeDesignAgentStreams.get(streamKey) === controller) {
+        activeDesignAgentStreams.delete(streamKey);
+      }
+      if (!reply.raw.writableEnded && !reply.raw.destroyed) {
+        reply.raw.end();
+      }
     }
   });
 
@@ -1098,6 +1138,9 @@ function openWorkspaceUrl(url: string) {
 }
 
 function writeSseEvent(stream: NodeJS.WritableStream, event: string, data: unknown) {
+  if ((stream as NodeJS.WritableStream & { writableEnded?: boolean; destroyed?: boolean }).writableEnded || (stream as NodeJS.WritableStream & { writableEnded?: boolean; destroyed?: boolean }).destroyed) {
+    return;
+  }
   stream.write(`event: ${event}\n`);
   stream.write(`data: ${JSON.stringify(data)}\n\n`);
 }

@@ -6,14 +6,25 @@ interface GenerateArgs {
   temperature?: number;
 }
 
+interface GenerateWithImagesArgs extends GenerateArgs {
+  images: Array<{
+    dataUrl: string;
+    label?: string;
+  }>;
+}
+
 interface StreamArgs extends GenerateArgs {
   signal?: AbortSignal;
   onToken?: (token: string) => void | Promise<void>;
 }
 
+type OpenAIContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 interface OpenAIMessage {
   role: "system" | "user";
-  content: string;
+  content: string | OpenAIContentPart[];
 }
 
 export interface LlmConnectionValidationResult {
@@ -73,28 +84,46 @@ export class OpenAIClient {
       userPromptChars: args.userPrompt.length
     });
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({
-        model: this.model,
-        temperature: args.temperature ?? 0.4,
-        messages: [
-          { role: "system", content: args.systemPrompt },
-          { role: "user", content: args.userPrompt }
-        ] satisfies OpenAIMessage[]
-      })
+    const requestBody = JSON.stringify({
+      model: this.model,
+      temperature: args.temperature ?? 0.4,
+      messages: [
+        { role: "system", content: args.systemPrompt },
+        { role: "user", content: args.userPrompt }
+      ] satisfies OpenAIMessage[]
     });
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`
+        },
+        body: requestBody
+      });
+    } catch (error) {
+      console.error("[AIPM][LLM] request:fetch_failed", {
+        model: this.model,
+        baseUrl: this.baseUrl,
+        durationMs: Date.now() - startedAt,
+        systemPromptChars: args.systemPrompt.length,
+        userPromptChars: args.userPrompt.length,
+        requestBodyChars: requestBody.length,
+        error: serializeUnknownError(error)
+      });
+      throw new Error(`OpenAI request failed before response: ${formatUnknownError(error)}`);
+    }
 
     if (!response.ok) {
       const text = await response.text();
       console.error("[AIPM][LLM] request:error", {
         model: this.model,
+        baseUrl: this.baseUrl,
         status: response.status,
         durationMs: Date.now() - startedAt,
+        requestBodyChars: requestBody.length,
         bodyPreview: text.slice(0, 500)
       });
       throw new Error(`OpenAI request failed: ${response.status} ${text}`);
@@ -129,6 +158,95 @@ export class OpenAIClient {
     throw new Error("OpenAI response did not contain message content");
   }
 
+  async generateTextWithImages(args: GenerateWithImagesArgs) {
+    if (!this.apiKey) {
+      throw new Error("OPENAI_API_KEY is not set");
+    }
+
+    const startedAt = Date.now();
+    console.info("[AIPM][LLM] vision:start", {
+      model: this.model,
+      baseUrl: this.baseUrl,
+      systemPromptChars: args.systemPrompt.length,
+      userPromptChars: args.userPrompt.length,
+      imageCount: args.images.length
+    });
+
+    const userContent: OpenAIContentPart[] = [
+      { type: "text", text: args.userPrompt },
+      ...args.images.map((image, index) => ({
+        type: "image_url" as const,
+        image_url: {
+          url: image.dataUrl
+        }
+      })),
+      {
+        type: "text",
+        text: args.images.map((image, index) => `图片 ${index + 1}: ${image.label || "画板预览"}`).join("\n")
+      }
+    ];
+
+    const requestBody = JSON.stringify({
+      model: this.model,
+      temperature: args.temperature ?? 0.2,
+      messages: [
+        { role: "system", content: args.systemPrompt },
+        { role: "user", content: userContent }
+      ] satisfies OpenAIMessage[]
+    });
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`
+        },
+        body: requestBody
+      });
+    } catch (error) {
+      console.error("[AIPM][LLM] vision:fetch_failed", {
+        model: this.model,
+        baseUrl: this.baseUrl,
+        durationMs: Date.now() - startedAt,
+        systemPromptChars: args.systemPrompt.length,
+        userPromptChars: args.userPrompt.length,
+        imageCount: args.images.length,
+        imageDataUrlChars: args.images.map((image) => image.dataUrl.length),
+        requestBodyChars: requestBody.length,
+        error: serializeUnknownError(error)
+      });
+      throw new Error(`OpenAI vision request failed before response: ${formatUnknownError(error)}`);
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("[AIPM][LLM] vision:error", {
+        model: this.model,
+        baseUrl: this.baseUrl,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+        requestBodyChars: requestBody.length,
+        bodyPreview: text.slice(0, 500)
+      });
+      throw new Error(`OpenAI vision request failed: ${response.status} ${text}`);
+    }
+
+    const payload = await response.json() as ChatCompletionResponse;
+    const content = payload.choices?.[0]?.message?.content;
+    const text = extractText(content).trim();
+    if (!text) {
+      throw new Error("OpenAI vision response did not contain message content");
+    }
+    console.info("[AIPM][LLM] vision:success", {
+      model: this.model,
+      durationMs: Date.now() - startedAt,
+      responseChars: text.length
+    });
+    return text;
+  }
+
   async generateTextStream(args: StreamArgs) {
     if (!this.apiKey) {
       throw new Error("OPENAI_API_KEY is not set");
@@ -142,30 +260,48 @@ export class OpenAIClient {
       userPromptChars: args.userPrompt.length
     });
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`
-      },
-      signal: args.signal,
-      body: JSON.stringify({
-        model: this.model,
-        temperature: args.temperature ?? 0.4,
-        stream: true,
-        messages: [
-          { role: "system", content: args.systemPrompt },
-          { role: "user", content: args.userPrompt }
-        ] satisfies OpenAIMessage[]
-      })
+    const requestBody = JSON.stringify({
+      model: this.model,
+      temperature: args.temperature ?? 0.4,
+      stream: true,
+      messages: [
+        { role: "system", content: args.systemPrompt },
+        { role: "user", content: args.userPrompt }
+      ] satisfies OpenAIMessage[]
     });
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`
+        },
+        signal: args.signal,
+        body: requestBody
+      });
+    } catch (error) {
+      console.error("[AIPM][LLM] stream:fetch_failed", {
+        model: this.model,
+        baseUrl: this.baseUrl,
+        durationMs: Date.now() - startedAt,
+        systemPromptChars: args.systemPrompt.length,
+        userPromptChars: args.userPrompt.length,
+        requestBodyChars: requestBody.length,
+        error: serializeUnknownError(error)
+      });
+      throw new Error(`OpenAI stream request failed before response: ${formatUnknownError(error)}`);
+    }
 
     if (!response.ok) {
       const text = await response.text();
       console.error("[AIPM][LLM] stream:error", {
         model: this.model,
+        baseUrl: this.baseUrl,
         status: response.status,
         durationMs: Date.now() - startedAt,
+        requestBodyChars: requestBody.length,
         bodyPreview: text.slice(0, 500)
       });
       throw new Error(`OpenAI request failed: ${response.status} ${text}`);
@@ -238,6 +374,23 @@ export class OpenAIClient {
     }
   }
 
+  async generateJsonWithImages<S extends ZodTypeAny>(schema: S, args: GenerateWithImagesArgs): Promise<z.output<S>> {
+    const text = await this.generateTextWithImages({
+      ...args,
+      userPrompt: `${args.userPrompt}\n\n只返回 JSON，不要输出解释、代码块标记或额外文本。`
+    });
+    try {
+      const extractedJson = extractJson(text);
+      return schema.parse(JSON.parse(extractedJson));
+    } catch (error) {
+      throw new StructuredOutputParseError(
+        error instanceof Error ? error.message : "Failed to parse structured vision LLM output",
+        text,
+        tryExtractJson(text)
+      );
+    }
+  }
+
   async generateJsonStream<S extends ZodTypeAny>(schema: S, args: StreamArgs): Promise<z.output<S>> {
     const text = await this.generateTextStream({
       ...args,
@@ -253,6 +406,143 @@ export class OpenAIClient {
         tryExtractJson(text)
       );
     }
+  }
+
+  async generateJsonStreamEarly<S extends ZodTypeAny>(schema: S, args: StreamArgs): Promise<z.output<S>> {
+    if (!this.apiKey) {
+      throw new Error("OPENAI_API_KEY is not set");
+    }
+
+    const startedAt = Date.now();
+    const userPrompt = `${args.userPrompt}\n\n只返回 JSON，不要输出解释、代码块标记或额外文本。`;
+    console.info("[AIPM][LLM] json_stream_early:start", {
+      model: this.model,
+      baseUrl: this.baseUrl,
+      systemPromptChars: args.systemPrompt.length,
+      userPromptChars: userPrompt.length
+    });
+
+    const requestBody = JSON.stringify({
+      model: this.model,
+      temperature: args.temperature ?? 0.4,
+      stream: true,
+      messages: [
+        { role: "system", content: args.systemPrompt },
+        { role: "user", content: userPrompt }
+      ] satisfies OpenAIMessage[]
+    });
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`
+        },
+        signal: args.signal,
+        body: requestBody
+      });
+    } catch (error) {
+      console.error("[AIPM][LLM] json_stream_early:fetch_failed", {
+        model: this.model,
+        baseUrl: this.baseUrl,
+        durationMs: Date.now() - startedAt,
+        requestBodyChars: requestBody.length,
+        error: serializeUnknownError(error)
+      });
+      throw new Error(`OpenAI stream request failed before response: ${formatUnknownError(error)}`);
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`OpenAI request failed: ${response.status} ${text}`);
+    }
+    if (!response.body) {
+      throw new Error("OpenAI streaming response missing body");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let output = "";
+    let done = false;
+    let lastParseError: unknown;
+
+    const tryReturnParsed = async () => {
+      const parsed = tryParseJsonWithSchema(schema, output);
+      if (!parsed.ok) {
+        lastParseError = parsed.error;
+        return undefined;
+      }
+      await reader.cancel().catch(() => undefined);
+      console.info("[AIPM][LLM] json_stream_early:parsed", {
+        model: this.model,
+        durationMs: Date.now() - startedAt,
+        responseChars: output.length
+      });
+      return parsed.value;
+    };
+
+    try {
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !readerDone });
+
+        let boundary = findSseBoundary(buffer);
+        while (boundary) {
+          const rawEvent = buffer.slice(0, boundary.index);
+          buffer = buffer.slice(boundary.index + boundary.length);
+          const parsed = parseSseData(rawEvent);
+
+          if (parsed === "[DONE]") {
+            done = true;
+            break;
+          }
+
+          if (parsed) {
+            const payload = JSON.parse(parsed) as ChatCompletionResponse;
+            const chunk = extractText(payload.choices?.[0]?.delta?.content);
+            if (chunk) {
+              output += chunk;
+              await args.onToken?.(chunk);
+              const parsedJson = await tryReturnParsed();
+              if (parsedJson !== undefined) return parsedJson;
+            }
+          }
+
+          boundary = findSseBoundary(buffer);
+        }
+
+        if (readerDone) {
+          done = true;
+        }
+      }
+    } catch (error) {
+      const parsedJson = tryParseJsonWithSchema(schema, output);
+      if (parsedJson.ok) {
+        console.warn("[AIPM][LLM] json_stream_early:using_partial_after_error", {
+          model: this.model,
+          durationMs: Date.now() - startedAt,
+          responseChars: output.length,
+          error: serializeUnknownError(error)
+        });
+        return parsedJson.value;
+      }
+      throw new StructuredOutputParseError(
+        `Streaming JSON failed before a valid schema was parsed: ${formatUnknownError(error)}`,
+        output,
+        tryExtractJson(output)
+      );
+    }
+
+    const parsed = tryParseJsonWithSchema(schema, output);
+    if (parsed.ok) return parsed.value;
+    throw new StructuredOutputParseError(
+      lastParseError instanceof Error ? lastParseError.message : "Failed to parse structured LLM output",
+      output,
+      tryExtractJson(output)
+    );
   }
 
   async validateConnection(signal?: AbortSignal): Promise<LlmConnectionValidationResult> {
@@ -374,4 +664,37 @@ function tryExtractJson(value: string) {
   } catch {
     return undefined;
   }
+}
+
+function tryParseJsonWithSchema<S extends ZodTypeAny>(schema: S, value: string): { ok: true; value: z.output<S> } | { ok: false; error: unknown } {
+  try {
+    const extractedJson = extractJson(value);
+    return { ok: true, value: schema.parse(JSON.parse(extractedJson)) };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+function formatUnknownError(error: unknown) {
+  const serialized = serializeUnknownError(error);
+  return [
+    serialized.name,
+    serialized.message,
+    serialized.code ? `code=${serialized.code}` : "",
+    serialized.cause ? `cause=${JSON.stringify(serialized.cause)}` : ""
+  ].filter(Boolean).join(" ");
+}
+
+function serializeUnknownError(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return { message: String(error) };
+  }
+  const cause = (error as Error & { cause?: unknown }).cause;
+  return {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    code: typeof (error as Error & { code?: unknown }).code === "string" ? (error as Error & { code?: unknown }).code : undefined,
+    cause: cause ? serializeUnknownError(cause) : undefined
+  };
 }

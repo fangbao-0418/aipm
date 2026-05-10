@@ -2,6 +2,15 @@ import { readFile } from "node:fs/promises";
 import { resolve, relative } from "node:path";
 import { z } from "zod";
 import { WorkspaceProjectRepository } from "../../infrastructure/files/workspace-project-repository.js";
+import { getDesignReferenceContext } from "./design-reference-catalog.js";
+import {
+  applyLibraryTokens,
+  getDesignCapabilityProfile,
+  type DesignCapabilityProfile,
+  type DesignPlatform
+} from "./design-capability-registry.js";
+import { ImageAssetProvider, type ResolvedDesignImageAsset } from "./image-asset-provider.js";
+import { compileLayoutTreeToSceneGraph, compileStitchUiDraftToSceneGraph } from "./design-ui-compiler.js";
 import type {
   WorkspaceDesignFile,
   WorkspaceDesignNode,
@@ -179,8 +188,8 @@ export const designAgentToolDescriptions: Array<{
   },
   {
     name: "schema.generate_ui_from_requirements",
-    description: "根据需求解析、页面清单和流程，在当前画布已有画板右侧追加多张可编辑 UI 画板。新增画板顶对齐，默认水平间距 40px；不新建独立文件页面。",
-    inputSchema: { userRequest: "string", parsedRequirement: "optional object", flowPlan: "optional object", platform: "optional mobile_app | web", pageId: "optional string", gap: "optional number" }
+    description: "根据需求解析、页面清单和流程，在当前画布已有画板右侧追加多张可编辑 UI 画板；传 targetFrameId 时改为把 schemaDraft 的节点增量追加到已有画板内。",
+    inputSchema: { userRequest: "string", parsedRequirement: "optional object", flowPlan: "optional object", platform: "optional mobile_app | web", pageId: "optional string", gap: "optional number", targetFrameId: "optional string", schemaDraft: "optional aipm.design.schema.v1" }
   },
   {
     name: "page.list",
@@ -380,6 +389,8 @@ export const designAgentToolDescriptions: Array<{
 ];
 
 export class DesignAgentToolService {
+  private readonly imageAssets = new ImageAssetProvider();
+
   constructor(private readonly repository: WorkspaceProjectRepository) {}
 
   async execute(context: DesignAgentToolExecutionContext, call: DesignAgentToolCall): Promise<DesignAgentToolResult> {
@@ -515,16 +526,25 @@ export class DesignAgentToolService {
   private async resolveAssets(projectId: string, input: Record<string, unknown>): Promise<DesignAgentToolResult> {
     await this.getFile(projectId);
     const requests = Array.isArray(input.assetRequests) ? input.assetRequests : inferAssetRequests(String(input.userRequest ?? ""));
+    const resolvedImageAssets = await this.imageAssets.resolveAssets(requests.map((request) => isRecord(request) ? request : { name: String(request) }), {
+      userRequest: String(input.userRequest ?? "")
+    });
     const assets = requests.map((request, index) => {
       const item = isRecord(request) ? request : { type: "icon", name: String(request) };
       const type = String(item.type ?? "icon");
       const name = String(item.name ?? item.query ?? `asset_${index + 1}`);
+      const id = `${type}_${name}`.replace(/[^\w-]+/g, "_").toLowerCase();
+      const resolved = resolvedImageAssets.find((asset) => asset.id === id || asset.name === name);
       return {
-        id: `${type}_${name}`.replace(/[^\w-]+/g, "_").toLowerCase(),
+        id,
         type: type === "image" || type === "illustration" ? "image" : "svg",
-        source: type === "image" || type === "illustration" ? "internal_asset_placeholder" : "local_icon_library",
+        source: resolved?.source ?? (type === "image" || type === "illustration" ? "internal_asset_placeholder" : "local_icon_library"),
         usage: String(item.usage ?? name),
-        license: "internal-placeholder"
+        license: resolved?.license ?? "internal-placeholder",
+        imageUrl: resolved?.imageUrl,
+        alt: resolved?.alt,
+        width: resolved?.width,
+        height: resolved?.height
       };
     });
     return {
@@ -556,9 +576,61 @@ export class DesignAgentToolService {
       };
     }
     const schemaDraft = parsedDraft.data;
+    const capabilityProfile = getDesignCapabilityProfile(toDesignPlatform(schemaDraft.platform, String(input.userRequest ?? "")), String(input.userRequest ?? ""));
+    const targetFrameId = typeof input.targetFrameId === "string" ? input.targetFrameId : "";
+    if (targetFrameId) {
+      const targetFrame = page.nodes.find((node) => node.id === targetFrameId && node.type === "frame");
+      if (!targetFrame) {
+        return {
+          ok: false,
+          message: `没有找到可增量追加的目标画板：${targetFrameId}`,
+          file,
+          page,
+          selectedPageId: page.id
+        };
+      }
+      const resolvedImageAssets = await this.imageAssets.resolveAssets(inferAssetRequests(String(input.userRequest ?? "")), {
+        userRequest: String(input.userRequest ?? "")
+      });
+      const generatedNodes = enhanceGeneratedUiNodes(
+        [targetFrame, ...createUiNodesFromSchemaDraftIntoFrame(schemaDraft, targetFrame, capabilityProfile)],
+        capabilityProfile,
+        resolvedImageAssets
+      ).filter((node) => node.id !== targetFrame.id);
+      const nextPage: WorkspaceDesignPage = {
+        ...page,
+        nodes: [...page.nodes, ...generatedNodes],
+        nodeCount: page.nodes.length + generatedNodes.length,
+        schemaLoaded: true
+      };
+      const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+      return {
+        ok: true,
+        message: `已向画板「${targetFrame.name}」增量追加 ${generatedNodes.length} 个节点。`,
+        file: nextFile,
+        page: nextPage,
+        selectedPageId: nextPage.id,
+        data: {
+          pageId: nextPage.id,
+          targetFrameId,
+          generatedFrameIds: [targetFrameId],
+          generatedNodeIds: generatedNodes.map((node) => node.id),
+          generatedCount: generatedNodes.length,
+          schemaDraft: {
+            schemaVersion: schemaDraft.schemaVersion,
+            intent: schemaDraft.intent,
+            platform: schemaDraft.platform,
+            artboards: schemaDraft.artboards.map((artboard) => ({ refId: artboard.refId, name: artboard.name, nodeCount: artboard.nodes.length }))
+          }
+        }
+      };
+    }
     const firstArtboard = schemaDraft.artboards[0];
     const placement = getCanvasAppendPlacement(page, { width: firstArtboard.width, height: firstArtboard.height }, gap);
-    const generatedNodes = createUiNodesFromSchemaDraft(schemaDraft, placement);
+    const resolvedImageAssets = await this.imageAssets.resolveAssets(inferAssetRequests(String(input.userRequest ?? "")), {
+      userRequest: String(input.userRequest ?? "")
+    });
+    const generatedNodes = enhanceGeneratedUiNodes(createUiNodesFromSchemaDraft(schemaDraft, placement, capabilityProfile), capabilityProfile, resolvedImageAssets);
     const generatedFrameIds = generatedNodes.filter((node) => node.type === "frame" && !node.parentId).map((node) => node.id);
     const nextPage: WorkspaceDesignPage = {
       ...page,
@@ -1237,7 +1309,9 @@ export class DesignAgentToolService {
     const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
     if (!page) return { ok: false, message: "当前没有可做 UI 审核的页面。", file };
     const request = String(input.userRequest ?? "");
+    const generatedFrameIds = Array.isArray(input.generatedFrameIds) ? input.generatedFrameIds.map(String).filter(Boolean) : [];
     const structure = analyzePageSemantics(page, request);
+    const capabilityProfile = getDesignCapabilityProfile(/小程序|微信/.test(request) ? "wechat_mini_program" : /移动端|手机|app/i.test(request) ? "mobile_app" : "pc_web", request);
     const issues: Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> = [];
     const hasSearchIntent = /(列表|表格|table|list).*(搜索|筛选|查询|filter|search|query)|(搜索|筛选|查询|filter|search|query).*(列表|表格|table|list)/i.test(request);
     const filterRegion = structure.mainRegions.find((region) => region.type === "filter_bar");
@@ -1256,21 +1330,22 @@ export class DesignAgentToolService {
         suggestedFix: { tool: "layout.insert_above", input: { targetNodeId: tableRegion.nodeId, insertKind: "filter_bar" } }
       });
     }
-    const overlaps = detectMeaningfulOverlaps(page.nodes);
+    const scopedNodes = scopeNodesForReview(page.nodes, generatedFrameIds);
+    const overlaps = detectMeaningfulOverlaps(scopedNodes);
     if (overlaps.length > 0) {
       issues.push({
-        level: "warning",
-        message: `检测到 ${overlaps.length} 处可能遮挡或重叠。`,
+        level: "blocking",
+        message: `检测到 ${overlaps.length} 处文字或交互控件可能互相遮挡。容器/卡片/背景与内部内容的正常层叠不会计入。`,
         suggestedFix: { tool: "layout.reflow", input: { spacing: 16 } }
       });
     }
-    const frameIssues = reviewArtboardLayout(page);
+    const frameIssues = reviewArtboardLayout(page, request, generatedFrameIds, capabilityProfile);
     issues.push(...frameIssues);
     const blockingCount = issues.filter((issue) => issue.level === "blocking").length;
     return {
       ok: blockingCount === 0,
       message: blockingCount === 0
-        ? `UI Agent 审核通过：已检查 ${getTopLevelArtboards(page).length} 个画板，没有发现阻塞问题。`
+        ? `UI Agent 审核通过：已检查 ${generatedFrameIds.length || getTopLevelArtboards(page).length} 个画板，没有发现阻塞问题。`
         : `UI Agent 审核发现 ${blockingCount} 个阻塞问题。`,
       file,
       page,
@@ -1279,7 +1354,13 @@ export class DesignAgentToolService {
         passed: blockingCount === 0,
         issues,
         structure,
-        designRules: getDesignReviewRules()
+        reviewScope: {
+          generatedFrameIds,
+          scopedNodeCount: scopedNodes.length
+        },
+        designReferences: getDesignReferenceContext(request, /小程序|移动端|手机|app/i.test(request) ? "mobile_app" : "pc_web"),
+        designRules: getDesignReviewRules(),
+        capabilityProfile
       }
     };
   }
@@ -1387,7 +1468,7 @@ function parseUiRequirement(userRequest: string) {
     module: /产品|商品|sku|规格|价格|库存/.test(userRequest)
       ? "商品产品模块"
       : /用户|登录|注册|个人|实名|地址/.test(userRequest) ? "用户基础模块" : "业务模块",
-    platform: /app|移动|手机|手机号/.test(userRequest.toLowerCase()) ? "mobile_app" : "web",
+    platform: /小程序|app|移动|手机|手机号/i.test(userRequest) ? "mobile_app" : "web",
     features,
     nonFunctionalRequirements: inferNonFunctionalRequirements(userRequest),
     interfaceRequirements: inferInterfaceRequirements(userRequest),
@@ -1407,7 +1488,7 @@ function inferNonFunctionalRequirements(userRequest: string) {
 }
 
 function inferInterfaceRequirements(userRequest: string) {
-  const platform = /app|移动|手机|手机号/.test(userRequest.toLowerCase()) ? "mobile_app" : "web";
+  const platform = /小程序|app|移动|手机|手机号/i.test(userRequest) ? "mobile_app" : "web";
   const items = platform === "mobile_app"
     ? ["移动端画板基准 750px 设计稿 / 375px 逻辑宽度", "主要操作按钮靠近底部安全区，输入表单保持单列布局"]
     : ["PC 端以 1920px 宽屏为设计基准，内容区建议 1440px 画板", "顶部导航、左侧导航、内容卡片和表格区域需要清晰分层"];
@@ -1519,55 +1600,20 @@ function createUiNodesFromFlowPlan(
   });
 }
 
-function createUiNodesFromSchemaDraft(schemaDraft: UiSchemaDraft, placement: { startX: number; topY: number; gap: number }) {
-  const nodes: WorkspaceDesignNode[] = [];
-  schemaDraft.artboards.forEach((artboard, index) => {
-    const originX = placement.startX + index * (artboard.width + placement.gap);
-    const originY = placement.topY;
-    const frameId = createDesignId("frame");
-    const refToNodeId = new Map<string, string>([[artboard.refId, frameId]]);
-    nodes.push(createDesignNode("frame", {
-      id: frameId,
-      name: `${artboard.name} 画板`,
-      x: originX,
-      y: originY,
-      width: artboard.width,
-      height: artboard.height,
-      fill: "#f7f8fb",
-      stroke: "#e4e7ec",
-      radius: artboard.width >= 900 ? 24 : 28
-    }));
-    artboard.nodes.forEach((draftNode) => {
-      refToNodeId.set(draftNode.refId, createDesignId("node"));
-    });
-    artboard.nodes.forEach((draftNode) => {
-      const nodeId = refToNodeId.get(draftNode.refId) ?? createDesignId("node");
-      const parentId = draftNode.parentRef ? refToNodeId.get(draftNode.parentRef) : frameId;
-      if (draftNode.type === "table") {
-        nodes.push(...createGranularTableNodesFromDraft(draftNode, {
-          nodeId,
-          parentId,
-          originX,
-          originY,
-          platform: schemaDraft.platform
-        }));
-        return;
-      }
-      const normalizedDraftNode = normalizeDraftNodeForRendering(draftNode);
-      nodes.push(createDesignNode(draftNode.type, {
-        ...normalizedDraftNode,
-        id: nodeId,
-        parentId,
-        x: originX + normalizedDraftNode.x,
-        y: originY + normalizedDraftNode.y,
-        width: normalizedDraftNode.width,
-        height: normalizedDraftNode.height,
-        visible: normalizedDraftNode.visible,
-        locked: normalizedDraftNode.locked
-      }));
-    });
-  });
-  return nodes;
+function createUiNodesFromSchemaDraft(schemaDraft: UiSchemaDraft, placement: { startX: number; topY: number; gap: number }, capabilityProfile?: DesignCapabilityProfile) {
+  const profile = capabilityProfile ?? getDesignCapabilityProfile(schemaDraft.platform === "mobile_app" ? "mobile_app" : "pc_web");
+  return compileStitchUiDraftToSceneGraph(schemaDraft, profile, {
+    placement,
+    userRequest: schemaDraft.intent
+  }).nodes;
+}
+
+function createUiNodesFromSchemaDraftIntoFrame(schemaDraft: UiSchemaDraft, targetFrame: WorkspaceDesignNode, capabilityProfile?: DesignCapabilityProfile) {
+  const profile = capabilityProfile ?? getDesignCapabilityProfile(schemaDraft.platform === "mobile_app" ? "mobile_app" : "pc_web");
+  return compileStitchUiDraftToSceneGraph(schemaDraft, profile, {
+    targetFrame,
+    userRequest: schemaDraft.intent
+  }).nodes;
 }
 
 function createSemanticPageNodes(
@@ -1674,6 +1720,18 @@ function createSemanticPageNodes(
 }
 
 function normalizeDraftNodeForRendering(draftNode: z.infer<typeof uiSchemaDraftNodeSchema>) {
+  if (draftNode.type === "button") {
+    const text = String(draftNode.text ?? draftNode.name ?? "");
+    const fontSize = draftNode.fontSize ?? 14;
+    return {
+      ...draftNode,
+      height: Math.max(draftNode.height, 44),
+      fontSize,
+      text,
+      textAlign: "center" as const,
+      lineHeight: Math.max(draftNode.height, 44)
+    };
+  }
   if (draftNode.type !== "text") {
     return draftNode;
   }
@@ -1685,6 +1743,87 @@ function normalizeDraftNodeForRendering(draftNode: z.infer<typeof uiSchemaDraftN
     ...draftNode,
     height: Math.max(draftNode.height, Math.ceil(estimatedLines * fontSize * 1.55))
   };
+}
+
+function enhanceGeneratedUiNodes(nodes: WorkspaceDesignNode[], profile: DesignCapabilityProfile, resolvedAssets: ResolvedDesignImageAsset[] = []) {
+  let nextNodes = compileLayoutTreeToSceneGraph(nodes, profile);
+  nextNodes = addMissingVisualAssets(nextNodes, profile, resolvedAssets);
+  nextNodes = compileLayoutTreeToSceneGraph(nextNodes, profile);
+  return nextNodes;
+}
+
+function addMissingVisualAssets(nodes: WorkspaceDesignNode[], profile: DesignCapabilityProfile, resolvedAssets: ResolvedDesignImageAsset[] = []) {
+  const nextNodes = [...nodes];
+  let assetCursor = 0;
+  const artboards = nextNodes.filter((node) => node.type === "frame" && !node.parentId);
+  artboards.forEach((frame, index) => {
+    const children = nextNodes.filter((node) => node.parentId === frame.id || isNodeInsideTarget(node, frame)).filter((node) => node.id !== frame.id);
+    const hasIconOrImage = children.some((node) => node.type === "image" || /icon|图标|插画|图片|主图|avatar|logo/i.test(node.name));
+    if (hasIconOrImage) return;
+    const isMobile = frame.width <= 480 || profile.platform === "mobile_app" || profile.platform === "wechat_mini_program";
+    const iconSize = isMobile ? 36 : 44;
+    const iconX = frame.x + (isMobile ? 24 : 32);
+    const iconY = frame.y + (isMobile ? 36 : 32);
+    const iconAsset = resolvedAssets.find((asset) => asset.type === "icon" && asset.imageUrl);
+    nextNodes.push(createDesignNode("image", {
+      parentId: frame.id,
+      name: "语义图标",
+      x: iconX,
+      y: iconY,
+      width: iconSize,
+      height: iconSize,
+      fill: "transparent",
+      stroke: "transparent",
+      radius: 12,
+      imageUrl: iconAsset?.imageUrl ?? buildLocalSvgDataUrl({
+        label: inferIconLabel(frame.name),
+        background: getAssetBackground(index),
+        foreground: "#ffffff"
+      })
+    }));
+    if (!isMobile && !children.some((node) => /主图|demo|插画|图片/i.test(node.name))) {
+      const visualAssets = resolvedAssets.filter((asset) => asset.type === "image" || asset.type === "illustration");
+      const visualAsset = visualAssets[assetCursor % Math.max(visualAssets.length, 1)];
+      if (visualAssets.length > 0) assetCursor += 1;
+      nextNodes.push(createDesignNode("image", {
+        parentId: frame.id,
+        name: visualAsset?.source === "openai-image" ? "生成图片" : visualAsset?.source === "unsplash" || visualAsset?.source === "pexels" ? "真实图片" : "Demo 图片",
+        x: frame.x + frame.width - 352,
+        y: frame.y + 96,
+        width: 288,
+        height: 180,
+        fill: "#eef4ff",
+        stroke: "#c7d7fe",
+        radius: 18,
+        imageUrl: visualAsset?.imageUrl ?? buildDemoImageDataUrl(frame.name),
+        sourceRef: visualAsset?.license
+      }));
+    }
+  });
+  return nextNodes;
+}
+
+function inferIconLabel(name: string) {
+  if (/登录|注册|账号/.test(name)) return "登录";
+  if (/实名|认证|安全/.test(name)) return "盾";
+  if (/地址|地图/.test(name)) return "位";
+  if (/商品|产品/.test(name)) return "品";
+  if (/支付|收益|提现/.test(name)) return "¥";
+  return "UI";
+}
+
+function getAssetBackground(index: number) {
+  return ["#2563eb", "#07c160", "#f97316", "#7c3aed", "#0891b2"][index % 5];
+}
+
+function buildLocalSvgDataUrl(input: { label: string; background: string; foreground: string }) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="24" fill="${input.background}"/><text x="48" y="58" text-anchor="middle" font-size="28" font-weight="700" font-family="Arial, sans-serif" fill="${input.foreground}">${escapeSvgText(input.label).slice(0, 2)}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function buildDemoImageDataUrl(label: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="576" height="360" viewBox="0 0 576 360"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#dbeafe"/><stop offset="1" stop-color="#f8fafc"/></linearGradient></defs><rect width="576" height="360" rx="32" fill="url(#g)"/><circle cx="104" cy="96" r="36" fill="#2563eb" opacity=".9"/><rect x="172" y="78" width="268" height="28" rx="14" fill="#0f172a" opacity=".86"/><rect x="84" y="172" width="408" height="24" rx="12" fill="#64748b" opacity=".36"/><rect x="84" y="222" width="288" height="24" rx="12" fill="#64748b" opacity=".26"/><text x="84" y="306" font-size="28" font-weight="700" font-family="Arial, sans-serif" fill="#1e3a8a">${escapeSvgText(label).slice(0, 16)}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function createGranularTableNodesFromDraft(
@@ -1826,7 +1965,17 @@ function inferAssetRequests(userRequest: string) {
   if (/支付宝/.test(userRequest)) requests.push({ type: "icon", name: "alipay", usage: "third_party_login" });
   if (/实名|身份证|人脸/.test(userRequest)) requests.push({ type: "illustration", name: "identity_security", usage: "identity_page" });
   if (/地图|地址/.test(userRequest)) requests.push({ type: "icon", name: "map_pin", usage: "address_page" });
+  if (/商品|产品|详情|主图/.test(userRequest)) requests.push({ type: "image", name: "product_demo", query: "premium product photo", usage: "product_hero" });
+  if (/首页|概览|工作台|dashboard/i.test(userRequest)) requests.push({ type: "illustration", name: "dashboard_demo", query: "modern dashboard illustration", usage: "hero_visual" });
+  if (/空状态|引导|注册|登录/.test(userRequest)) requests.push({ type: "illustration", name: "onboarding_demo", query: "mobile app onboarding illustration", usage: "empty_or_onboarding" });
   return requests;
+}
+
+function toDesignPlatform(platform: string, userRequest = ""): DesignPlatform {
+  if (/小程序|微信/.test(userRequest)) return "wechat_mini_program";
+  if (platform === "mobile_app" || /移动端|手机|app/i.test(userRequest)) return "mobile_app";
+  if (/响应式|responsive/i.test(userRequest)) return "responsive_web";
+  return "pc_web";
 }
 
 function inferRequiredTopics(userRequest: string) {
@@ -2158,7 +2307,7 @@ function buildUiAnalysis(page: WorkspaceDesignPage, kind: "layout" | "spacing" |
   const overlaps = countOverlaps(visibleNodes.slice(0, 160));
   const layoutHints = [
     bounds.width > 0 ? `页面内容范围 ${Math.round(bounds.width)} x ${Math.round(bounds.height)}` : "页面暂无有效内容范围",
-    overlaps > 0 ? `检测到约 ${overlaps} 组节点可能重叠，需要人工确认层级或布局` : "未发现明显大面积节点重叠",
+    overlaps > 0 ? `检测到约 ${overlaps} 组文字/交互控件可能遮挡，需要确认功能可读可点` : "未发现明显文字/交互遮挡",
     visibleNodes.length > 120 ? `节点数量 ${visibleNodes.length}，建议按区域分组以提升可编辑性` : `节点数量 ${visibleNodes.length}`
   ];
   const spacingHints = inferSpacingHints(visibleNodes);
@@ -2187,11 +2336,57 @@ function buildUiAnalysis(page: WorkspaceDesignPage, kind: "layout" | "spacing" |
   };
 }
 
-function reviewArtboardLayout(page: WorkspaceDesignPage): Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> {
-  const artboards = getTopLevelArtboards(page).filter((node) => node.id !== "page-preview-frame");
+function reviewArtboardLayout(page: WorkspaceDesignPage, userRequest = "", generatedFrameIds: string[] = [], capabilityProfile?: DesignCapabilityProfile): Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> {
+  const targetFrameIds = new Set(generatedFrameIds);
+  const artboards = getTopLevelArtboards(page)
+    .filter((node) => node.id !== "page-preview-frame")
+    .filter((node) => targetFrameIds.size === 0 || targetFrameIds.has(node.id));
   const issues: Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> = [];
+  const isMobileRequest = /小程序|移动端|手机|app/i.test(userRequest);
+  const profile = capabilityProfile ?? getDesignCapabilityProfile(isMobileRequest ? "mobile_app" : "pc_web", userRequest);
+  const minimums = profile.rubric.minimums;
   artboards.forEach((frame) => {
     const children = page.nodes.filter((node) => node.parentId === frame.id || isNodeInsideTarget(node, frame)).filter((node) => node.id !== frame.id);
+    const visibleChildren = children.filter((node) => node.visible !== false);
+    const textNodes = visibleChildren.filter((node) => node.type === "text");
+    const visualAssets = visibleChildren.filter((node) => node.type === "image" || /icon|图标|图片|插画|主图|demo/i.test(node.name));
+    const fills = new Set(visibleChildren.map((node) => node.fill).filter((fill) => fill && fill !== "transparent"));
+    if (visibleChildren.length < minimums.minNodesPerArtboard) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」只有 ${visibleChildren.length} 个可见节点，低于基础质量门槛 ${minimums.minNodesPerArtboard}，页面会显得粗糙。`
+      });
+    }
+    if (textNodes.length < minimums.minTextNodesPerArtboard) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」文本层级不足，只有 ${textNodes.length} 个文本节点，无法形成清晰信息架构。`
+      });
+    }
+    if (visualAssets.length < minimums.minVisualAssetsPerArtboard) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」缺少 icon、demo 图片或插画资产，页面内容过于简陋。`
+      });
+    }
+    if (fills.size < minimums.minDistinctFillsPerArtboard) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」颜色/层级过少，仅 ${fills.size} 种有效填充，缺少可识别页面风格。`
+      });
+    }
+    if (isMobileRequest && frame.width > 480) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」看起来是 PC 尺寸（${frame.width}x${frame.height}），但用户要求移动端/小程序，需要重新按 375x812 单列规范生成。`
+      });
+    }
+    if (isMobileRequest && children.some((node) => node.type === "table")) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」包含 table 节点，但移动端/小程序应使用卡片列表或行容器，避免文字挤压。`
+      });
+    }
     const clipped = children.filter((node) => (
       node.x < frame.x ||
       node.y < frame.y ||
@@ -2215,12 +2410,54 @@ function reviewArtboardLayout(page: WorkspaceDesignPage): Array<{ level: "blocki
     const primaryActions = children.filter((node) => node.type === "button");
     if (primaryActions.length === 0) {
       issues.push({
-        level: "warning",
+        level: "blocking",
         message: `画板「${frame.name}」没有明确主操作按钮，用户可能不知道下一步做什么。`
+      });
+    }
+    const badButtons = primaryActions.filter((node) => !isButtonTextCentered(node));
+    if (badButtons.length > 0) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」存在 ${badButtons.length} 个按钮文字没有居中或按钮高度不足。`
+      });
+    }
+    const textOverflows = children.filter((node) => node.type === "text" && mayTextOverflow(node));
+    if (textOverflows.length > 0) {
+      issues.push({
+        level: "blocking",
+        message: `画板「${frame.name}」存在 ${textOverflows.length} 个文本节点高度/宽度不足，可能出现遮挡、换行挤压或显示不全。`,
+        suggestedFix: { tool: "layout.reflow", input: { pageId: page.id, spacing: 16 } }
       });
     }
   });
   return issues;
+}
+
+function isButtonTextCentered(node: WorkspaceDesignNode) {
+  return node.height >= 40 && node.textAlign === "center" && Math.abs((node.lineHeight ?? node.height) - node.height) <= 4;
+}
+
+function scopeNodesForReview(nodes: WorkspaceDesignNode[], generatedFrameIds: string[]) {
+  if (generatedFrameIds.length === 0) return nodes;
+  const scopeIds = new Set<string>();
+  generatedFrameIds.forEach((frameId) => {
+    scopeIds.add(frameId);
+    collectDescendantNodeIds(nodes, frameId).forEach((id) => scopeIds.add(id));
+  });
+  return nodes.filter((node) => scopeIds.has(node.id) || generatedFrameIds.some((frameId) => {
+    const frame = nodes.find((item) => item.id === frameId);
+    return frame ? isNodeInsideTarget(node, frame) : false;
+  }));
+}
+
+function mayTextOverflow(node: WorkspaceDesignNode) {
+  const text = String(node.text ?? "").trim();
+  if (!text) return false;
+  const fontSize = node.fontSize || 14;
+  const charsPerLine = Math.max(4, Math.floor(node.width / Math.max(8, fontSize)));
+  const lines = Math.ceil(text.length / charsPerLine);
+  const requiredHeight = lines * fontSize * 1.35;
+  return requiredHeight > node.height + 2;
 }
 
 function getDesignReviewRules() {
@@ -2228,18 +2465,28 @@ function getDesignReviewRules() {
     pc: {
       designWidth: 1920,
       artboardWidth: 1440,
-      layout: "顶部导航 / 左侧导航 / 内容区清晰分层，表格和表单不可互相遮挡。"
+      references: ["Ant Design Pro", "Tailwind SaaS Dashboard"],
+      layout: "顶部导航 / 左侧导航 / 内容区清晰分层，表格和表单不可互相遮挡。",
+      density: "筛选区、表格、卡片、操作栏使用 16-24px 间距，主操作在首屏可见。"
     },
     mobile: {
       designWidth: 750,
       logicalWidth: 375,
-      layout: "单列为主，底部主操作避开安全区，表单输入和错误反馈同屏可见。"
+      references: ["微信小程序官方组件", "iOS/Android 原生表单"],
+      layout: "单列为主，底部主操作避开安全区，表单输入和错误反馈同屏可见。",
+      density: "左右安全边距 16-24px，按钮高度 44-52px，列表使用卡片/行容器，不使用 PC 表格。"
+    },
+    industries: {
+      ecommerce: "电商/交易类页面必须覆盖商品/订单/支付/状态/操作反馈，不能用无关业务对象。",
+      iot: "IoT 页面必须覆盖设备状态、指标、告警、趋势和远程操作风险提示。",
+      account: "账号体系页面必须覆盖安全、隐私、异常兜底、验证码倒计时、实名/地址等关键状态。"
     },
     common: [
       "新增画板顶对齐，横向间距默认 40px。",
       "所有元素必须在所属画板内，禁止被剪切、遮挡或不可点击。",
       "每个页面必须有页面标题、核心内容区、主行动和异常/空状态考虑。",
-      "涉及账号、实名、地址等敏感能力时，需要隐私、安全和失败重试说明。"
+      "涉及账号、实名、地址等敏感能力时，需要隐私、安全和失败重试说明。",
+      "生成 UI 必须是颗粒化可编辑节点，不能用一张大图或一个大表格假装完成。"
     ]
   };
 }
@@ -2434,7 +2681,8 @@ function createFilterBarNodes(input: {
 }
 
 function reflowOverlappingNodes(nodes: WorkspaceDesignNode[], spacing: number) {
-  const sorted = [...nodes].sort((a, b) => a.y - b.y || a.x - b.x);
+  const readableNodes = nodes.map((node) => node.type === "text" ? expandTextNodeForReadability(node) : node);
+  const sorted = [...readableNodes].filter(isReflowMovableNode).sort((a, b) => a.y - b.y || a.x - b.x);
   const yById = new Map<string, number>();
   sorted.forEach((node, index) => {
     let nextY = yById.get(node.id) ?? node.y;
@@ -2449,13 +2697,49 @@ function reflowOverlappingNodes(nodes: WorkspaceDesignNode[], spacing: number) {
     }
     yById.set(node.id, nextY);
   });
-  return nodes.map((node) => ({ ...node, y: yById.get(node.id) ?? node.y }));
+  const movedNodes = readableNodes.map((node) => ({ ...node, y: yById.get(node.id) ?? node.y }));
+  return expandFramesToFitChildren(movedNodes, spacing);
+}
+
+function isReflowMovableNode(node: WorkspaceDesignNode) {
+  if (node.visible === false) return false;
+  if (node.type === "frame" || node.type === "container" || node.type === "card" || node.type === "image") return false;
+  return node.type === "text" || node.type === "button" || node.type === "input" || node.type === "table";
+}
+
+function expandTextNodeForReadability(node: WorkspaceDesignNode) {
+  const text = String(node.text ?? "").trim();
+  if (!text) return node;
+  const fontSize = node.fontSize || 14;
+  const charsPerLine = Math.max(4, Math.floor(node.width / Math.max(8, fontSize)));
+  const lines = Math.ceil(text.length / charsPerLine);
+  const minHeight = Math.ceil(lines * fontSize * 1.45);
+  return minHeight > node.height ? { ...node, height: minHeight } : node;
+}
+
+function expandFramesToFitChildren(nodes: WorkspaceDesignNode[], spacing: number) {
+  return nodes.map((node) => {
+    if (node.type !== "frame" && node.type !== "container" && node.type !== "card") return node;
+    const children = nodes.filter((child) => child.id !== node.id && (
+      child.parentId === node.id || (node.type === "frame" && isNodeInsideTarget(child, node))
+    ));
+    if (children.length === 0) return node;
+    const bottom = Math.max(...children.map((child) => child.y + child.height));
+    const right = Math.max(...children.map((child) => child.x + child.width));
+    return {
+      ...node,
+      height: Math.max(node.height, Math.ceil(bottom - node.y + spacing)),
+      width: Math.max(node.width, Math.ceil(right - node.x + spacing))
+    };
+  });
 }
 
 function detectMeaningfulOverlaps(nodes: WorkspaceDesignNode[]) {
-  return nodes
-    .filter((node) => node.visible !== false && node.type !== "text")
-    .flatMap((node, index, list) => list.slice(index + 1).filter((other) => node.parentId === other.parentId && rectsOverlap(node, other)).map((other) => [node.id, other.id]))
+  const visible = nodes.filter((node) => node.visible !== false);
+  return visible
+    .flatMap((node, index, list) => list.slice(index + 1)
+      .filter((other) => isMeaningfulOcclusion(node, other))
+      .map((other) => [node.id, other.id]))
     .slice(0, 20);
 }
 
@@ -2491,19 +2775,84 @@ function countOverlaps(nodes: WorkspaceDesignNode[]) {
   let count = 0;
   for (let i = 0; i < nodes.length; i += 1) {
     for (let j = i + 1; j < nodes.length; j += 1) {
-      if (rectsOverlap(nodes[i], nodes[j])) count += 1;
+      if (isMeaningfulOcclusion(nodes[i], nodes[j])) count += 1;
       if (count > 40) return count;
     }
   }
   return count;
 }
 
-function rectsOverlap(a: WorkspaceDesignNode, b: WorkspaceDesignNode) {
-  const xOverlap = a.x < b.x + b.width && a.x + a.width > b.x;
-  const yOverlap = a.y < b.y + b.height && a.y + a.height > b.y;
-  if (!xOverlap || !yOverlap) return false;
-  const area = Math.min(a.width * a.height, b.width * b.height);
-  return area > 400;
+function isMeaningfulOcclusion(a: WorkspaceDesignNode, b: WorkspaceDesignNode) {
+  const overlap = getOverlapMetrics(a, b);
+  if (!overlap) return false;
+  if (isAllowedLayering(a, b, overlap)) return false;
+  if (a.type === "text" && b.type === "text") return overlap.minRatio > 0.08 || overlap.area > 180;
+  if (a.type === "text" || b.type === "text") return overlap.minRatio > 0.12 || overlap.area > 220;
+  if (isInteractiveNode(a) && isInteractiveNode(b)) return overlap.minRatio > 0.1 || overlap.area > 320;
+  if (isFunctionalContentNode(a) && isFunctionalContentNode(b)) return overlap.minRatio > 0.16 || overlap.area > 640;
+  return false;
+}
+
+function isAllowedLayering(a: WorkspaceDesignNode, b: WorkspaceDesignNode, overlap: OverlapMetrics) {
+  if (a.id === b.parentId || b.id === a.parentId) return true;
+  const firstContainsSecond = containsNode(a, b);
+  const secondContainsFirst = containsNode(b, a);
+  if ((firstContainsSecond || secondContainsFirst) && (isLayerContainer(a) || isLayerContainer(b))) return true;
+  if ((isLayerContainer(a) && !isTextOrInteractiveNode(a)) || (isLayerContainer(b) && !isTextOrInteractiveNode(b))) {
+    const layer = isLayerContainer(a) ? a : b;
+    const content = layer === a ? b : a;
+    if (containsNode(layer, content) || overlap.minRatio > 0.7) return true;
+  }
+  if ((a.type === "image" || b.type === "image") && overlap.minRatio > 0.7 && (!isInteractiveNode(a) && !isInteractiveNode(b))) return true;
+  return false;
+}
+
+type OverlapMetrics = {
+  area: number;
+  minRatio: number;
+  aRatio: number;
+  bRatio: number;
+};
+
+function getOverlapMetrics(a: WorkspaceDesignNode, b: WorkspaceDesignNode): OverlapMetrics | undefined {
+  const xOverlap = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const yOverlap = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  if (xOverlap <= 0 || yOverlap <= 0) return undefined;
+  const area = xOverlap * yOverlap;
+  if (area <= 24) return undefined;
+  const aArea = Math.max(1, a.width * a.height);
+  const bArea = Math.max(1, b.width * b.height);
+  const aRatio = area / aArea;
+  const bRatio = area / bArea;
+  return {
+    area,
+    aRatio,
+    bRatio,
+    minRatio: Math.min(aRatio, bRatio)
+  };
+}
+
+function containsNode(container: WorkspaceDesignNode, child: WorkspaceDesignNode) {
+  return child.x >= container.x
+    && child.y >= container.y
+    && child.x + child.width <= container.x + container.width
+    && child.y + child.height <= container.y + container.height;
+}
+
+function isLayerContainer(node: WorkspaceDesignNode) {
+  return node.type === "frame" || node.type === "container" || node.type === "card" || node.type === "image";
+}
+
+function isInteractiveNode(node: WorkspaceDesignNode) {
+  return node.type === "button" || node.type === "input";
+}
+
+function isTextOrInteractiveNode(node: WorkspaceDesignNode) {
+  return node.type === "text" || isInteractiveNode(node);
+}
+
+function isFunctionalContentNode(node: WorkspaceDesignNode) {
+  return node.type === "button" || node.type === "input" || node.type === "table" || node.type === "text";
 }
 
 function getPageBounds(page: WorkspaceDesignPage) {
@@ -2555,12 +2904,18 @@ function renderPreviewNode(node: WorkspaceDesignNode, target: WorkspaceDesignNod
   if (node.type === "text") {
     return `<text x="${x}" y="${y + Math.max(12, Math.round(node.fontSize ?? 14))}" fill="${escapeSvgAttr(node.textColor || "#101828")}" font-size="${Math.round(node.fontSize ?? 14)}" font-family="PingFang SC, sans-serif">${escapeSvgText(node.text || node.name)}</text>`;
   }
+  if (node.type === "image" && node.imageUrl?.startsWith("data:image/")) {
+    return `<image x="${x}" y="${y}" width="${width}" height="${height}" href="${escapeSvgAttr(node.imageUrl)}" preserveAspectRatio="xMidYMid slice"/>`;
+  }
   const fill = node.fill === "transparent" ? "#ffffff" : node.fill || "#ffffff";
   const stroke = node.stroke === "transparent" ? "#e4e7ec" : node.stroke || "#e4e7ec";
   const label = node.text || (["button", "input", "card", "table"].includes(node.type) ? node.name : "");
+  const textX = node.type === "button" || node.textAlign === "center" ? x + width / 2 : x + 14;
+  const textAnchor = node.type === "button" || node.textAlign === "center" ? "middle" : "start";
+  const textY = node.type === "button" ? y + height / 2 + Math.round((node.fontSize ?? 14) * 0.35) : y + Math.min(height - 10, 28);
   return [
     `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${Math.round(node.radius ?? 8)}" fill="${escapeSvgAttr(fill)}" stroke="${escapeSvgAttr(stroke)}" stroke-width="${Math.max(0, node.strokeWidth ?? 1)}"/>`,
-    label ? `<text x="${x + 14}" y="${y + Math.min(height - 10, 28)}" fill="${escapeSvgAttr(node.textColor || (node.type === "button" ? "#ffffff" : "#344054"))}" font-size="${Math.round(node.fontSize ?? 14)}" font-family="PingFang SC, sans-serif">${escapeSvgText(label).slice(0, 80)}</text>` : ""
+    label ? `<text x="${textX}" y="${textY}" text-anchor="${textAnchor}" fill="${escapeSvgAttr(node.textColor || (node.type === "button" ? "#ffffff" : "#344054"))}" font-size="${Math.round(node.fontSize ?? 14)}" font-family="PingFang SC, sans-serif">${escapeSvgText(label).slice(0, 80)}</text>` : ""
   ].join("");
 }
 

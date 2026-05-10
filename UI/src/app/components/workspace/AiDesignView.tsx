@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent as ReactWheelEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
@@ -40,11 +40,13 @@ import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { getProject } from "../../utils/storage";
 import { toast } from "sonner";
 import {
   getAiDesignFile,
-  getAiDesignAgentMessages,
+  cancelAiDesignAgentConversation,
+  getAiDesignAgentCurrent,
   getAiDesignPage,
   importAiDesignFile,
   streamAiDesignAgent,
@@ -96,6 +98,7 @@ interface DesignNode {
   fontSize: number;
   lineHeight?: number;
   textAlign?: "left" | "center" | "right" | "justify";
+  textVerticalAlign?: "top" | "middle" | "bottom";
   visible: boolean;
   locked: boolean;
   imageUrl?: string;
@@ -114,6 +117,7 @@ interface DesignNode {
     strokeLineJoin?: "miter" | "round" | "bevel";
     fillRule?: "nonzero" | "evenodd";
     opacity?: number;
+    transform?: string;
   }>;
   svgTree?: DesignSvgNode;
   clipBounds?: {
@@ -173,6 +177,7 @@ type DesignSvgNode = {
   strokeLineJoin?: "miter" | "round" | "bevel";
   fillRule?: "nonzero" | "evenodd";
   opacity?: number;
+  transform?: string;
 };
 
 interface DesignPage {
@@ -333,6 +338,11 @@ export function AiDesignView() {
   ]);
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiConversationId, setAiConversationId] = useState(() => {
+    const storageKey = `aipm-ai-design-conversation:${projectId}`;
+    return window.localStorage.getItem(storageKey) || `design-agent-${projectId}`;
+  });
+  const [aiConversationRunning, setAiConversationRunning] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiSystemPrompt, setAiSystemPrompt] = useState(project?.systemPrompt ?? "");
   const [aiPlanningMode, setAiPlanningMode] = useState<"auto" | "plan">("auto");
@@ -341,6 +351,7 @@ export function AiDesignView() {
   const [aiModel, setAiModel] = useState(project?.llmSettings?.stageModelRouting?.design ?? project?.llmSettings?.stageModelRouting?.structure ?? "");
   const [aiApiKey, setAiApiKey] = useState("");
   const [savingAiSettings, setSavingAiSettings] = useState(false);
+  const [previewImageDialog, setPreviewImageDialog] = useState<{ label: string; dataUrl: string } | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [viewportSize, setViewportSize] = useState({ width: 1200, height: 800 });
 
@@ -348,17 +359,28 @@ export function AiDesignView() {
     if (!projectId) {
       return;
     }
+    window.localStorage.setItem(`aipm-ai-design-conversation:${projectId}`, aiConversationId);
     let cancelled = false;
-    void getAiDesignAgentMessages(projectId, `design-agent-${projectId}`, 200)
-      .then((messages) => {
-        if (cancelled || messages.length === 0) {
+    void getAiDesignAgentCurrent(projectId, aiConversationId, 300)
+      .then((current) => {
+        if (cancelled) {
           return;
         }
-        setAiMessages(messages.map((message) => ({
+        setAiConversationRunning(current.running);
+        if (current.messages.length === 0) {
+          setAiMessages([{
+            id: createId("ai-message"),
+            role: "assistant",
+            content: "这是一个新的 AI Design 会话。你可以继续描述要生成或编辑的页面，这个会话会使用新的上下文。"
+          }]);
+          return;
+        }
+        setAiMessages(current.messages.map((message) => ({
           id: message.id,
           role: message.role,
           content: message.content,
-          agentRole: message.agentRole
+          agentRole: message.agentRole,
+          previewImages: message.previewImages
         })));
       })
       .catch((error) => {
@@ -367,21 +389,57 @@ export function AiDesignView() {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, aiConversationId]);
+
+  useEffect(() => {
+    if (!projectId || aiBusy || !aiConversationRunning) {
+      return;
+    }
+    let cancelled = false;
+    const refreshCurrentConversation = async () => {
+      try {
+        const current = await getAiDesignAgentCurrent(projectId, aiConversationId, 300);
+        if (cancelled) return;
+        setAiConversationRunning(current.running);
+        setAiMessages(current.messages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          agentRole: message.agentRole,
+          previewImages: message.previewImages
+        })));
+      } catch (error) {
+        console.warn("[AIPM][AI Design] failed to refresh running conversation", error);
+      }
+    };
+    const intervalId = window.setInterval(() => void refreshCurrentConversation(), 2000);
+    void refreshCurrentConversation();
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [projectId, aiConversationId, aiBusy, aiConversationRunning]);
   const [selectionRect, setSelectionRect] = useState<{
     start: { x: number; y: number };
     current: { x: number; y: number };
   } | null>(null);
+  const [dragPreviewNodeIds, setDragPreviewNodeIds] = useState<string[]>([]);
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const designImportInputRef = useRef<HTMLInputElement | null>(null);
   const applyingRemoteDesignRef = useRef(false);
   const saveDesignTimerRef = useRef<number | null>(null);
   const selectedPageIdRef = useRef(selectedPageId);
+  const aiStreamingDeltaMessageIdRef = useRef<string | null>(null);
+  const aiStreamControllerRef = useRef<AbortController | null>(null);
+  const dragPreviewRef = useRef<{ nodeIds: string[]; dx: number; dy: number } | null>(null);
+  const selectionPreviewRef = useRef<HTMLDivElement | null>(null);
   const loadedPageIdsRef = useRef<Set<string>>(new Set(file.pages.filter((page) => page.nodes.length > 0).map((page) => page.id)));
   const nodeDragRef = useRef<{
     nodeIds: string[];
     startX: number;
     startY: number;
+    currentDx: number;
+    currentDy: number;
     originals: Array<{ id: string; x: number; y: number }>;
   } | null>(null);
   const panDragRef = useRef<{
@@ -411,11 +469,7 @@ export function AiDesignView() {
   }), [pan.x, pan.y, viewportSize.height, viewportSize.width, zoom]);
   const minimapBounds = useMemo(() => unionBounds(sceneContentBounds, visibleSceneBounds), [sceneContentBounds, visibleSceneBounds]);
   const renderedNodes = useMemo(() => {
-    if (visibleNodes.length < 500) {
-      return visibleNodes;
-    }
-
-    const padding = 960 / zoom;
+    const padding = Math.max(240, 960 / zoom);
     const sceneViewport = {
       x: visibleSceneBounds.x - padding,
       y: visibleSceneBounds.y - padding,
@@ -423,10 +477,17 @@ export function AiDesignView() {
       height: visibleSceneBounds.height + padding * 2
     };
 
-    return visibleNodes.filter((node) => selectedNodeIds.includes(node.id) || rectsIntersect(sceneViewport, nodeToBounds(node)));
-  }, [selectedNodeIds, visibleNodes, visibleSceneBounds, zoom]);
-  const canvasRenderedNodes = useMemo(() => renderedNodes.filter((node) => !shouldRenderNodeWithDomSvg(node)), [renderedNodes]);
-  const domSvgRenderedNodes = useMemo(() => renderedNodes.filter(shouldRenderNodeWithDomSvg), [renderedNodes]);
+    const movingIds = new Set(dragPreviewNodeIds);
+    return visibleNodes.filter((node) => !movingIds.has(node.id) && (selectedNodeIds.includes(node.id) || rectsIntersect(sceneViewport, nodeToBounds(node))));
+  }, [dragPreviewNodeIds, selectedNodeIds, visibleNodes, visibleSceneBounds, zoom]);
+  const hitTestNodes = renderedNodes;
+  const canvasRenderedNodes = renderedNodes;
+  console.log(canvasRenderedNodes, 'canvasRenderedNodes')
+  const dragPreviewNodes = useMemo(() => {
+    if (dragPreviewNodeIds.length === 0) return [];
+    const movingIds = new Set(dragPreviewNodeIds);
+    return selectedPage.nodes.filter((node) => movingIds.has(node.id));
+  }, [dragPreviewNodeIds, selectedPage.nodes]);
   const layerTree = useMemo(() => buildDesignLayerTree(selectedPage.nodes, layerQuery), [layerQuery, selectedPage.nodes]);
   const localComponents = useMemo(() => (file.importedComponents ?? []).filter((component) => component.sourceFileName === LOCAL_COMPONENT_SOURCE_NAME), [file.importedComponents]);
   const externalImportedComponents = useMemo(() => (file.importedComponents ?? []).filter((component) => component.sourceFileName !== LOCAL_COMPONENT_SOURCE_NAME), [file.importedComponents]);
@@ -740,6 +801,51 @@ export function AiDesignView() {
     }
   };
 
+  const cancelDesignAgentMessage = async () => {
+    aiStreamControllerRef.current?.abort();
+    aiStreamControllerRef.current = null;
+    setAiBusy(false);
+    setAiConversationRunning(false);
+    try {
+      await cancelAiDesignAgentConversation(projectId, aiConversationId);
+      setAiMessages((current) => [...current, {
+        id: createId("ai-message"),
+        role: "assistant",
+        content: "已中断当前会话的执行。你可以在这个会话里继续补充，也可以新开会话重来。",
+        agentRole: "负责人 Agent"
+      }]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "中断会话失败");
+    }
+  };
+
+  const startNewDesignAgentConversation = async () => {
+    if (aiBusy || aiConversationRunning) {
+      await cancelDesignAgentMessage();
+    }
+    const nextConversationId = `design-agent-${projectId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    aiStreamingDeltaMessageIdRef.current = null;
+    setAiConversationId(nextConversationId);
+    setAiConversationRunning(false);
+    window.localStorage.setItem(`aipm-ai-design-conversation:${projectId}`, nextConversationId);
+    setAiMessages([{
+      id: createId("ai-message"),
+      role: "assistant",
+      content: "已新开会话。之前会话已断开，新消息会使用新的上下文。"
+    }]);
+  };
+
+  const resumeDesignAgentConversation = async () => {
+    if (aiBusy || aiConversationRunning) {
+      return;
+    }
+    await runDesignAgentMessage([
+      "继续执行上次中断或未完成的 AI Design 任务。",
+      "请根据会话上下文、最近工具结果和画布状态续接，不要从零开始重复已完成步骤。",
+      "如果首版 UI 还没有真正落到画布，先生成 UI 稿；如果已生成但缺少截图，先执行 canvas.capture 并把截图展示在聊天框；然后再做视觉/交互审核和必要修复。"
+    ].join("\n"));
+  };
+
   const runDesignAgentMessage = async (message: string) => {
     const content = message.trim();
     if (!content || aiBusy) {
@@ -747,6 +853,10 @@ export function AiDesignView() {
     }
     setAiInput("");
     setAiBusy(true);
+    setAiConversationRunning(true);
+    aiStreamingDeltaMessageIdRef.current = null;
+    const controller = new AbortController();
+    aiStreamControllerRef.current = controller;
     const userMessage: AiDesignChatMessage = { id: createId("ai-message"), role: "user", content };
     setAiMessages((current) => [...current, userMessage]);
     try {
@@ -759,13 +869,27 @@ export function AiDesignView() {
         pageId: requestPageId,
         systemPrompt: aiSystemPrompt,
         planningMode: aiPlanningMode,
-        conversationId: `design-agent-${projectId}`
+        conversationId: aiConversationId
       }, (event: AiDesignAgentStreamEvent) => {
         if (event.type === "message") {
           setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: event.content, agentRole: event.agentRole }]);
           return;
         }
+        if (event.type === "llm_delta") {
+          const messageId = aiStreamingDeltaMessageIdRef.current ?? createId("ai-message");
+          aiStreamingDeltaMessageIdRef.current = messageId;
+          setAiMessages((current) => {
+            const index = current.findIndex((item) => item.id === messageId);
+            const prefix = `模型推理中（${event.source}）：\n`;
+            if (index < 0) {
+              return [...current, { id: messageId, role: "assistant", content: `${prefix}${event.delta}`, agentRole: event.agentRole }];
+            }
+            return current.map((item) => item.id === messageId ? { ...item, content: `${item.content}${event.delta}` } : item);
+          });
+          return;
+        }
         if (event.type === "plan") {
+          aiStreamingDeltaMessageIdRef.current = null;
           setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: [`执行计划：${event.title}`, ...event.steps].join("\n"), agentRole: event.agentRole ?? "负责人 Agent" }]);
           return;
         }
@@ -814,7 +938,7 @@ export function AiDesignView() {
           finalPage = resolveAgentEventPage(requestPageId, event.page);
           setAiMessages((current) => [...current, { id: createId("ai-message"), role: "assistant", content: event.summary, agentRole: event.agentRole ?? "负责人 Agent" }]);
         }
-      });
+      }, { signal: controller.signal });
       if (finalFile) {
         const nextFile = mergeAgentPageIntoFile(
           preserveLoadedDesignPages(finalFile, streamFile),
@@ -827,6 +951,9 @@ export function AiDesignView() {
       }
       setLeftTab("ai");
     } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
       const messageText = error instanceof Error ? error.message : "AI Design Agent 执行失败";
       setAiMessages((current) => [
         ...current,
@@ -834,7 +961,11 @@ export function AiDesignView() {
       ]);
       toast.error(messageText);
     } finally {
-      setAiBusy(false);
+      if (aiStreamControllerRef.current === controller) {
+        aiStreamControllerRef.current = null;
+        setAiBusy(false);
+        setAiConversationRunning(false);
+      }
     }
   };
 
@@ -1110,12 +1241,12 @@ export function AiDesignView() {
   };
 
   const resolveInteractiveNodeAtPoint = (point: { x: number; y: number }) => {
-    const hitNode = findTopDesignNodeAtPoint(visibleNodes, point);
+    const hitNode = findTopDesignNodeAtPoint(hitTestNodes, point);
     return hitNode ? getCanvasSelectionTarget(hitNode, selectedPage.nodes, selectedNodeIds) : null;
   };
 
   const resolveDrillNodeAtPoint = (point: { x: number; y: number }) => {
-    return findTopDesignNodeAtPoint(visibleNodes, point);
+    return findTopDesignNodeAtPoint(hitTestNodes, point);
   };
 
   const getDragNodesForSelection = (selectionIds: string[]) => {
@@ -1131,8 +1262,15 @@ export function AiDesignView() {
       nodeIds: dragIds.map((item) => item.id),
       startX: scenePoint.x,
       startY: scenePoint.y,
+      currentDx: 0,
+      currentDy: 0,
       originals: dragIds.map((item) => ({ id: item.id, x: item.x, y: item.y }))
     };
+    dragPreviewRef.current = { nodeIds: dragIds.map((item) => item.id), dx: 0, dy: 0 };
+    setDragPreviewNodeIds(dragIds.map((item) => item.id));
+    if (selectionPreviewRef.current) {
+      selectionPreviewRef.current.style.transform = "translate3d(0px, 0px, 0)";
+    }
   };
 
   const openNodeContextMenu = (event: ReactMouseEvent<HTMLElement>, node: DesignNode, source: DesignContextMenuState["source"]) => {
@@ -1258,18 +1396,17 @@ export function AiDesignView() {
       const scenePoint = getScenePoint(event.clientX, event.clientY);
       const deltaX = scenePoint.x - nodeDragRef.current.startX;
       const deltaY = scenePoint.y - nodeDragRef.current.startY;
-      const originals = nodeDragRef.current.originals;
-      updateSelectedPage((page) => ({
-        ...page,
-        nodes: page.nodes.map((node) => {
-          const original = originals.find((item) => item.id === node.id);
-          return original ? {
-            ...node,
-            x: Math.round(original.x + deltaX),
-            y: Math.round(original.y + deltaY)
-          } : node;
-        })
-      }));
+      const roundedDx = Math.round(deltaX);
+      const roundedDy = Math.round(deltaY);
+      nodeDragRef.current.currentDx = roundedDx;
+      nodeDragRef.current.currentDy = roundedDy;
+      if (dragPreviewRef.current) {
+        dragPreviewRef.current.dx = roundedDx;
+        dragPreviewRef.current.dy = roundedDy;
+      }
+      if (selectionPreviewRef.current) {
+        selectionPreviewRef.current.style.transform = `translate3d(${roundedDx}px, ${roundedDy}px, 0)`;
+      }
       return;
     }
 
@@ -1301,7 +1438,7 @@ export function AiDesignView() {
     if (selectionDragRef.current && selectionRect) {
       const rect = normalizeRect(selectionRect.start, selectionRect.current);
       if (rect.width > 3 || rect.height > 3) {
-        const matchedIds = visibleNodes
+        const matchedIds = hitTestNodes
           .filter((node) => rectsIntersect(rect, nodeToBounds(node)) && !node.locked)
           .map((node) => getCanvasSelectionTarget(node, selectedPage.nodes, selectedNodeIds)?.id)
           .filter((id): id is string => Boolean(id));
@@ -1310,7 +1447,29 @@ export function AiDesignView() {
       }
     }
     panDragRef.current = null;
+    if (nodeDragRef.current) {
+      const dragSession = nodeDragRef.current;
+      const originalById = new Map(dragSession.originals.map((item) => [item.id, item]));
+      if (dragSession.currentDx !== 0 || dragSession.currentDy !== 0) {
+        updateSelectedPage((page) => ({
+          ...page,
+          nodes: page.nodes.map((node) => {
+            const original = originalById.get(node.id);
+            return original ? {
+              ...node,
+              x: original.x + dragSession.currentDx,
+              y: original.y + dragSession.currentDy
+            } : node;
+          })
+        }));
+      }
+    }
     nodeDragRef.current = null;
+    dragPreviewRef.current = null;
+    setDragPreviewNodeIds([]);
+    if (selectionPreviewRef.current) {
+      selectionPreviewRef.current.style.transform = "translate3d(0px, 0px, 0)";
+    }
     resizeDragRef.current = null;
     selectionDragRef.current = null;
     setSelectionRect(null);
@@ -1411,6 +1570,7 @@ export function AiDesignView() {
   const showSelectionBounds = selectionBounds && selectedNodeIds.length > 0;
 
   return (
+    <>
     <div style={{ overscrollBehavior: 'none' }} className="flex h-screen min-h-0 w-screen flex-col overflow-hidden bg-[#f5f5f6] text-[#171717]">
       <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#e6e6e8] bg-white px-4">
         <div className="flex items-center gap-3">
@@ -1813,6 +1973,43 @@ export function AiDesignView() {
                   </span>
                   <ChevronDown className={`size-4 text-[#777] transition-transform ${aiSettingsOpen ? "" : "-rotate-90"}`} />
                 </button>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 flex-1 rounded-xl text-xs"
+                    onClick={() => void startNewDesignAgentConversation()}
+                  >
+                    <Plus className="mr-1 size-3.5" />
+                    新会话
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 flex-1 rounded-xl text-xs"
+                    disabled={aiBusy || aiConversationRunning}
+                    onClick={() => void resumeDesignAgentConversation()}
+                  >
+                    <Play className="mr-1 size-3.5" />
+                    继续
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 flex-1 rounded-xl text-xs"
+                    disabled={!aiBusy && !aiConversationRunning}
+                    onClick={() => void cancelDesignAgentMessage()}
+                  >
+                    <Trash2 className="mr-1 size-3.5" />
+                    中断
+                  </Button>
+                </div>
+                <div className="mt-2 truncate px-2 text-[11px] text-[#777]">
+                  当前会话：{aiConversationId.replace(`design-agent-${projectId}`, "默认会话")}{aiConversationRunning ? " · 运行中" : ""}
+                </div>
                 {aiSettingsOpen ? (
                   <div className="mt-3 space-y-3">
                     <div>
@@ -1913,7 +2110,13 @@ export function AiDesignView() {
                         <div className="mt-2 grid gap-2">
                           {message.previewImages.map((image) => (
                             <figure key={image.dataUrl} className="overflow-hidden rounded-xl border border-[#ececef] bg-[#f7f8fb]">
-                              <img src={image.dataUrl} alt={image.label} className="block max-h-72 w-full object-contain" />
+                              <button
+                                type="button"
+                                className="block w-full cursor-zoom-in bg-[#f7f8fb]"
+                                onClick={() => setPreviewImageDialog(image)}
+                              >
+                                <img src={image.dataUrl} alt={image.label} className="block max-h-72 w-full object-contain" />
+                              </button>
                               <figcaption className="border-t border-[#ececef] px-2 py-1 text-[11px] text-[#777]">{image.label}</figcaption>
                             </figure>
                           ))}
@@ -1969,7 +2172,7 @@ export function AiDesignView() {
             onWheel={handleCanvasWheel}
           >
             <CanvasDesignRenderer nodes={canvasRenderedNodes} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
-            <DomSvgDesignRenderer nodes={domSvgRenderedNodes} pan={pan} zoom={zoom} />
+            <CanvasDragPreviewRenderer nodes={dragPreviewNodes} previewRef={dragPreviewRef} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
             {loadingPageId === selectedPageId ? (
               <div className="pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 rounded-full border border-[#e4e4e7] bg-white/90 px-4 py-2 text-xs font-semibold text-[#555] shadow-sm">
                 正在加载当前页面 schema...
@@ -1985,10 +2188,12 @@ export function AiDesignView() {
                 <CanvasOutlineBoundsView bounds={hoverBounds} tone="hover" />
               ) : null}
               {showSelectionBounds ? (
-                <SelectionBoundsView
-                  bounds={selectionBounds}
-                  onResizePointerDown={handleResizePointerDown}
-                />
+                <div ref={selectionPreviewRef} className="absolute left-0 top-0 will-change-transform">
+                  <SelectionBoundsView
+                    bounds={selectionBounds}
+                    onResizePointerDown={handleResizePointerDown}
+                  />
+                </div>
               ) : null}
               {activeSelectionRect ? (
                 <div
@@ -2066,6 +2271,7 @@ export function AiDesignView() {
                       <NumberField label="Y" value={selectedNode.y} onChange={(value) => updateNode(selectedNode.id, { y: value })} />
                       <NumberField label="W" value={selectedNode.width} onChange={(value) => updateNode(selectedNode.id, { width: value })} />
                       <NumberField label="H" value={selectedNode.height} onChange={(value) => updateNode(selectedNode.id, { height: value })} />
+                      <NumberField label="Z" value={selectedNode.zIndex ?? 0} onChange={(value) => updateNode(selectedNode.id, { zIndex: value })} />
                     </div>
                   </InspectorSection>
                   <InspectorSection title="外观">
@@ -2216,6 +2422,23 @@ export function AiDesignView() {
         </aside>
       </div>
     </div>
+    <Dialog open={Boolean(previewImageDialog)} onOpenChange={(open) => !open && setPreviewImageDialog(null)}>
+      <DialogContent className="max-h-[92vh] max-w-[92vw] overflow-hidden p-0">
+        <DialogHeader className="border-b border-[#eeeeef] px-5 py-4">
+          <DialogTitle>{previewImageDialog?.label ?? "画板截图"}</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[82vh] overflow-auto bg-[#f5f5f6] p-4">
+          {previewImageDialog ? (
+            <img
+              src={previewImageDialog.dataUrl}
+              alt={previewImageDialog.label}
+              className="mx-auto block max-w-none rounded-xl bg-white shadow-[0_16px_80px_rgba(0,0,0,0.18)]"
+            />
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
@@ -2312,11 +2535,75 @@ function CanvasDesignRenderer({
     context.save();
     context.translate(pan.x, pan.y);
     context.scale(zoom, zoom);
-    [...nodes]
-      .sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0))
-      .forEach((node) => drawDesignNodeOnCanvas(context, node, () => setImageRevision((current) => current + 1)));
+    const sortedNodes = [...nodes]
+      .sort((first, second) => ((first.zIndex ?? 0) - (second.zIndex ?? 0)));
+    console.log(sortedNodes, 'sortedNodes')
+    sortedNodes.forEach((node) => drawDesignNodeOnCanvas(context, node, () => setImageRevision((current) => current + 1)));
     context.restore();
   }, [height, nodes, pan.x, pan.y, width, zoom]);
+
+  return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" />;
+}
+
+function CanvasDragPreviewRenderer({
+  nodes,
+  previewRef,
+  width,
+  height,
+  pan,
+  zoom
+}: {
+  nodes: DesignNode[];
+  previewRef: MutableRefObject<{ nodeIds: string[]; dx: number; dy: number } | null>;
+  width: number;
+  height: number;
+  pan: { x: number; y: number };
+  zoom: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [, setImageRevision] = useState(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || nodes.length === 0) {
+      return;
+    }
+
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    let frameId = 0;
+    const draw = () => {
+      const preview = previewRef.current;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.clearRect(0, 0, width, height);
+      if (preview) {
+        context.save();
+        context.translate(pan.x, pan.y);
+        context.scale(zoom, zoom);
+        context.translate(preview.dx, preview.dy);
+        [...nodes]
+          .sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0))
+          .forEach((node) => drawDesignNodeOnCanvas(context, node, () => setImageRevision((current) => current + 1)));
+        context.restore();
+      }
+      frameId = window.requestAnimationFrame(draw);
+    };
+
+    frameId = window.requestAnimationFrame(draw);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.clearRect(0, 0, width, height);
+    };
+  }, [height, nodes, pan.x, pan.y, previewRef, width, zoom]);
 
   return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" />;
 }
@@ -2825,7 +3112,8 @@ function DomSvgPathNode({ node }: { node: DesignNode }) {
           fillRule: node.svgFillRule
         }]
       : [];
-  const paints = paths.map((path, index) => ({
+  const visiblePaths = paths.filter((path) => !isInvisibleDesignSvgPath(node, path));
+  const paints = visiblePaths.map((path, index) => ({
     fill: getSvgPaintDescriptor(node, path.fill ?? node.fill, "fill", "transparent", `${index}`),
     stroke: getSvgPaintDescriptor(node, path.stroke ?? node.stroke, "stroke", "none", `${index}`)
   }));
@@ -2847,7 +3135,7 @@ function DomSvgPathNode({ node }: { node: DesignNode }) {
           ))}
         </defs>
       ) : null}
-      {paths.map((path, index) => (
+      {visiblePaths.map((path, index) => (
         <path
           key={`${node.id}-path-${index}`}
           d={path.d}
@@ -2859,6 +3147,7 @@ function DomSvgPathNode({ node }: { node: DesignNode }) {
           strokeLinecap={path.strokeLineCap ?? "butt"}
           strokeLinejoin={path.strokeLineJoin ?? "miter"}
           opacity={path.opacity}
+          transform={path.transform}
           vectorEffect="non-scaling-stroke"
         />
       ))}
@@ -2867,6 +3156,9 @@ function DomSvgPathNode({ node }: { node: DesignNode }) {
 }
 
 function renderDesignSvgTreeNode(owner: DesignNode, svgNode: DesignSvgNode, keyPath: string): ReactNode {
+  if (svgNode.opacity !== undefined && svgNode.opacity <= 0) {
+    return null;
+  }
   const fill = svgNode.fill !== undefined
     ? getSvgPaintDescriptor(owner, svgNode.fill, "fill", "none", keyPath)
     : undefined;
@@ -2930,6 +3222,7 @@ function renderDesignSvgTreeNode(owner: DesignNode, svgNode: DesignSvgNode, keyP
         strokeLinejoin={svgNode.strokeLineJoin}
         fillRule={svgNode.fillRule}
         opacity={svgNode.opacity}
+        transform={svgNode.transform}
         vectorEffect="non-scaling-stroke"
       />
     </Fragment>
@@ -2942,6 +3235,7 @@ function buildDesignSvgDocument(nodes: DesignNode[], name: string) {
     .sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0));
   const bounds = getExactNodesBounds(visibleNodes);
   const defs = new SvgExportDefinitions();
+  console.log(visibleNodes, 'visibleNodes')
   const content = visibleNodes
     .map((node) => serializeDesignNodeForExport(node, bounds, defs))
     .filter(Boolean)
@@ -3001,8 +3295,9 @@ function serializeDesignNodeLocalContent(node: DesignNode, defs: SvgExportDefini
           fillRule: node.svgFillRule
         }]
       : [];
-  if (vectorPaths.length > 0) {
-    return vectorPaths.map((path, index) => {
+  const visibleVectorPaths = vectorPaths.filter((path) => !isInvisibleDesignSvgPath(node, path));
+  if (visibleVectorPaths.length > 0) {
+    return visibleVectorPaths.map((path, index) => {
       const fill = defs.paint(node, path.fill ?? node.fill, "fill", "none", `${index}`);
       const stroke = defs.paint(node, path.stroke ?? node.stroke, "stroke", "none", `${index}`);
       return `<path${serializeSvgAttributes({
@@ -3015,6 +3310,7 @@ function serializeDesignNodeLocalContent(node: DesignNode, defs: SvgExportDefini
         "stroke-linecap": path.strokeLineCap,
         "stroke-linejoin": path.strokeLineJoin,
         opacity: path.opacity,
+        transform: path.transform,
         "vector-effect": "non-scaling-stroke"
       })}/>`;
     }).join("\n    ");
@@ -3054,6 +3350,9 @@ function serializeDesignNodeLocalContent(node: DesignNode, defs: SvgExportDefini
 }
 
 function serializeDesignSvgTreeForExport(owner: DesignNode, svgNode: DesignSvgNode, defs: SvgExportDefinitions): string {
+  if (svgNode.opacity !== undefined && svgNode.opacity <= 0) {
+    return "";
+  }
   if (svgNode.type === "g") {
     if (isCompoundSvgPathGroup(svgNode)) {
       return `<path${serializeSvgAttributes({
@@ -3096,6 +3395,7 @@ function serializeDesignSvgTreeForExport(owner: DesignNode, svgNode: DesignSvgNo
     "stroke-linejoin": svgNode.strokeLineJoin,
     "fill-rule": svgNode.fillRule,
     opacity: svgNode.opacity,
+    transform: svgNode.transform,
     "vector-effect": "non-scaling-stroke"
   });
   return `<path${attrs}/>`;
@@ -3385,19 +3685,21 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
   context.globalCompositeOperation = (node.blendMode ?? "source-over") as GlobalCompositeOperation;
   context.filter = node.blurRadius ? `blur(${node.blurRadius}px)` : "none";
 
-  if (node.svgPath) {
-    drawSvgPathNode(context, node);
+  if (node.svgTree || node.svgPaths?.length || node.svgPath) {
+    drawSvgVectorNode(context, node);
   } else if (node.type === "image" && node.imageUrl) {
     drawImageNode(context, node, requestRedraw);
   } else if (node.type === "table") {
     drawTableNode(context, node, requestRedraw);
   } else {
     drawBoxNode(context, node, requestRedraw);
-    if (node.text) {
-      if (node.textRuns?.length) {
+    if (node.text || node.textRuns?.length) {
+      if (isIconFontNode(node)) {
+        drawIconFontFallback(context, node);
+      } else if (node.textRuns?.length) {
         drawRichTextNode(context, node);
       } else {
-        drawTextNode(context, node, node.text);
+        drawTextNode(context, node, node.text || node.textRuns?.map((run) => run.text).join("") || "");
       }
     }
   }
@@ -3479,24 +3781,170 @@ function applyCanvasClip(context: CanvasRenderingContext2D, node: DesignNode) {
   }
 }
 
-function drawSvgPathNode(context: CanvasRenderingContext2D, node: DesignNode) {
+function drawSvgVectorNode(context: CanvasRenderingContext2D, node: DesignNode) {
+  if (node.svgTree) {
+    drawSvgTreeNodeOnCanvas(context, node, node.svgTree);
+    return;
+  }
+  const paths = node.svgPaths?.length
+    ? node.svgPaths
+    : node.svgPath
+      ? [{
+          d: node.svgPath,
+          fill: node.fill,
+          stroke: node.stroke,
+          strokeWidth: node.strokeWidth,
+          fillRule: node.svgFillRule
+        }]
+      : [];
+  if (paths.length === 0) {
+    drawBoxNode(context, node);
+    return;
+  }
+  paths
+    .filter((pathNode) => !isInvisibleDesignSvgPath(node, pathNode))
+    .forEach((pathNode) => drawSvgPathOnCanvas(context, node, pathNode));
+}
+
+function drawSvgTreeNodeOnCanvas(
+  context: CanvasRenderingContext2D,
+  owner: DesignNode,
+  treeNode: DesignSvgNode,
+  inherited: Partial<Extract<DesignSvgNode, { type: "path" }>> = {}
+) {
+  if (treeNode.opacity !== undefined && treeNode.opacity <= 0) {
+    return;
+  }
+  context.save();
+  if (treeNode.opacity !== undefined) {
+    context.globalAlpha *= treeNode.opacity;
+  }
+  if (treeNode.transform) {
+    applyCanvasSvgTransform(context, treeNode.transform);
+  }
+  if (treeNode.type === "path") {
+    drawSvgPathOnCanvas(context, owner, { ...inherited, ...treeNode, opacity: treeNode.opacity });
+  } else {
+    const nextInherited = {
+      ...inherited,
+      fill: treeNode.fill ?? inherited.fill,
+      stroke: treeNode.stroke ?? inherited.stroke,
+      strokeWidth: treeNode.strokeWidth ?? inherited.strokeWidth,
+      strokeDashPattern: treeNode.strokeDashPattern ?? inherited.strokeDashPattern,
+      strokeLineCap: treeNode.strokeLineCap ?? inherited.strokeLineCap,
+      strokeLineJoin: treeNode.strokeLineJoin ?? inherited.strokeLineJoin,
+      fillRule: treeNode.fillRule ?? inherited.fillRule
+    };
+    treeNode.children.forEach((child) => drawSvgTreeNodeOnCanvas(context, owner, child, nextInherited));
+  }
+  context.restore();
+}
+
+function drawSvgPathOnCanvas(
+  context: CanvasRenderingContext2D,
+  node: DesignNode,
+  pathNode: {
+    d: string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    strokeDashPattern?: number[];
+    strokeLineCap?: "butt" | "round" | "square";
+    strokeLineJoin?: "miter" | "round" | "bevel";
+    fillRule?: "nonzero" | "evenodd";
+    opacity?: number;
+    transform?: string;
+  }
+) {
+  if (isInvisibleDesignSvgPath(node, pathNode)) {
+    return;
+  }
   try {
-    const path = new Path2D(node.svgPath);
-    const fill = getCanvasFillStyle(context, node, node.fill);
-    const stroke = getCanvasStrokeStyle(context, node);
-    drawPathShadowLayers(context, path, node, fill || getCanvasPaint(node.fill) || "#ffffff");
+    const path = new Path2D(pathNode.d);
+    const fill = getCanvasFillStyle(context, node, pathNode.fill ?? node.fill);
+    const stroke = getCanvasFillStyle(context, node, pathNode.stroke ?? node.stroke);
+    if (pathNode.opacity !== undefined) {
+      context.save();
+      context.globalAlpha *= pathNode.opacity;
+    }
+    if (pathNode.transform) {
+      context.save();
+      applyCanvasSvgTransform(context, pathNode.transform);
+    }
+    drawPathShadowLayers(context, path, node, fill || getCanvasPaint(pathNode.fill ?? node.fill) || "#ffffff");
     if (fill) {
       context.fillStyle = fill;
-      context.fill(path, node.svgFillRule === "evenodd" ? "evenodd" : "nonzero");
+      context.fill(path, pathNode.fillRule === "evenodd" ? "evenodd" : "nonzero");
     }
-    if (stroke && (node.strokeWidth ?? 0) > 0) {
-      applyCanvasStrokeStyle(context, node);
+    if (stroke && (pathNode.strokeWidth ?? node.strokeWidth ?? 0) > 0) {
+      applyCanvasStrokeStyle(context, {
+        ...node,
+        strokeWidth: pathNode.strokeWidth ?? node.strokeWidth,
+        strokeDashPattern: pathNode.strokeDashPattern ?? node.strokeDashPattern,
+        strokeLineCap: pathNode.strokeLineCap ?? node.strokeLineCap,
+        strokeLineJoin: pathNode.strokeLineJoin ?? node.strokeLineJoin
+      });
       context.strokeStyle = stroke;
       context.stroke(path);
+    }
+    if (pathNode.transform) {
+      context.restore();
+    }
+    if (pathNode.opacity !== undefined) {
+      context.restore();
     }
   } catch {
     drawBoxNode(context, node);
   }
+}
+
+function isInvisibleDesignSvgPath(
+  node: DesignNode,
+  pathNode: {
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    opacity?: number;
+  }
+) {
+  if (pathNode.opacity !== undefined && pathNode.opacity <= 0) {
+    return true;
+  }
+  const fill = pathNode.fill ?? node.fill;
+  const stroke = pathNode.stroke ?? node.stroke;
+  const strokeWidth = pathNode.strokeWidth ?? node.strokeWidth ?? 0;
+  return isTransparentPaint(fill) && (strokeWidth <= 0 || isTransparentPaint(stroke));
+}
+
+function applyCanvasSvgTransform(context: CanvasRenderingContext2D, transform: string) {
+  const commands = transform.match(/(?:matrix|translate|scale|rotate)\([^)]*\)/gi) ?? [];
+  commands.forEach((command) => {
+    const match = /^(matrix|translate|scale|rotate)\(([^)]*)\)$/i.exec(command.trim());
+    if (!match) return;
+    const values = match[2].split(/[\s,]+/).map(Number).filter(Number.isFinite);
+    if (match[1].toLowerCase() === "matrix" && values.length === 6) {
+      context.transform(values[0], values[1], values[2], values[3], values[4], values[5]);
+      return;
+    }
+    if (match[1].toLowerCase() === "translate") {
+      context.translate(values[0] ?? 0, values[1] ?? 0);
+      return;
+    }
+    if (match[1].toLowerCase() === "scale") {
+      context.scale(values[0] ?? 1, values[1] ?? values[0] ?? 1);
+      return;
+    }
+    if (match[1].toLowerCase() === "rotate") {
+      const angle = (values[0] ?? 0) * Math.PI / 180;
+      if (values.length >= 3) {
+        context.translate(values[1], values[2]);
+        context.rotate(angle);
+        context.translate(-values[1], -values[2]);
+        return;
+      }
+      context.rotate(angle);
+    }
+  });
 }
 
 function drawImageNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
@@ -3695,7 +4143,9 @@ function drawTextNode(context: CanvasRenderingContext2D, node: DesignNode, text:
   const fill = getCanvasPaint(node.textColor) || "#171717";
   const lineHeight = node.lineHeight ?? node.fontSize * 1.35;
   const font = getCanvasFont(node);
-  const lines = wrapCanvasText(context, transformTextContent(text, node.textTransform), Math.max(8, node.width - 12), font);
+  const horizontalPadding = node.type === "text" ? 0 : 6;
+  const verticalPadding = node.type === "text" ? 0 : 4;
+  const lines = wrapCanvasText(context, transformTextContent(text, node.textTransform), Math.max(8, node.width - horizontalPadding * 2), font);
   context.fillStyle = fill;
   context.font = font;
   if ("letterSpacing" in context) {
@@ -3703,11 +4153,15 @@ function drawTextNode(context: CanvasRenderingContext2D, node: DesignNode, text:
   }
   context.textAlign = node.textAlign === "right" ? "right" : node.textAlign === "center" ? "center" : "left";
   context.textBaseline = "top";
-  const x = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 : 6;
+  const x = node.textAlign === "right" ? node.width - horizontalPadding : node.textAlign === "center" ? node.width / 2 : horizontalPadding;
   const totalHeight = lines.length * lineHeight;
-  const startY = Math.max(0, Math.min(node.height - lineHeight, node.height / 2 - totalHeight / 2));
+  const startY = getCanvasTextStartY(node, totalHeight, lineHeight, verticalPadding);
   lines.forEach((line, index) => {
-    const y = startY + index * lineHeight;
+    const lineTop = startY + index * lineHeight;
+    const y = lineTop + getCanvasLineGlyphOffset(lineHeight, node.fontSize);
+    if (lineTop > node.height) {
+      return;
+    }
     context.fillText(line, x, y);
     drawCanvasTextDecorations(context, node, line, x, y);
   });
@@ -3721,27 +4175,25 @@ function drawRichTextNode(context: CanvasRenderingContext2D, node: DesignNode) {
 
   context.save();
   const baseLineHeight = node.lineHeight ?? node.fontSize * 1.35;
-  let cursorX = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 : 6;
-  let cursorY = Math.max(0, node.height / 2 - baseLineHeight / 2);
-  const alignOffset = node.textAlign === "center" ? measureRichTextLine(context, node, getFirstRichTextLine(runs)) / 2 : 0;
-  if (node.textAlign === "center") {
-    cursorX -= alignOffset;
-  }
+  const horizontalPadding = node.type === "text" ? 0 : 6;
+  const maxWidth = Math.max(8, node.width - horizontalPadding * 2);
+  const lines = layoutRichCanvasText(context, node, runs, maxWidth);
+  let lineTop = getCanvasTextStartY(node, lines.length * baseLineHeight, baseLineHeight, node.type === "text" ? 0 : 4);
 
-  runs.forEach((run) => {
-    const segments = run.text.split("\n");
-    segments.forEach((segment, segmentIndex) => {
-      if (segmentIndex > 0) {
-        cursorX = node.textAlign === "right" ? node.width - 6 : node.textAlign === "center" ? node.width / 2 - alignOffset : 6;
-        cursorY += baseLineHeight;
-      }
-      if (!segment) {
-        return;
-      }
+  lines.forEach((line) => {
+    let cursorX = node.textAlign === "right"
+      ? node.width - horizontalPadding - line.width
+      : node.textAlign === "center"
+        ? node.width / 2 - line.width / 2
+        : horizontalPadding;
+
+    line.segments.forEach(({ text: segment, run }) => {
+      const runFontSize = run.fontSize ?? node.fontSize;
+      const cursorY = lineTop + getCanvasLineGlyphOffset(baseLineHeight, runFontSize);
       const font = getCanvasFont({
         ...node,
         fontFamily: run.fontFamily ?? node.fontFamily,
-        fontSize: run.fontSize ?? node.fontSize,
+        fontSize: runFontSize,
         fontWeight: run.fontWeight ?? node.fontWeight
       });
       context.font = font;
@@ -3753,21 +4205,215 @@ function drawRichTextNode(context: CanvasRenderingContext2D, node: DesignNode) {
       }
       const renderedSegment = transformTextContent(segment, node.textTransform);
       context.fillText(renderedSegment, cursorX, cursorY);
-      const textMetrics = context.measureText(renderedSegment);
+      const segmentWidth = measureCanvasTextWithSpacing(context, renderedSegment, run.letterSpacing);
       if (run.underline || run.strikethrough || node.underline || node.strikethrough) {
         drawCanvasTextSegmentDecorations(context, {
           x: cursorX,
           y: cursorY,
-          width: textMetrics.width,
-          fontSize: run.fontSize ?? node.fontSize,
+          width: segmentWidth,
+          fontSize: runFontSize,
           underline: Boolean(run.underline || node.underline),
           strikethrough: Boolean(run.strikethrough || node.strikethrough)
         });
       }
-      cursorX += textMetrics.width;
+      cursorX += segmentWidth;
+    });
+    lineTop += baseLineHeight;
+  });
+
+  context.restore();
+}
+
+function layoutRichCanvasText(
+  context: CanvasRenderingContext2D,
+  node: DesignNode,
+  runs: NonNullable<DesignNode["textRuns"]>,
+  maxWidth: number
+) {
+  type RichSegment = { text: string; run: NonNullable<DesignNode["textRuns"]>[number] };
+  const lines: Array<{ segments: RichSegment[]; width: number }> = [];
+  let currentSegments: RichSegment[] = [];
+  let currentWidth = 0;
+
+  const pushLine = () => {
+    lines.push({ segments: currentSegments, width: currentWidth });
+    currentSegments = [];
+    currentWidth = 0;
+  };
+
+  const appendSegment = (text: string, run: NonNullable<DesignNode["textRuns"]>[number], width: number) => {
+    const previous = currentSegments[currentSegments.length - 1];
+    if (previous && previous.run === run) {
+      previous.text += text;
+    } else {
+      currentSegments.push({ text, run });
+    }
+    currentWidth += width;
+  };
+
+  runs.forEach((run) => {
+    const font = getCanvasFont({
+      ...node,
+      fontFamily: run.fontFamily ?? node.fontFamily,
+      fontSize: run.fontSize ?? node.fontSize,
+      fontWeight: run.fontWeight ?? node.fontWeight
+    });
+    context.font = font;
+    Array.from(run.text).forEach((char) => {
+      if (char === "\n") {
+        pushLine();
+        return;
+      }
+      const renderedChar = transformTextContent(char, node.textTransform);
+      const charWidth = measureCanvasTextWithSpacing(context, renderedChar, run.letterSpacing);
+      if (currentSegments.length > 0 && currentWidth + charWidth > maxWidth) {
+        pushLine();
+      }
+      appendSegment(char, run, charWidth);
     });
   });
 
+  if (currentSegments.length > 0 || lines.length === 0) {
+    pushLine();
+  }
+  return lines;
+}
+
+function measureCanvasTextWithSpacing(context: CanvasRenderingContext2D, text: string, letterSpacing?: number) {
+  return context.measureText(text).width + Math.max(0, Array.from(text).length - 1) * (letterSpacing ?? 0);
+}
+
+function getCanvasLineGlyphOffset(lineHeight: number, fontSize: number) {
+  return Math.max(0, (lineHeight - fontSize) / 2);
+}
+
+function getCanvasTextStartY(node: DesignNode, totalHeight: number, lineHeight: number, verticalPadding: number) {
+  const align = node.textVerticalAlign ?? (node.type === "text" ? "top" : "middle");
+  if (align === "bottom") {
+    return Math.max(verticalPadding, node.height - totalHeight - verticalPadding);
+  }
+  if (align === "middle") {
+    return Math.max(verticalPadding, Math.min(node.height - lineHeight, node.height / 2 - totalHeight / 2));
+  }
+  return verticalPadding;
+}
+
+function isIconFontNode(node: DesignNode) {
+  const text = node.text || node.textRuns?.map((run) => run.text).join("") || "";
+  const font = `${node.fontFamily ?? ""} ${node.textRuns?.map((run) => run.fontFamily ?? "").join(" ") ?? ""}`.toLowerCase();
+  return font.includes("iconfont") || font.includes("anticon") || Array.from(text).some((char) => {
+    const code = char.codePointAt(0) ?? 0;
+    return code >= 0xe000 && code <= 0xf8ff;
+  });
+}
+
+function drawIconFontFallback(context: CanvasRenderingContext2D, node: DesignNode) {
+  const color = getCanvasPaint(node.textRuns?.[0]?.color ?? node.textColor) || "#8a8f99";
+  const size = Math.max(10, Math.min(node.width, node.height, node.fontSize || 14));
+  const cx = node.width / 2;
+  const cy = node.height / 2;
+  const label = `${node.name} ${node.text ?? ""}`.toLowerCase();
+  context.save();
+  context.strokeStyle = color;
+  context.fillStyle = color;
+  context.lineWidth = Math.max(1.25, size / 12);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  if (/search|搜索/.test(label)) {
+    context.beginPath();
+    context.arc(cx - size * 0.1, cy - size * 0.1, size * 0.28, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx + size * 0.12, cy + size * 0.12);
+    context.lineTo(cx + size * 0.34, cy + size * 0.34);
+    context.stroke();
+  } else if (/bell|通知|提醒/.test(label)) {
+    context.beginPath();
+    context.arc(cx, cy + size * 0.32, size * 0.06, 0, Math.PI * 2);
+    context.fill();
+    context.beginPath();
+    context.moveTo(cx - size * 0.28, cy + size * 0.18);
+    context.quadraticCurveTo(cx - size * 0.22, cy - size * 0.28, cx, cy - size * 0.32);
+    context.quadraticCurveTo(cx + size * 0.22, cy - size * 0.28, cx + size * 0.28, cy + size * 0.18);
+    context.lineTo(cx - size * 0.28, cy + size * 0.18);
+    context.stroke();
+  } else if (/global|earth| globe|地球|语言/.test(label)) {
+    context.beginPath();
+    context.arc(cx, cy, size * 0.34, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx - size * 0.32, cy);
+    context.lineTo(cx + size * 0.32, cy);
+    context.moveTo(cx, cy - size * 0.34);
+    context.quadraticCurveTo(cx + size * 0.18, cy, cx, cy + size * 0.34);
+    context.moveTo(cx, cy - size * 0.34);
+    context.quadraticCurveTo(cx - size * 0.18, cy, cx, cy + size * 0.34);
+    context.stroke();
+  } else if (/user|avatar|个人|用户/.test(label)) {
+    context.beginPath();
+    context.arc(cx, cy - size * 0.12, size * 0.14, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.arc(cx, cy + size * 0.3, size * 0.28, Math.PI * 1.1, Math.PI * 1.9);
+    context.stroke();
+  } else if (/dashboard|仪表|gauge/.test(label)) {
+    context.beginPath();
+    context.arc(cx, cy + size * 0.1, size * 0.32, Math.PI, 0);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx, cy + size * 0.1);
+    context.lineTo(cx + size * 0.18, cy - size * 0.08);
+    context.stroke();
+  } else if (/form|表单|edit/.test(label)) {
+    context.strokeRect(cx - size * 0.3, cy - size * 0.26, size * 0.5, size * 0.52);
+    context.beginPath();
+    context.moveTo(cx - size * 0.18, cy - size * 0.08);
+    context.lineTo(cx + size * 0.12, cy - size * 0.08);
+    context.moveTo(cx - size * 0.18, cy + size * 0.08);
+    context.lineTo(cx + size * 0.12, cy + size * 0.08);
+    context.stroke();
+  } else if (/table|list|列表/.test(label)) {
+    for (let index = -1; index <= 1; index += 1) {
+      context.beginPath();
+      context.rect(cx - size * 0.32, cy + index * size * 0.18 - size * 0.035, size * 0.07, size * 0.07);
+      context.fill();
+      context.moveTo(cx - size * 0.16, cy + index * size * 0.18);
+      context.lineTo(cx + size * 0.34, cy + index * size * 0.18);
+      context.stroke();
+    }
+  } else if (/warning|异常|alert/.test(label)) {
+    context.beginPath();
+    context.moveTo(cx, cy - size * 0.34);
+    context.lineTo(cx + size * 0.34, cy + size * 0.28);
+    context.lineTo(cx - size * 0.34, cy + size * 0.28);
+    context.closePath();
+    context.stroke();
+  } else if (/check|result|结果/.test(label)) {
+    context.beginPath();
+    context.arc(cx, cy, size * 0.32, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx - size * 0.16, cy);
+    context.lineTo(cx - size * 0.04, cy + size * 0.12);
+    context.lineTo(cx + size * 0.18, cy - size * 0.14);
+    context.stroke();
+  } else if (/hand|小手|cursor|pointer/.test(label)) {
+    context.beginPath();
+    context.moveTo(cx - size * 0.08, cy + size * 0.34);
+    context.lineTo(cx - size * 0.18, cy - size * 0.02);
+    context.quadraticCurveTo(cx - size * 0.2, cy - size * 0.14, cx - size * 0.08, cy - size * 0.14);
+    context.lineTo(cx + size * 0.02, cy + size * 0.06);
+    context.lineTo(cx + size * 0.02, cy - size * 0.28);
+    context.quadraticCurveTo(cx + size * 0.02, cy - size * 0.38, cx + size * 0.12, cy - size * 0.38);
+    context.quadraticCurveTo(cx + size * 0.22, cy - size * 0.38, cx + size * 0.22, cy - size * 0.26);
+    context.lineTo(cx + size * 0.22, cy + size * 0.28);
+    context.stroke();
+  } else {
+    context.beginPath();
+    context.arc(cx, cy, size * 0.26, 0, Math.PI * 2);
+    context.stroke();
+  }
   context.restore();
 }
 
@@ -3929,7 +4575,7 @@ function getCanvasImage(url: string, requestRedraw: () => void) {
 
 function getCanvasPaint(value: string | undefined) {
   const paint = value?.trim();
-  if (!paint || paint === "transparent" || paint.startsWith("linear-gradient") || paint.startsWith("radial-gradient") || paint.startsWith("url(")) {
+  if (isTransparentPaint(paint) || paint?.startsWith("linear-gradient") || paint?.startsWith("radial-gradient") || paint?.startsWith("url(")) {
     return "";
   }
   return paint;
@@ -3937,7 +4583,7 @@ function getCanvasPaint(value: string | undefined) {
 
 function getCanvasStrokeStyle(context: CanvasRenderingContext2D, node: DesignNode): string | CanvasGradient {
   const stroke = node.stroke?.trim();
-  if (!stroke || stroke === "transparent" || stroke.startsWith("url(")) {
+  if (isTransparentPaint(stroke) || stroke?.startsWith("url(")) {
     return "";
   }
   if (stroke.startsWith("linear-gradient")) {
@@ -3968,7 +4614,7 @@ function getMinimapNodeColor(node: DesignNode) {
 
 function getCanvasFillStyle(context: CanvasRenderingContext2D, node: DesignNode, value: string | undefined): string | CanvasGradient {
   const paint = value?.trim();
-  if (!paint || paint === "transparent" || paint.startsWith("url(")) {
+  if (isTransparentPaint(paint) || paint?.startsWith("url(")) {
     return "";
   }
   if (paint.startsWith("linear-gradient")) {
@@ -4692,6 +5338,19 @@ function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile 
   };
 }
 
+function applyDragPreviewToNodes(
+  nodes: DesignNode[],
+  dragPreview: { nodeIds: string[]; dx: number; dy: number } | null
+) {
+  if (!dragPreview || (dragPreview.dx === 0 && dragPreview.dy === 0) || dragPreview.nodeIds.length === 0) {
+    return nodes;
+  }
+  const movingIds = new Set(dragPreview.nodeIds);
+  return nodes.map((node) => movingIds.has(node.id)
+    ? { ...node, x: node.x + dragPreview.dx, y: node.y + dragPreview.dy }
+    : node);
+}
+
 function mergeAgentPageIntoFile(file: AiDesignFile, page?: DesignPage): AiDesignFile {
   if (!page) {
     return file;
@@ -4705,11 +5364,14 @@ function mergeAgentPageIntoFile(file: AiDesignFile, page?: DesignPage): AiDesign
   };
 }
 
-function resolveAgentEventPage(requestPageId: string, page?: DesignPage) {
+function resolveAgentEventPage(requestPageId: string | undefined, page?: DesignPage) {
   if (!page) {
     return undefined;
   }
-  return page.id === requestPageId ? page : undefined;
+  if (!requestPageId || page.id === requestPageId || page.nodes.length > 0) {
+    return page;
+  }
+  return undefined;
 }
 
 function extractAiPreviewImages(result: unknown): Array<{ label: string; dataUrl: string }> | undefined {
@@ -4795,6 +5457,7 @@ function createNode(type: DesignNodeType, overrides: Partial<DesignNode> = {}): 
     text: defaultNodeText(type),
     textColor: type === "button" ? "#ffffff" : "#171717",
     fontSize: type === "text" ? 22 : 14,
+    textVerticalAlign: type === "text" ? "top" : "middle",
     fontFamily: "PingFang SC",
     fontWeight: type === "button" ? 600 : 400,
     letterSpacing: 0,

@@ -211,6 +211,7 @@ export interface AiDesignAgentResponse {
 
 export type AiDesignAgentStreamEvent =
   | { type: "message"; content: string; agentRole?: string }
+  | { type: "llm_delta"; source: "ui-designer" | "schema-draft" | "json-repair" | "visual-review"; delta: string; agentRole?: string }
   | { type: "plan"; title: string; steps: string[]; plan?: unknown; uiDesignPlan?: unknown; agentRole?: string }
   | { type: "tool_call_start"; toolName: string; params?: unknown; reason?: string; toolCallId?: string; agentRole?: string }
   | { type: "tool_call_result"; toolName: string; success: boolean; result?: unknown; error?: string; message: string; toolCallId?: string; agentRole?: string }
@@ -226,7 +227,16 @@ export interface AiDesignAgentMessageRecord {
   eventType?: string;
   toolName?: string;
   agentRole?: string;
+  previewImages?: Array<{ label: string; dataUrl: string }>;
   createdAt: string;
+}
+
+export interface AiDesignAgentCurrentResponse {
+  conversationId: string;
+  running: boolean;
+  canResume: boolean;
+  lastEventType?: string;
+  messages: AiDesignAgentMessageRecord[];
 }
 
 interface WorkspaceDocumentApiRecord {
@@ -697,7 +707,8 @@ export async function streamAiDesignAgent(
     planningMode?: "auto" | "plan";
     conversationId?: string;
   },
-  onEvent: (event: AiDesignAgentStreamEvent) => void
+  onEvent: (event: AiDesignAgentStreamEvent) => void,
+  options?: { signal?: AbortSignal }
 ) {
   const response = await fetch(`/api/workspace/projects/${projectId}/design/agent/stream`, {
     method: "POST",
@@ -705,7 +716,8 @@ export async function streamAiDesignAgent(
       "Content-Type": "application/json",
       Accept: "text/event-stream"
     },
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
+    signal: options?.signal
   });
 
   if (!response.ok) {
@@ -749,6 +761,25 @@ export async function getAiDesignAgentMessages(
     limit: String(limit)
   });
   return requestJson<AiDesignAgentMessageRecord[]>(`/api/workspace/projects/${projectId}/design/agent/messages?${params.toString()}`);
+}
+
+export async function getAiDesignAgentCurrent(
+  projectId: string,
+  conversationId: string,
+  limit = 300
+) {
+  const params = new URLSearchParams({
+    conversationId,
+    limit: String(limit)
+  });
+  return requestJson<AiDesignAgentCurrentResponse>(`/api/workspace/projects/${projectId}/design/agent/current?${params.toString()}`);
+}
+
+export async function cancelAiDesignAgentConversation(projectId: string, conversationId: string) {
+  return requestJson<{ ok: true; conversationId: string; cancelled: boolean }>(
+    `/api/workspace/projects/${projectId}/design/agent/conversations/${encodeURIComponent(conversationId)}/cancel`,
+    { method: "POST" }
+  );
 }
 
 export function getWorkspaceSourceFileUrl(projectId: string, fileId: string) {

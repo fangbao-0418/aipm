@@ -53,24 +53,43 @@ export type WorkspaceDesignNodeType =
   | "image";
 
 export interface WorkspaceDesignNode {
+  /** Stable node id inside the AI PM design schema. */
   id: string;
+  /** Parent node id. Nodes are stored as a flat list, and hierarchy is reconstructed through this field. */
   parentId?: string;
+  /** Import/render depth. Root canvas children are depth 0. */
   depth?: number;
+  /** Normalized AI PM node type used by canvas rendering and agents. */
   type: WorkspaceDesignNodeType;
+  /** Human-readable layer/component name. */
   name: string;
+  /** Absolute canvas x coordinate after import normalization. */
   x: number;
+  /** Absolute canvas y coordinate after import normalization. */
   y: number;
+  /** Node width in canvas pixels. */
   width: number;
+  /** Node height in canvas pixels. */
   height: number;
+  /** CSS-compatible fill. Supports solid color, gradient, image fill, or transparent. */
   fill: string;
+  /** CSS-compatible stroke color or gradient. */
   stroke: string;
+  /** Stroke thickness in canvas pixels. */
   strokeWidth?: number;
+  /** Sketch/Figma-like stroke alignment. */
   strokePosition?: "center" | "inside" | "outside";
+  /** SVG/CSS stroke dash pattern. */
   strokeDashPattern?: number[];
+  /** SVG/CSS stroke line cap. */
   strokeLineCap?: "butt" | "round" | "square";
+  /** SVG/CSS stroke line join. */
   strokeLineJoin?: "miter" | "round" | "bevel";
+  /** Corner radius. Oval-like nodes use a very large radius. */
   radius: number;
+  /** Plain text content for text/button/table-like nodes. */
   text?: string;
+  /** Rich text runs preserved from imported attributed text. */
   textRuns?: Array<{
     text: string;
     color?: string;
@@ -81,18 +100,33 @@ export interface WorkspaceDesignNode {
     underline?: boolean;
     strikethrough?: boolean;
   }>;
+  /** Default text color when rich runs are absent. */
   textColor: string;
+  /** Default font size when rich runs are absent. */
   fontSize: number;
+  /** Line height in canvas pixels. */
   lineHeight?: number;
+  /** Horizontal text alignment. */
   textAlign?: "left" | "center" | "right" | "justify";
+  /** Vertical text alignment inside the node bounds. Text layers from Sketch often rely on this for menu rows and buttons. */
+  textVerticalAlign?: "top" | "middle" | "bottom";
+  /** Visibility flag from the design source. Hidden nodes remain in schema but are not rendered. */
   visible: boolean;
+  /** Lock flag from the design source. */
   locked: boolean;
+  /** Bitmap/image URL resolved into the workspace asset store. */
   imageUrl?: string;
+  /** Image fill URL resolved into the workspace asset store. */
   fillImageUrl?: string;
+  /** Image fill rendering mode. */
   fillImageMode?: "stretch" | "fill" | "fit" | "tile";
+  /** Image fill tile scale. */
   fillImageScale?: number;
+  /** Single SVG path for vector primitives or collapsed shape groups. */
   svgPath?: string;
+  /** Fill rule for svgPath. */
   svgFillRule?: "nonzero" | "evenodd";
+  /** Multiple SVG paths when a compound shape needs separate paint metadata. */
   svgPaths?: Array<{
     d: string;
     fill?: string;
@@ -103,14 +137,18 @@ export interface WorkspaceDesignNode {
     strokeLineJoin?: "miter" | "round" | "bevel";
     fillRule?: "nonzero" | "evenodd";
     opacity?: number;
+    transform?: string;
   }>;
+  /** Nested SVG tree for shapeGroup/group vector hierarchies. */
   svgTree?: WorkspaceDesignSvgNode;
+  /** Active clipping bounds inherited from Sketch clipping masks. */
   clipBounds?: {
     x: number;
     y: number;
     width: number;
     height: number;
   };
+  /** Active clipping path inherited from Sketch vector masks. */
   clipPath?: {
     x: number;
     y: number;
@@ -119,23 +157,81 @@ export interface WorkspaceDesignNode {
     svgPath: string;
     fillRule?: "nonzero" | "evenodd";
   };
+  /** Resolved source asset or source reference id. */
   sourceRef?: string;
+  /** Original source layer id, e.g. Sketch do_objectID. */
+  sourceLayerId?: string;
+  /** Original source layer class, e.g. group, artboard, shapeGroup, text, symbolInstance, bitmap. */
   sourceLayerClass?: string;
+  /** Source-specific metadata retained for schema generation and round-trip import debugging. */
+  sourceMeta?: {
+    provider?: "sketch" | "figma" | "vextra" | string;
+    layerClass?: string;
+    layerListExpandedType?: number;
+    nameIsFixed?: boolean;
+    isTemplate?: boolean;
+    isFixedToViewport?: boolean;
+    maintainScrollPosition?: boolean;
+    booleanOperation?: number;
+    resizingConstraint?: number;
+    resizingType?: number;
+    sharedStyleID?: string;
+    symbolID?: string;
+    overrideValues?: Array<{ overrideName?: string; value?: string }>;
+    groupLayout?: Record<string, unknown>;
+    points?: Array<{
+      point?: string;
+      curveFrom?: string;
+      curveTo?: string;
+      hasCurveFrom?: boolean;
+      hasCurveTo?: boolean;
+      cornerRadius?: number;
+      curveMode?: number;
+    }>;
+    numberOfPoints?: number;
+    shapeRadius?: number;
+    isClosed?: boolean;
+    pointRadiusBehaviour?: number;
+    textBehaviour?: number;
+    lineSpacingBehaviour?: number;
+    glyphBounds?: string;
+    imageRef?: string;
+    clippingMask?: string;
+    flow?: Record<string, unknown>;
+    exportOptions?: Record<string, unknown>;
+    userInfo?: Record<string, unknown>;
+  };
+  /** Layer opacity after style context settings are applied. */
   opacity?: number;
+  /** Rotation in degrees. */
   rotation?: number;
+  /** Blend mode normalized from source style context settings. */
   blendMode?: string;
+  /** Blur radius when source blur is enabled. */
   blurRadius?: number;
+  /** Font family for text nodes. */
   fontFamily?: string;
+  /** Numeric font weight inferred from source font descriptor. */
   fontWeight?: number;
+  /** Letter spacing in canvas pixels. */
   letterSpacing?: number;
+  /** Optional font stretch descriptor. */
   fontStretch?: string;
+  /** Text underline decoration. */
   underline?: boolean;
+  /** Text strikethrough decoration. */
   strikethrough?: boolean;
+  /** Text transform hint used by generated schemas. */
   textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
+  /** Horizontal flip from source layer. */
   flippedHorizontal?: boolean;
+  /** Vertical flip from source layer. */
   flippedVertical?: boolean;
+  /** CSS box-shadow string for source shadows. */
   shadow?: string;
+  /** CSS box-shadow-like string for source inner shadows. */
   innerShadow?: string;
+  /** Render order. Higher values render later. */
   zIndex?: number;
 }
 
@@ -162,6 +258,7 @@ export type WorkspaceDesignSvgNode = {
   strokeLineJoin?: "miter" | "round" | "bevel";
   fillRule?: "nonzero" | "evenodd";
   opacity?: number;
+  transform?: string;
 };
 
 export interface WorkspaceDesignPage {
