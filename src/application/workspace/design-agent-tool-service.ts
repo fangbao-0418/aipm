@@ -12,6 +12,8 @@ import {
 import { ImageAssetProvider, type ResolvedDesignImageAsset } from "./image-asset-provider.js";
 import { compileLayoutTreeToSceneGraph, compileStitchUiDraftToSceneGraph } from "./design-ui-compiler.js";
 import type {
+  WorkspaceDesignComponent,
+  WorkspaceDesignComponentLibrary,
   WorkspaceDesignFile,
   WorkspaceDesignNode,
   WorkspaceDesignNodeType,
@@ -115,6 +117,9 @@ export const designAgentToolNameSchema = z.enum([
   "schema.delete_node",
   "schema.duplicate_node",
   "schema.generate_from_prompt",
+  "component_library.list",
+  "component.search",
+  "component.insert",
   "workspace.read_file",
   "canvas.capture",
   "ui.analyze_layout",
@@ -312,6 +317,21 @@ export const designAgentToolDescriptions: Array<{
     inputSchema: { prompt: "string", pageId: "optional string" }
   },
   {
+    name: "component_library.list",
+    description: "读取本地组件库和组件摘要。用于用户要求使用本地组件库、AntD 组件库或项目内沉淀组件时先做资源检索。",
+    inputSchema: {}
+  },
+  {
+    name: "component.search",
+    description: "按组件库、组件名称、描述、文本内容和节点类型搜索本地组件。用于选择最匹配的组件资产，不直接修改画布。",
+    inputSchema: { libraryId: "optional string", libraryName: "optional string", query: "optional string", componentName: "optional string", limit: "optional number" }
+  },
+  {
+    name: "component.insert",
+    description: "把本地组件库里的组件插入到当前页面。会克隆节点 id，并按 x/y 或目标区域坐标平移组件，保持组件内部相对位置。",
+    inputSchema: { pageId: "optional string", componentId: "optional string", componentName: "optional string", libraryId: "optional string", libraryName: "optional string", query: "optional string", x: "optional number", y: "optional number" }
+  },
+  {
     name: "workspace.read_file",
     description: "只读读取当前 project workspace 内的文件，用于参考 PRD、schema、素材说明等，禁止读取 workspace 外路径。",
     inputSchema: { path: "string" }
@@ -452,6 +472,12 @@ export class DesignAgentToolService {
         return this.duplicateNode(context.projectId, normalized.input, context.selectedPageId);
       case "schema.generate_from_prompt":
         return this.generateSchemaFromPrompt(context.projectId, normalized.input, context.selectedPageId);
+      case "component_library.list":
+        return this.listComponentLibraries(context.projectId);
+      case "component.search":
+        return this.searchComponents(context.projectId, normalized.input);
+      case "component.insert":
+        return this.insertComponent(context.projectId, normalized.input, context.selectedPageId);
       case "workspace.read_file":
         return this.readWorkspaceFile(context.projectId, normalized.input.path as string | undefined);
       case "canvas.capture":
@@ -1246,6 +1272,98 @@ export class DesignAgentToolService {
     return this.addNodes(projectId, { pageId: input.pageId, nodes }, selectedPageId);
   }
 
+  private async listComponentLibraries(projectId: string): Promise<DesignAgentToolResult> {
+    const file = await this.getFile(projectId);
+    const componentLibraries = await this.repository.listDesignComponentLibraries(projectId).catch(() => []);
+    const components = await this.repository.listDesignComponents(projectId).catch(() => []);
+    return {
+      ok: true,
+      message: componentLibraries.length > 0
+        ? `已读取 ${componentLibraries.length} 个本地组件库、${components.length} 个组件。`
+        : "当前项目还没有本地组件库。",
+      file,
+      data: summarizeComponentLibrariesForAgent(componentLibraries, components)
+    };
+  }
+
+  private async searchComponents(projectId: string, input: Record<string, unknown>): Promise<DesignAgentToolResult> {
+    const file = await this.getFile(projectId);
+    const componentLibraries = await this.repository.listDesignComponentLibraries(projectId).catch(() => []);
+    const components = await this.repository.listDesignComponents(projectId).catch(() => []);
+    const matches = findLocalComponents(componentLibraries, components, input);
+    const limit = Math.max(1, Math.min(50, Math.floor(numberOr(input.limit, 12))));
+    return {
+      ok: true,
+      message: `已找到 ${matches.length} 个本地组件候选。`,
+      file,
+      data: {
+        query: {
+          libraryId: input.libraryId,
+          libraryName: input.libraryName,
+          componentName: input.componentName,
+          query: input.query
+        },
+        components: matches.slice(0, limit).map(({ component, library, score }) => summarizeComponentForAgent(component, library, score))
+      }
+    };
+  }
+
+  private async insertComponent(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可插入组件的页面。", file };
+    const componentLibraries = await this.repository.listDesignComponentLibraries(projectId).catch(() => []);
+    const components = await this.repository.listDesignComponents(projectId).catch(() => []);
+    const selected = findLocalComponents(componentLibraries, components, input)[0];
+    if (!selected) {
+      return {
+        ok: false,
+        message: "没有找到匹配的本地组件。建议先使用 component_library.list 或 component.search 确认组件名称。",
+        file,
+        page,
+        selectedPageId: page.id,
+        data: {
+          availableLibraries: summarizeComponentLibrariesForAgent(componentLibraries, components).map((library) => ({
+            id: library.id,
+            name: library.name,
+            componentCount: library.componentCount
+          }))
+        }
+      };
+    }
+    if (selected.component.nodes.length === 0) {
+      return {
+        ok: false,
+        message: `组件「${selected.component.name}」没有可插入的节点。`,
+        file,
+        page,
+        selectedPageId: page.id
+      };
+    }
+    const target = getComponentInsertTarget(page, input);
+    const insertedNodes = instantiateComponentNodes(selected.component, target.x, target.y);
+    const nextPage = {
+      ...page,
+      nodes: [...page.nodes, ...insertedNodes],
+      nodeCount: page.nodes.length + insertedNodes.length,
+      schemaLoaded: true
+    };
+    const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+    return {
+      ok: true,
+      message: `已把组件「${selected.component.name}」插入到页面「${page.name}」。`,
+      file: nextFile,
+      page: nextPage,
+      selectedPageId: nextPage.id,
+      data: {
+        library: selected.library ? { id: selected.library.id, name: selected.library.name } : undefined,
+        component: summarizeComponentForAgent(selected.component, selected.library, selected.score),
+        insertedNodeIds: insertedNodes.map((node) => node.id),
+        x: target.x,
+        y: target.y
+      }
+    };
+  }
+
   private async readWorkspaceFile(projectId: string, filePath?: string): Promise<DesignAgentToolResult> {
     if (!filePath) return { ok: false, message: "缺少文件路径。" };
     const projectRoot = resolve(process.cwd(), "workspace", "projects", projectId);
@@ -1429,6 +1547,116 @@ export class DesignAgentToolService {
     await this.repository.saveDesignFile(projectId, nextFile);
     return this.repository.getDesignFile(projectId);
   }
+}
+
+function summarizeComponentLibrariesForAgent(componentLibraries: WorkspaceDesignComponentLibrary[], components: WorkspaceDesignComponent[]) {
+  return componentLibraries.map((library) => {
+    const libraryComponents = components.filter((component) => component.libraryId === library.id);
+    return {
+      id: library.id,
+      name: library.name,
+      description: library.description ?? "",
+      componentCount: libraryComponents.length,
+      components: libraryComponents.slice(0, 30).map((component) => summarizeComponentForAgent(component, library))
+    };
+  });
+}
+
+function summarizeComponentForAgent(component: WorkspaceDesignComponent, library?: WorkspaceDesignComponentLibrary, score?: number) {
+  return {
+    id: component.id,
+    name: component.name,
+    libraryId: component.libraryId,
+    libraryName: library?.name ?? "",
+    description: component.description ?? "",
+    nodeCount: component.nodeCount,
+    nodeTypes: Array.from(new Set(component.nodes.map((node) => node.type))).slice(0, 12),
+    keyTexts: extractComponentKeyTexts(component),
+    score
+  };
+}
+
+function findLocalComponents(
+  componentLibraries: WorkspaceDesignComponentLibrary[],
+  components: WorkspaceDesignComponent[],
+  input: Record<string, unknown>
+) {
+  type ComponentMatch = { component: WorkspaceDesignComponent; library?: WorkspaceDesignComponentLibrary; score: number };
+  const libraryId = typeof input.libraryId === "string" ? input.libraryId.trim() : "";
+  const libraryName = typeof input.libraryName === "string" ? input.libraryName.trim().toLowerCase() : "";
+  const componentId = typeof input.componentId === "string" ? input.componentId.trim() : "";
+  const componentName = typeof input.componentName === "string" ? input.componentName.trim().toLowerCase() : "";
+  const query = typeof input.query === "string" ? input.query.trim().toLowerCase() : "";
+  const librariesById = new Map(componentLibraries.map((library) => [library.id, library]));
+  const matches: ComponentMatch[] = [];
+  components.forEach((component) => {
+    const library = component.libraryId ? librariesById.get(component.libraryId) : undefined;
+    if (componentId && component.id !== componentId) return;
+    if (libraryId && component.libraryId !== libraryId) return;
+    if (libraryName && !`${library?.name ?? ""} ${library?.description ?? ""}`.toLowerCase().includes(libraryName)) return;
+    const searchable = [
+      component.name,
+      component.description ?? "",
+      component.sourceFileName,
+      library?.name ?? "",
+      library?.description ?? "",
+      extractComponentKeyTexts(component).join(" "),
+      Array.from(new Set(component.nodes.map((node) => node.type))).join(" ")
+    ].join(" ").toLowerCase();
+    let score = 0;
+    if (componentName) {
+      if (component.name.toLowerCase() === componentName) score += 100;
+      if (component.name.toLowerCase().includes(componentName)) score += 60;
+    }
+    if (query) {
+      query.split(/\s+/).filter(Boolean).forEach((token) => {
+        if (searchable.includes(token)) score += 12;
+      });
+    }
+    if (!componentName && !query && !libraryId && !libraryName && !componentId) score = 1;
+    if (score > 0 || componentId) matches.push({ component, library, score });
+  });
+  return matches.sort((a, b) => b.score - a.score || a.component.name.localeCompare(b.component.name, "zh-CN"));
+}
+
+function extractComponentKeyTexts(component: WorkspaceDesignComponent) {
+  return component.nodes
+    .map((node) => node.text?.trim())
+    .filter((text): text is string => Boolean(text))
+    .filter((text, index, array) => array.indexOf(text) === index)
+    .slice(0, 20);
+}
+
+function getComponentInsertTarget(page: WorkspaceDesignPage, input: Record<string, unknown>) {
+  const bounds = getPageBounds(page);
+  return {
+    x: numberOr(input.x, bounds.x + 48),
+    y: numberOr(input.y, bounds.y + 48)
+  };
+}
+
+function instantiateComponentNodes(component: WorkspaceDesignComponent, targetX: number, targetY: number) {
+  const bounds = getNodesBounds(component.nodes);
+  const idMap = new Map(component.nodes.map((node) => [node.id, createDesignId("node")]));
+  return component.nodes.map((node, index) => normalizePatchedNode({
+    ...node,
+    id: idMap.get(node.id) ?? createDesignId("node"),
+    parentId: node.parentId ? idMap.get(node.parentId) : undefined,
+    name: index === 0 ? component.name : node.name,
+    x: Math.round(node.x - bounds.x + targetX),
+    y: Math.round(node.y - bounds.y + targetY),
+    locked: false,
+    visible: node.visible !== false
+  }));
+}
+
+function getNodesBounds(nodes: WorkspaceDesignNode[]) {
+  if (nodes.length === 0) return { x: 0, y: 0, width: 1, height: 1 };
+  const minX = Math.min(...nodes.map((node) => node.x));
+  const minY = Math.min(...nodes.map((node) => node.y));
+  const maxX = Math.max(...nodes.map((node) => node.x + node.width));
+  const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+  return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
 }
 
 function parseNodeInputs(value: unknown): WorkspaceDesignNode[] {
@@ -1884,7 +2112,7 @@ function createGranularTableNodesFromDraft(
           y: rowY + 14 + columnIndex * 21,
           width: width - 56,
           height: 20,
-          text: columnIndex === 0 ? `${column} ${rowIndex + 1}` : `${column}：${sampleTableCell(column, rowIndex)}`,
+          text: columnIndex === 0 ? column : `${column}：`,
           fontSize: columnIndex === 0 ? 14 : 12,
           textColor: columnIndex === 0 ? "#101828" : "#667085"
         }));
@@ -1942,21 +2170,13 @@ function createGranularTableNodesFromDraft(
         y: cellY + 11,
         width: columnWidth - 24,
         height: 18,
-        text: sampleTableCell(column, rowIndex),
+        text: "",
         fontSize: 12,
         textColor: "#475467"
       }));
     });
   });
   return nodes;
-}
-
-function sampleTableCell(column: string, rowIndex: number) {
-  if (/日期|时间|date|time/i.test(column)) return ["2026-05-05", "2026-05-03", "2026-05-01"][rowIndex] ?? "2026-05-01";
-  if (/状态|status/i.test(column)) return ["待处理", "已完成", "进行中"][rowIndex] ?? "待处理";
-  if (/金额|收入|收益|余额|price|amount/i.test(column)) return ["¥450.00", "¥128.00", "¥89.00"][rowIndex] ?? "¥0.00";
-  if (/姓名|用户|司机|name|user/i.test(column)) return ["方宝", "用户 2", "用户 3"][rowIndex] ?? `用户 ${rowIndex + 1}`;
-  return [`记录 ${rowIndex + 1}`, `内容 ${rowIndex + 1}`, `备注 ${rowIndex + 1}`][rowIndex] ?? `内容 ${rowIndex + 1}`;
 }
 
 function inferAssetRequests(userRequest: string) {
@@ -2095,7 +2315,7 @@ function inferColumns(prompt: string) {
     ?.split(/[、,，|/／\s]+/)
     .map((item) => item.trim())
     .filter((item) => item && !/字段|列|columns?|包含|包括|table|表格/.test(item));
-  return columns && columns.length >= 2 ? columns.slice(0, 8) : ["名称", "状态", "负责人", "更新时间", "操作"];
+  return columns && columns.length >= 2 ? columns.slice(0, 8) : [];
 }
 
 function serializeTableColumns(columns: string[]) {

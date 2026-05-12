@@ -28,6 +28,7 @@ import { MainAgentOrchestratorService } from "./main-agent-orchestrator-service.
 import type {
   WorkspaceBundle,
   WorkspaceDesignComponent,
+  WorkspaceDesignComponentLibrary,
   WorkspaceDesignAsset,
   WorkspaceDesignFile,
   WorkspaceDesignImportResult,
@@ -161,6 +162,7 @@ type DesignAgentRoleName =
   | "UI 设计师 Agent"
   | "Schema 执行 Agent"
   | "页面理解 Agent"
+  | "组件库 Agent"
   | "素材 Agent"
   | "审核 Agent"
   | "文件 Agent"
@@ -206,6 +208,7 @@ type SketchSharedStyleMaps = {
   layerStyleById: Map<string, Record<string, unknown>>;
   textStyleById: Map<string, Record<string, unknown>>;
 };
+type SketchClippingMaskSourceMeta = NonNullable<WorkspaceDesignNode["sourceMeta"]>["activeClippingMask"];
 
 const structureSchema = z.object({
   userGoals: z.array(z.string()).default([]),
@@ -553,7 +556,8 @@ export class WorkspaceProjectService {
 
   async getDesignFile(projectId: string): Promise<WorkspaceDesignFile> {
     const project = await this.repository.getProject(projectId);
-    return this.repository.getDesignFile(projectId).catch(() => createInitialWorkspaceDesignFile(project.name));
+    const file = await this.repository.getDesignFile(projectId).catch(() => createInitialWorkspaceDesignFile(project.name));
+    return this.hydrateDesignFileWithComponentStore(projectId, file);
   }
 
   async getDesignPage(projectId: string, pageId: string): Promise<WorkspaceDesignPage> {
@@ -566,12 +570,67 @@ export class WorkspaceProjectService {
     const normalized: WorkspaceDesignFile = {
       ...designFile,
       updatedAt: nowIso(),
+      componentLibraries: Array.isArray(designFile.componentLibraries) ? designFile.componentLibraries : [],
       importedComponents: Array.isArray(designFile.importedComponents) ? designFile.importedComponents : [],
       importedAssets: Array.isArray(designFile.importedAssets) ? designFile.importedAssets : [],
       pages: Array.isArray(designFile.pages) && designFile.pages.length > 0 ? designFile.pages : createInitialWorkspaceDesignFile(designFile.name).pages
     };
     await this.repository.saveDesignFile(projectId, normalized);
+    await this.syncDesignComponentStoreFromFile(projectId, normalized);
     return this.repository.getDesignFile(projectId);
+  }
+
+  async upsertDesignComponentLibrary(
+    projectId: string,
+    input: Pick<WorkspaceDesignComponentLibrary, "name" | "description"> & { id?: string }
+  ) {
+    await this.repository.getProject(projectId);
+    const now = nowIso();
+    const existing = input.id
+      ? (await this.repository.listDesignComponentLibraries(projectId).catch(() => [])).find((library) => library.id === input.id)
+      : undefined;
+    const library: WorkspaceDesignComponentLibrary = {
+      id: input.id || createDesignId("component-library"),
+      name: input.name.trim(),
+      description: input.description?.trim() || undefined,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    if (!library.name) {
+      throw new Error("组件库名称不能为空");
+    }
+    await this.repository.upsertDesignComponentLibrary(projectId, library);
+    return library;
+  }
+
+  async deleteDesignComponentLibrary(projectId: string, libraryId: string) {
+    await this.repository.getProject(projectId);
+    await this.repository.deleteDesignComponentLibrary(projectId, libraryId);
+    return { ok: true, id: libraryId };
+  }
+
+  async upsertDesignComponent(projectId: string, component: WorkspaceDesignComponent) {
+    await this.repository.getProject(projectId);
+    if (!component.name.trim()) {
+      throw new Error("组件名称不能为空");
+    }
+    if (!component.libraryId) {
+      throw new Error("组件必须选择组件库");
+    }
+    const normalized: WorkspaceDesignComponent = {
+      ...component,
+      sourceFileName: component.sourceFileName || "本地组件集合",
+      nodeCount: Array.isArray(component.nodes) ? component.nodes.length : 0,
+      nodes: Array.isArray(component.nodes) ? component.nodes : []
+    };
+    await this.repository.upsertDesignComponent(projectId, normalized);
+    return normalized;
+  }
+
+  async deleteDesignComponent(projectId: string, componentId: string) {
+    await this.repository.getProject(projectId);
+    await this.repository.deleteDesignComponent(projectId, componentId);
+    return { ok: true, id: componentId };
   }
 
   async importDesignFile(projectId: string, file: WorkspaceDesignImportFile): Promise<WorkspaceDesignFile> {
@@ -581,12 +640,38 @@ export class WorkspaceProjectService {
     const nextFile: WorkspaceDesignFile = {
       ...current,
       pages: [...current.pages, ...persisted.pages],
-      importedComponents: [...current.importedComponents, ...persisted.components],
+      componentLibraries: current.componentLibraries ?? [],
+      importedComponents: current.importedComponents,
       importedAssets: [...current.importedAssets, ...persisted.assets],
       updatedAt: nowIso()
     };
     return await this.repository.saveDesignFile(projectId, nextFile);
     // return this.repository.getDesignFile(projectId);
+  }
+
+  private async hydrateDesignFileWithComponentStore(projectId: string, file: WorkspaceDesignFile): Promise<WorkspaceDesignFile> {
+    const [componentLibraries, storedComponents] = await Promise.all([
+      this.repository.listDesignComponentLibraries(projectId).catch(() => []),
+      this.repository.listDesignComponents(projectId).catch(() => [])
+    ]);
+    const localStoredComponentIds = new Set(storedComponents.map((component) => component.id));
+    const nonStoredComponents = (file.importedComponents ?? []).filter((component) => (
+      component.sourceFileName !== "本地组件集合" || !localStoredComponentIds.has(component.id)
+    ));
+    return {
+      ...file,
+      componentLibraries: componentLibraries.length > 0 ? componentLibraries : file.componentLibraries ?? [],
+      importedComponents: [...storedComponents, ...nonStoredComponents]
+    };
+  }
+
+  private async syncDesignComponentStoreFromFile(projectId: string, file: WorkspaceDesignFile) {
+    await Promise.all([
+      ...(file.componentLibraries ?? []).map((library) => this.repository.upsertDesignComponentLibrary(projectId, library)),
+      ...(file.importedComponents ?? [])
+        .filter((component) => component.sourceFileName === "本地组件集合")
+        .map((component) => this.repository.upsertDesignComponent(projectId, component))
+    ]);
   }
 
   async getDesignAsset(projectId: string, assetId: string) {
@@ -1745,6 +1830,7 @@ export class WorkspaceProjectService {
         "product.review_requirements 如果没有识别到列表/表格，必须拒绝业务字段建议，禁止臆测订单、商品等业务对象。",
         "如果 schema.update_node 失败或找不到目标，不要直接停止；应切换到 layout.insert_above、schema.add_nodes 或 layout.reflow 完成用户目标。",
         "当用户说“添加菜单/新增菜单/左侧添加菜单/导航栏/侧边栏菜单”，必须使用 schema.create_menu，不要使用 schema.update_node。",
+        "当用户说“本地组件库/组件库/插入组件/使用某某组件/用本地 AntD 组件库”等，必须先 component_library.list 或 component.search，再使用 component.insert 插入本地组件资产；不要退化成 schema.generate_from_prompt。",
         "当用户说“添加/插入/修改/调整 table/text/image/group/shapeGroup/container”等组件时，必须使用 schema.* 工具修改当前页面，不要新建页面。",
         "只有用户明确说“新建独立页面/创建独立页面/新增文件页面/复制页面”时才使用 page.create；普通生成 UI 稿不要用 page.create。",
         "如果用户需求涉及页面设计、排版、风格、组件选择，应参考 UI 设计 Agent 的设计方案生成 tool steps。",
@@ -1761,6 +1847,7 @@ export class WorkspaceProjectService {
         taskProfile: options?.taskProfile,
         uiDesignPlan: options?.uiDesignPlan ?? null,
         recentConversationMessages: options?.recentConversationMessages?.slice(-24) ?? [],
+        localComponentLibraries: summarizeLocalComponentLibraries(file),
         selectedPageId: selectedPage?.id,
         selectedPage: selectedPage ? summarizeDesignPageForPrompt(selectedPage) : null,
         pages: file.pages.map((page) => ({ id: page.id, name: page.name, nodeCount: page.nodeCount ?? page.nodes.length }))
@@ -1793,11 +1880,13 @@ export class WorkspaceProjectService {
         "如果目标是小程序/移动端，禁止规划 PC dashboard、宽表格和横向统计大屏。",
         "输出必须结构化 JSON，供主 Agent 转成 schema tool 调用。",
         "如果 qualityContext.designReferences 命中本地参考数据，要把它作为设计基准：学习布局密度、间距、颜色、层级和组件构成，不要照抄业务文案和节点 ID。",
+        "如果 localComponentLibraries 非空，必须优先从本地组件库中选择可复用组件，并在 pageSpecs/keyBlocks/designRationale 中体现选择了哪个组件库、哪些组件和原因。",
         "不要输出代码、不要输出 markdown、不要直接生成完整 schema。"
       ].filter(Boolean).join("\n\n"),
       userPrompt: JSON.stringify({
         userRequest: message,
         qualityContext,
+        localComponentLibraries: summarizeLocalComponentLibraries(await this.repository.getDesignFile(project.id).catch(() => createInitialWorkspaceDesignFile(project.name))),
         recentConversationMessages: recentConversationMessages?.slice(-24) ?? [],
         currentPageSchemaSummary: selectedPage ? summarizeDesignPageForPrompt(selectedPage) : null,
         constraints: {
@@ -1828,6 +1917,7 @@ export class WorkspaceProjectService {
     const targetPlatform = platformOverride === "mobile_app" || /小程序|移动端|手机|app/i.test(message) ? "mobile_app" : "web";
     const schemaPromptQualityContext = qualityContext ? compactDesignQualityContextForSchema(qualityContext) : undefined;
     const capabilityProfile = getDesignCapabilityProfile(targetPlatform === "mobile_app" ? (/小程序|微信/.test(message) ? "wechat_mini_program" : "mobile_app") : "pc_web", message);
+    const designFileForComponents = await this.repository.getDesignFile(project.id).catch(() => createInitialWorkspaceDesignFile(project.name));
     const schemaSystemPrompt = [
         project.systemPrompt || "",
         systemPrompt || "",
@@ -1841,6 +1931,8 @@ export class WorkspaceProjectService {
         schemaPromptQualityContext ? `本次质量上下文：${JSON.stringify(schemaPromptQualityContext)}` : "",
         `本次设计能力注册表：${getCapabilityPrompt(capabilityProfile)}`,
         "必须先选择组件库能力，再落 schema：PC 后台优先 Ant Design + Tailwind SaaS；小程序/移动端优先微信小程序组件范式 + Tailwind 卡片范式。后续新增组件库时按注册表扩展，不要写死页面模板。",
+        "如果 localComponentLibraries 非空，生成 schema 前必须先参考本地组件库摘要：优先复用名称/描述/keyTexts 匹配的本地组件结构、节点类型和文字层级；只有没有匹配组件时才退回通用组件范式。",
+        "本地组件库是用户确认过的设计资产，不是 Sketch 自动切碎的默认组件；不要忽略组件库名称、组件描述和组件 keyTexts。",
         "每个画板必须体现页面风格：背景层、内容面、主色、弱文本、边框、圆角、层级阴影/色块至少 3 种可识别视觉 token。",
         "每个画板必须包含 icon 或 demo 图片/插画资产；如没有真实图片，先使用 image 节点表达可替换 demo 图，不允许纯文字大白页。",
         "图片资产策略：优先使用 asset.resolve 返回的真实搜索图片或图像生成图片 URL；没有真实 URL 时才允许 generated-placeholder，占位也必须是 image 节点。",
@@ -1870,6 +1962,7 @@ export class WorkspaceProjectService {
         targetPlatform,
         qualityContext: schemaPromptQualityContext,
         capabilityProfile,
+        localComponentLibraries: summarizeLocalComponentLibraries(designFileForComponents),
         uiDesignPlan: uiDesignPlan ?? null,
         currentCanvasSummary: selectedPage ? summarizeDesignPageForSchemaPrompt(selectedPage) : null,
         schemaContract: {
@@ -4052,6 +4145,7 @@ function convertSketchLayer(
     sharedStyleMaps?: SketchSharedStyleMaps;
     clipBounds?: WorkspaceDesignNode["clipBounds"];
     clipPath?: WorkspaceDesignNode["clipPath"];
+    activeClippingMask?: SketchClippingMaskSourceMeta;
     parentNodeId?: string;
     inheritedShapeStyle?: Record<string, unknown>;
     parentShapeGroupBounds?: { x: number; y: number; width: number; height: number };
@@ -4074,6 +4168,7 @@ function convertSketchLayer(
   const nodeY = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.y : Math.round(context.parentY + frame.y * context.scaleY);
   const nodeWidth = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.width : Math.max(1, Math.round(frame.width * context.scaleX));
   const nodeHeight = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.height : Math.max(1, Math.round(frame.height * context.scaleY));
+  const hasChildClippingMask = isSketchVectorContainerLayer(layerObject) && hasSketchClippingMaskDescendant(layerObject);
   const nodeId = createDesignId("import-node");
   const node = createDesignNode(nodeType, {
     id: nodeId,
@@ -4108,7 +4203,7 @@ function convertSketchLayer(
     locked: layerObject.isLocked === true,
     sourceLayerId: getStringProp(layerObject, "do_objectID"),
     sourceLayerClass: layerClass,
-    sourceMeta: readSketchSourceMeta(layerObject, context.assetByRef),
+    sourceMeta: readSketchSourceMeta(layerObject, context.assetByRef, context.activeClippingMask),
     opacity: readSketchOpacity(layerObject),
     rotation: toNumber(layerObject.rotation, 0),
     blendMode: readSketchBlendMode(layerObject),
@@ -4119,16 +4214,16 @@ function convertSketchLayer(
     innerShadow: readSketchInnerShadow(layerObject),
     clipBounds: context.clipBounds,
     clipPath: context.clipPath,
-    ...readSketchVectorMeta(layerObject, nodeWidth, nodeHeight, {
+    ...(hasChildClippingMask ? {} : readSketchVectorMeta(layerObject, nodeWidth, nodeHeight, {
       scaleX: context.scaleX,
       scaleY: context.scaleY
-    }),
+    })),
     ...readSketchFillImageMeta(layerObject, context.assetByRef),
     ...readSketchImageMeta(layerObject, context.assetByRef)
   });
   node.zIndex = nextSketchRenderZIndex(context);
   const renderNode = suppressSketchContainerPaint(layerObject, node);
-  const shouldRenderShapeGroupAsVector = isSketchVectorContainerLayer(layerObject) && Boolean(renderNode.svgPath);
+  const shouldRenderShapeGroupAsVector = isSketchVectorContainerLayer(layerObject) && !hasChildClippingMask && Boolean(renderNode.svgPath);
 
   const symbolChildren = layerClass === "symbolInstance"
     ? convertSketchSymbolInstance(layerObject, {
@@ -4180,6 +4275,7 @@ function convertSketchChildLayers(
     sharedStyleMaps?: SketchSharedStyleMaps;
     clipBounds?: WorkspaceDesignNode["clipBounds"];
     clipPath?: WorkspaceDesignNode["clipPath"];
+    activeClippingMask?: SketchClippingMaskSourceMeta;
     parentNodeId?: string;
     inheritedShapeStyle?: Record<string, unknown>;
     parentShapeGroupBounds?: { x: number; y: number; width: number; height: number };
@@ -4187,6 +4283,7 @@ function convertSketchChildLayers(
 ) {
   let activeClipBounds = context.clipBounds;
   let activeClipPath = context.clipPath;
+  let activeClippingMask = context.activeClippingMask;
   const parentFrame = readSketchFrame(parentLayer);
   const parentShapeGroupBounds = getStringProp(parentLayer, "_class") === "shapeGroup"
     ? {
@@ -4204,12 +4301,16 @@ function convertSketchChildLayers(
     if (childObject.shouldBreakMaskChain === true) {
       activeClipBounds = context.clipBounds;
       activeClipPath = context.clipPath;
+      activeClippingMask = context.activeClippingMask;
     }
 
     if (childObject.hasClippingMask === true) {
       const clip = readSketchLayerClip(childObject, context);
-      activeClipBounds = intersectDesignRects(activeClipBounds, clip.bounds);
-      activeClipPath = clip.path ?? activeClipPath;
+      // Sketch mask chains are sibling-order render scopes: a new mask replaces the
+      // current sibling chain, while any inherited parent clip still constrains it.
+      activeClipBounds = intersectDesignRects(context.clipBounds, clip.bounds);
+      activeClipPath = clip.path ?? context.clipPath;
+      activeClippingMask = readSketchClippingMaskSourceMeta(childObject);
       return [];
     }
 
@@ -4226,6 +4327,7 @@ function convertSketchChildLayers(
       sharedStyleMaps: context.sharedStyleMaps,
       clipBounds: activeClipBounds,
       clipPath: activeClipPath,
+      activeClippingMask,
       parentNodeId: context.parentNodeId,
       inheritedShapeStyle: context.inheritedShapeStyle,
       parentShapeGroupBounds
@@ -4296,7 +4398,7 @@ function createDesignNode(type: WorkspaceDesignNodeType, overrides: Partial<Work
     y: 320,
     width: type === "text" ? 220 : type === "table" ? 520 : type === "input" ? 260 : 180,
     height: type === "text" ? 64 : type === "table" ? 270 : type === "button" ? 64 : 120,
-    fill: type === "button" ? "#246bfe" : type === "text" ? "transparent" : "#ffffff",
+    fill: type === "button" ? "#246bfe" : type === "text" ? "transparent" : "transparent",
     stroke: type === "text" ? "transparent" : "#d8d8dd",
     radius: type === "button" || type === "input" ? 14 : 8,
     text: type === "text" ? "Text" : type === "button" ? "Button" : "",
@@ -4528,7 +4630,7 @@ function inferTableColumns(message: string) {
     .filter((item) => item && !/字段|列|columns?|包含|包括|table|表格/.test(item));
   const columns = rawColumns && rawColumns.length >= 2
     ? rawColumns.slice(0, 8)
-    : ["名称", "状态", "负责人", "更新时间", "操作"];
+    : [];
   return Array.from(new Set(columns));
 }
 
@@ -4537,7 +4639,7 @@ function serializeTableColumns(columns: string[]) {
 }
 
 function parseTableSchemaText(text?: string) {
-  const match = /^columns:(.+)$/i.exec(text?.trim() ?? "");
+  const match = /^columns:(.*)$/i.exec(text?.trim() ?? "");
   if (!match) {
     return [] as string[];
   }
@@ -4549,7 +4651,7 @@ function mergeTableSchemaText(current?: string, next?: string) {
     ...parseTableSchemaText(current),
     ...parseTableSchemaText(next)
   ];
-  return serializeTableColumns(columns.length > 0 ? Array.from(new Set(columns)) : ["名称", "状态", "负责人", "更新时间", "操作"]);
+  return serializeTableColumns(Array.from(new Set(columns)));
 }
 
 function buildFallbackDesignToolPlan(message: string): DesignAgentPlan {
@@ -4572,7 +4674,9 @@ function buildFallbackDesignToolPlan(message: string): DesignAgentPlan {
     return makeDesignToolPlan(message, wantsPlanOnly, "我会读取 workspace 内指定文件。", steps);
   }
 
-  if (/页面列表|有哪些页面|查询页面|list.*page|pages/.test(text)) {
+  if (isLocalComponentQueryIntent(message)) {
+    steps.push({ tool: "component_library.list", reason: "查询本地组件库和组件摘要。", input: {} });
+  } else if (/页面列表|有哪些页面|查询页面|list.*page|pages/.test(text)) {
     steps.push({ tool: "page.list", reason: "查询页面列表。", input: {} });
   } else if (/schema|结构|节点|图层信息|当前页|页面信息/.test(text) && !/(添加|新增|加一个|加入|放一个|插入|修改|调整|更新|改一下|add|insert|update)/i.test(message)) {
     steps.push({ tool: "page.get_schema", reason: "获取当前页面 schema。", input: {} });
@@ -4584,6 +4688,11 @@ function buildFallbackDesignToolPlan(message: string): DesignAgentPlan {
     steps.push({ tool: "page.rename", reason: "重命名当前页面。", input: { name: inferPageNameFromMessage(message) ?? "未命名页面" } });
   } else if (/新建.*页面|新增.*页面|创建.*页面|create.*page|new.*page/.test(text)) {
     steps.push({ tool: "page.create", reason: "用户明确要求新建页面。", input: { name: inferPageNameFromMessage(message) ?? "AI 新页面" } });
+  } else if (isLocalComponentAssetIntent(message)) {
+    steps.push({ tool: "page.get_schema", reason: "先读取当前页面 schema，确认组件插入上下文。", input: {} });
+    steps.push({ tool: "component.search", reason: "按用户描述搜索本地组件库组件。", input: { query: message } });
+    steps.push({ tool: "component.insert", reason: "把匹配的本地组件插入当前页面。", input: { query: message } });
+    steps.push({ tool: "schema.validate", reason: "插入组件后校验页面。", input: {} });
   } else if (/(添加|新增|加一个|加入|放一个|插入|add|insert)/i.test(message)) {
     steps.push({ tool: "schema.generate_from_prompt", reason: "根据提示生成局部 schema 并添加到当前页面。", input: { prompt: message } });
     steps.push({ tool: "schema.validate", reason: "新增 schema 后校验页面。", input: {} });
@@ -4636,6 +4745,9 @@ function getDesignAgentRoleForTool(tool: DesignAgentToolCall["tool"]): DesignAge
   }
   if (tool === "asset.resolve") {
     return "素材 Agent";
+  }
+  if (tool === "component_library.list" || tool === "component.search" || tool === "component.insert") {
+    return "组件库 Agent";
   }
   if (tool === "page.analyze_structure" || tool === "page.get_schema" || tool === "page.list") {
     return "页面理解 Agent";
@@ -4698,6 +4810,7 @@ function validateDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan
 
   const isAddMenu = /(添加|新增|加一个|加入|放一个|插入|add|insert).*(菜单|导航|menu|sidebar|侧边栏)|(?:菜单|导航|menu|sidebar|侧边栏).*(添加|新增|加一个|加入|放一个|插入|add|insert)/i.test(message);
   const isAddSearchCondition = isListSearchConditionIntent(message);
+  const isLocalComponentIntent = isLocalComponentAssetIntent(message);
   if (isAddMenu) {
     const hasCreateMenu = plan.steps.some((step) => step.tool === "schema.create_menu");
     const hasUnsafeUpdate = plan.steps.some((step) => step.tool === "schema.update_node");
@@ -4722,6 +4835,18 @@ function validateDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan
       ].join("\n"));
     }
   }
+  if (isLocalComponentIntent) {
+    const hasComponentLookup = plan.steps.some((step) => step.tool === "component_library.list" || step.tool === "component.search");
+    const hasComponentInsert = plan.steps.some((step) => step.tool === "component.insert");
+    const hasUnsafePromptGenerate = plan.steps.some((step) => step.tool === "schema.generate_from_prompt");
+    if (!hasComponentLookup || !hasComponentInsert || hasUnsafePromptGenerate) {
+      throw new Error([
+        "计划安全校验失败：用户意图是使用本地组件库资产。",
+        "必须先 component_library.list 或 component.search，再使用 component.insert 插入组件。",
+        "不允许把本地组件库需求退化成 schema.generate_from_prompt。"
+      ].join("\n"));
+    }
+  }
 
   const schemaMutationTools = new Set([
     "layout.insert_above",
@@ -4734,7 +4859,8 @@ function validateDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan
     "schema.update_node",
     "schema.delete_node",
     "schema.duplicate_node",
-    "schema.generate_from_prompt"
+    "schema.generate_from_prompt",
+    "component.insert"
   ]);
   const hasMutation = plan.steps.some((step) => schemaMutationTools.has(step.tool));
   const firstMutationIndex = plan.steps.findIndex((step) => schemaMutationTools.has(step.tool));
@@ -4788,6 +4914,26 @@ function normalizeDesignAgentPlanForIntent(message: string, plan: DesignAgentPla
 
   const isAddMenu = /(添加|新增|加一个|加入|放一个|插入|add|insert).*(菜单|导航|menu|sidebar|侧边栏)|(?:菜单|导航|menu|sidebar|侧边栏).*(添加|新增|加一个|加入|放一个|插入|add|insert)/i.test(message);
   const isAddSearchCondition = isListSearchConditionIntent(message);
+  const isLocalComponentIntent = isLocalComponentAssetIntent(message);
+  if (isLocalComponentIntent) {
+    const hasComponentLookup = plan.steps.some((step) => step.tool === "component_library.list" || step.tool === "component.search");
+    const hasComponentInsert = plan.steps.some((step) => step.tool === "component.insert");
+    const hasUnsafePromptGenerate = plan.steps.some((step) => step.tool === "schema.generate_from_prompt");
+    if (hasComponentLookup && hasComponentInsert && !hasUnsafePromptGenerate) return plan;
+    return {
+      ...plan,
+      title: plan.title || "插入本地组件",
+      userGoal: plan.userGoal || message,
+      assumptions: [...plan.assumptions, "优先使用本地组件库里的组件资产，而不是重新生成近似 schema"],
+      steps: [
+        { tool: "page.get_schema", reason: "先读取当前页面 schema，确认组件插入的页面上下文。", input: {} },
+        { tool: "component.search", reason: "按用户描述检索本地组件库和组件资产。", input: { query: message } },
+        { tool: "component.insert", reason: "把匹配到的本地组件克隆并插入当前画布。", input: { query: message } },
+        { tool: "schema.validate", reason: "插入组件后校验 schema 合法性。", input: {} },
+        { tool: "ui.review_design", reason: "审核插入组件后的布局、层级和遮挡。", input: { userRequest: message } }
+      ]
+    };
+  }
   if (isAddSearchCondition) {
     const hasSemanticFlow = plan.steps.some((step) => step.tool === "page.analyze_structure")
       && plan.steps.some((step) => step.tool === "product.review_requirements")
@@ -4859,6 +5005,14 @@ function isListSearchConditionIntent(message: string) {
   return hasAddIntent && hasSearchIntent && hasListContext;
 }
 
+function isLocalComponentAssetIntent(message: string) {
+  return /(插入|添加|新增|使用|复用|放一个|加入|用|insert|use).{0,24}(本地组件|组件库|组件|component)|(本地组件|组件库|component).{0,24}(插入|添加|新增|使用|复用|用|insert|use)|component\.insert/i.test(message);
+}
+
+function isLocalComponentQueryIntent(message: string) {
+  return /(本地组件|组件库|component).{0,20}(有哪些|列表|查询|查看|搜索|检索|list|search|find)|(有哪些|列表|查询|查看|搜索|检索|list|search|find).{0,20}(本地组件|组件库|component)/i.test(message);
+}
+
 function isSchemaMutationTool(tool: DesignAgentToolCall["tool"]) {
   return [
     "schema.generate_ui_from_requirements",
@@ -4876,7 +5030,8 @@ function isSchemaMutationTool(tool: DesignAgentToolCall["tool"]) {
     "schema.update_node",
     "schema.delete_node",
     "schema.duplicate_node",
-    "schema.generate_from_prompt"
+    "schema.generate_from_prompt",
+    "component.insert"
   ].includes(tool);
 }
 
@@ -5183,16 +5338,20 @@ function buildIncrementalUiSectionRequests(
 }
 
 function inferRequestedPageNames(message: string) {
-  const names = [
-    /登录|注册|验证码/.test(message) ? "登录注册页" : "",
-    /首页|工作台|概览|dashboard/i.test(message) ? "首页" : "",
-    /列表|管理|记录|订单|消息/.test(message) ? "列表管理页" : "",
-    /详情|资料|个人信息/.test(message) ? "详情页" : "",
-    /表单|填写|编辑|新增|设置/.test(message) ? "表单编辑页" : "",
-    /实名|上传|认证/.test(message) ? "认证上传页" : "",
-    /支付|收益|提现/.test(message) ? "支付收益页" : ""
-  ].filter(Boolean);
-  return names.length > 0 ? Array.from(new Set(names)).slice(0, 6) : ["核心页面"];
+  const explicitNames = message
+    .split(/[，,、；;\n]/)
+    .map((item) => item.trim())
+    .map((item) => /([\u4e00-\u9fa5A-Za-z0-9_\-\s]{1,24}(?:页面|页))/.exec(item)?.[1]?.trim())
+    .filter((item): item is string => Boolean(item));
+  if (explicitNames.length > 0) {
+    return Array.from(new Set(explicitNames)).slice(0, 6);
+  }
+  const inferredName = inferPageNameFromMessage(message);
+  if (inferredName) {
+    return [inferredName];
+  }
+  const compact = message.replace(/\s+/g, "").slice(0, 18);
+  return compact ? [`${compact}页面`] : [];
 }
 
 function formatVisualDesignReviewMessage(review: VisualDesignReview) {
@@ -5558,6 +5717,30 @@ function summarizeDesignPageForSchemaPrompt(page: WorkspaceDesignPage) {
   };
 }
 
+function summarizeLocalComponentLibraries(file: WorkspaceDesignFile) {
+  const localComponents = (file.importedComponents ?? []).filter((component) => component.sourceFileName === "本地组件集合");
+  return (file.componentLibraries ?? []).map((library) => {
+    const components = localComponents.filter((component) => component.libraryId === library.id);
+    return {
+      id: library.id,
+      name: library.name,
+      description: library.description ?? "",
+      componentCount: components.length,
+      components: components.slice(0, 30).map((component) => ({
+        id: component.id,
+        name: component.name,
+        description: component.description ?? "",
+        nodeCount: component.nodeCount,
+        nodeTypes: Array.from(new Set(component.nodes.map((node) => node.type))).slice(0, 12),
+        keyTexts: component.nodes
+          .map((node) => node.text || node.name)
+          .filter(Boolean)
+          .slice(0, 10)
+      }))
+    };
+  });
+}
+
 function createInitialWorkspaceDesignFile(projectName: string): WorkspaceDesignFile {
   const now = nowIso();
   return {
@@ -5565,6 +5748,7 @@ function createInitialWorkspaceDesignFile(projectName: string): WorkspaceDesignF
     name: `${projectName} AI Design`,
     prdText: "这里承载当前项目的 PRD 草稿。后续 AI 会根据 PRD 生成页面清单、UI Schema 和可编辑画布。",
     updatedAt: now,
+    componentLibraries: [],
     importedComponents: [],
     importedAssets: [],
     pages: [
@@ -5864,6 +6048,7 @@ function convertSketchSymbolInstance(
     sharedStyleMaps?: SketchSharedStyleMaps;
     clipBounds?: WorkspaceDesignNode["clipBounds"];
     clipPath?: WorkspaceDesignNode["clipPath"];
+    activeClippingMask?: SketchClippingMaskSourceMeta;
     parentNodeId?: string;
   }
 ) {
@@ -5883,20 +6068,16 @@ function convertSketchSymbolInstance(
   }
   const symbolObject = safeObject(symbol);
   const symbolFrame = readSketchFrame(symbolObject);
-  // const scaleX = symbolFrame.width > 0 ? context.nodeWidth / symbolFrame.width : 1;
-  // const scaleY = symbolFrame.height > 0 ? context.nodeHeight / symbolFrame.height : 1;
-  const scaleX = symbolFrame.width > 0 ? (instance.frame?.width || 0) / symbolFrame.width : 1;
-  const scaleY = symbolFrame.height > 0 ? (instance.frame?.height || 0) / symbolFrame.height : 1;
+  const scaleX = symbolFrame.width > 0 ? context.nodeWidth / symbolFrame.width : 1;
+  const scaleY = symbolFrame.height > 0 ? context.nodeHeight / symbolFrame.height : 1;
   const layers = applySketchSymbolOverrides(getSketchRenderableLayers(symbolObject), overrideValues, context.sharedStyleMaps);
   return layers.flatMap((layer, index) => (
     convertSketchLayer(layer, {
       depth: context.depth + 1,
       index,
       zIndexRef: context.zIndexRef,
-      // parentX: context.nodeX - symbolFrame.x * scaleX,
-      // parentY: context.nodeY - symbolFrame.y * scaleY,
-      parentX: context.nodeX,
-      parentY: context.nodeY,
+      parentX: context.nodeX - symbolFrame.x * scaleX,
+      parentY: context.nodeY - symbolFrame.y * scaleY,
       scaleX,
       scaleY,
       assetByRef: context.assetByRef,
@@ -5904,6 +6085,7 @@ function convertSketchSymbolInstance(
       sharedStyleMaps: context.sharedStyleMaps,
       clipBounds: context.clipBounds,
       clipPath: context.clipPath,
+      activeClippingMask: context.activeClippingMask,
       parentNodeId: context.parentNodeId
     })
   ));
@@ -6242,7 +6424,8 @@ function readSketchImageMeta(layer: Record<string, unknown>, assetByRef?: Map<st
 
 function readSketchSourceMeta(
   layer: Record<string, unknown>,
-  assetByRef?: Map<string | undefined, WorkspaceDesignAsset>
+  assetByRef?: Map<string | undefined, WorkspaceDesignAsset>,
+  activeClippingMask?: SketchClippingMaskSourceMeta
 ): WorkspaceDesignNode["sourceMeta"] {
   const layerClass = getStringProp(layer, "_class");
   const imageRef = layerClass === "bitmap"
@@ -6273,9 +6456,20 @@ function readSketchSourceMeta(
     glyphBounds: getStringProp(layer, "glyphBounds") || undefined,
     imageRef: imageRef || undefined,
     clippingMask: getStringProp(layer, "clippingMask") || undefined,
+    hasClippingMask: booleanOrUndefined(layer.hasClippingMask),
+    activeClippingMask,
     flow: sanitizeSketchRecord(layer.flow),
     exportOptions: sanitizeSketchExportOptions(layer.exportOptions),
     userInfo: sanitizeSketchRecord(layer.userInfo)
+  });
+}
+
+function readSketchClippingMaskSourceMeta(layer: Record<string, unknown>): SketchClippingMaskSourceMeta {
+  return stripUndefinedObject({
+    sourceLayerId: getStringProp(layer, "do_objectID") || undefined,
+    sourceLayerClass: getStringProp(layer, "_class") || undefined,
+    name: getStringProp(layer, "name") || undefined,
+    hasClippingMask: true as const
   });
 }
 
@@ -6825,6 +7019,13 @@ function hasEnabledSketchBorders(style: Record<string, unknown>) {
 
 function isSketchShapeVectorChild(layer: Record<string, unknown>): boolean {
   return isSketchShapePrimitive(layer) || isSketchVectorContainerLayer(layer);
+}
+
+function hasSketchClippingMaskDescendant(layer: Record<string, unknown>): boolean {
+  return getSketchLayers(layer)
+    .map(safeObject)
+    .filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child))
+    .some((child) => child.hasClippingMask === true || hasSketchClippingMaskDescendant(child));
 }
 
 function isSketchVectorContainerLayer(layer: Record<string, unknown>): boolean {

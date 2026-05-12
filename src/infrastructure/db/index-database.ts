@@ -3,6 +3,8 @@ import { mkdir } from "node:fs/promises";
 import type { Requirement, ScoreRecord } from "../../shared/types/models.js";
 import type { Task } from "../../shared/types/tasks.js";
 import type {
+  WorkspaceDesignComponent,
+  WorkspaceDesignComponentLibrary,
   WorkspaceProjectDocumentMeta,
   WorkspaceProjectDocumentVersion
 } from "../../shared/types/workspace.js";
@@ -144,6 +146,34 @@ export class IndexDatabase {
 
         CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_conversation_started
         ON agent_tool_calls(conversation_id, started_at DESC);
+
+        CREATE TABLE IF NOT EXISTS workspace_component_libraries (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_component_libraries_project
+        ON workspace_component_libraries(project_id, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS workspace_design_components (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          library_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          source_file_name TEXT NOT NULL,
+          node_count INTEGER NOT NULL,
+          nodes_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_design_components_project_library
+        ON workspace_design_components(project_id, library_id, updated_at DESC);
       `);
     }
   }
@@ -682,6 +712,106 @@ export class IndexDatabase {
     await this.ensureReady();
     const rows = this.db!.prepare("SELECT id FROM tasks ORDER BY seq ASC").all() as Array<{ id: string }>;
     return rows.map((row) => row.id);
+  }
+
+  async upsertWorkspaceComponentLibrary(projectId: string, library: WorkspaceDesignComponentLibrary) {
+    await this.ensureReady();
+    this.db!.prepare(`
+      INSERT INTO workspace_component_libraries (id, project_id, name, description, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        project_id = excluded.project_id,
+        name = excluded.name,
+        description = excluded.description,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
+    `).run(library.id, projectId, library.name, library.description ?? null, library.createdAt, library.updatedAt);
+  }
+
+  async listWorkspaceComponentLibraries(projectId: string): Promise<WorkspaceDesignComponentLibrary[]> {
+    await this.ensureReady();
+    const rows = this.db!.prepare(`
+      SELECT id, name, description, created_at, updated_at
+      FROM workspace_component_libraries
+      WHERE project_id = ?
+      ORDER BY updated_at DESC
+    `).all(projectId) as Array<{ id: string; name: string; description: string | null; created_at: string; updated_at: string }>;
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+  }
+
+  async deleteWorkspaceComponentLibrary(projectId: string, libraryId: string) {
+    await this.ensureReady();
+    this.db!.prepare("DELETE FROM workspace_design_components WHERE project_id = ? AND library_id = ?").run(projectId, libraryId);
+    this.db!.prepare("DELETE FROM workspace_component_libraries WHERE project_id = ? AND id = ?").run(projectId, libraryId);
+  }
+
+  async upsertWorkspaceDesignComponent(projectId: string, component: WorkspaceDesignComponent) {
+    await this.ensureReady();
+    const now = new Date().toISOString();
+    this.db!.prepare(`
+      INSERT INTO workspace_design_components (
+        id, project_id, library_id, name, description, source_file_name, node_count, nodes_json, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        project_id = excluded.project_id,
+        library_id = excluded.library_id,
+        name = excluded.name,
+        description = excluded.description,
+        source_file_name = excluded.source_file_name,
+        node_count = excluded.node_count,
+        nodes_json = excluded.nodes_json,
+        updated_at = excluded.updated_at
+    `).run(
+      component.id,
+      projectId,
+      component.libraryId ?? "",
+      component.name,
+      component.description ?? null,
+      component.sourceFileName,
+      component.nodeCount,
+      JSON.stringify(component.nodes ?? []),
+      now,
+      now
+    );
+  }
+
+  async listWorkspaceDesignComponents(projectId: string): Promise<WorkspaceDesignComponent[]> {
+    await this.ensureReady();
+    const rows = this.db!.prepare(`
+      SELECT id, library_id, name, description, source_file_name, node_count, nodes_json
+      FROM workspace_design_components
+      WHERE project_id = ?
+      ORDER BY updated_at DESC
+    `).all(projectId) as Array<{
+      id: string;
+      library_id: string;
+      name: string;
+      description: string | null;
+      source_file_name: string;
+      node_count: number;
+      nodes_json: string;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      libraryId: row.library_id || undefined,
+      description: row.description ?? undefined,
+      sourceFileName: row.source_file_name,
+      nodeCount: row.node_count,
+      nodes: Array.isArray(parseJsonSafe(row.nodes_json)) ? parseJsonSafe(row.nodes_json) as WorkspaceDesignComponent["nodes"] : []
+    }));
+  }
+
+  async deleteWorkspaceDesignComponent(projectId: string, componentId: string) {
+    await this.ensureReady();
+    this.db!.prepare("DELETE FROM workspace_design_components WHERE project_id = ? AND id = ?").run(projectId, componentId);
   }
 }
 

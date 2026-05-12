@@ -528,6 +528,39 @@ export async function startWorkspaceServer(options: WorkspaceServerOptions = {})
     return workspaceProjectService.saveDesignFile(params.id, request.body as WorkspaceDesignFile);
   });
 
+  app.post("/api/workspace/projects/:id/design/component-libraries", async (request) => {
+    const params = request.params as { id: string };
+    const body = request.body as { name: string; description?: string };
+    return workspaceProjectService.upsertDesignComponentLibrary(params.id, body);
+  });
+
+  app.put("/api/workspace/projects/:id/design/component-libraries/:libraryId", async (request) => {
+    const params = request.params as { id: string; libraryId: string };
+    const body = request.body as { name: string; description?: string };
+    return workspaceProjectService.upsertDesignComponentLibrary(params.id, { ...body, id: params.libraryId });
+  });
+
+  app.delete("/api/workspace/projects/:id/design/component-libraries/:libraryId", async (request) => {
+    const params = request.params as { id: string; libraryId: string };
+    return workspaceProjectService.deleteDesignComponentLibrary(params.id, params.libraryId);
+  });
+
+  app.post("/api/workspace/projects/:id/design/components", { bodyLimit: 128 * 1024 * 1024 }, async (request) => {
+    const params = request.params as { id: string };
+    return workspaceProjectService.upsertDesignComponent(params.id, request.body as WorkspaceDesignFile["importedComponents"][number]);
+  });
+
+  app.put("/api/workspace/projects/:id/design/components/:componentId", { bodyLimit: 128 * 1024 * 1024 }, async (request) => {
+    const params = request.params as { id: string; componentId: string };
+    const body = request.body as WorkspaceDesignFile["importedComponents"][number];
+    return workspaceProjectService.upsertDesignComponent(params.id, { ...body, id: params.componentId });
+  });
+
+  app.delete("/api/workspace/projects/:id/design/components/:componentId", async (request) => {
+    const params = request.params as { id: string; componentId: string };
+    return workspaceProjectService.deleteDesignComponent(params.id, params.componentId);
+  });
+
   app.post("/api/workspace/projects/:id/design/import", async (request) => {
     const params = request.params as { id: string };
     const upload = await request.file();

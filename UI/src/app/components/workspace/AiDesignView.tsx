@@ -18,6 +18,7 @@ import {
   Import,
   Layers,
   Lock,
+  MoreHorizontal,
   MousePointer2,
   PanelLeft,
   Play,
@@ -41,6 +42,7 @@ import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { getProject } from "../../utils/storage";
 import { toast } from "sonner";
 import {
@@ -51,6 +53,12 @@ import {
   importAiDesignFile,
   streamAiDesignAgent,
   saveAiDesignFile,
+  createAiDesignComponent,
+  createAiDesignComponentLibrary,
+  deleteAiDesignComponent,
+  deleteAiDesignComponentLibrary,
+  updateAiDesignComponent,
+  updateAiDesignComponentLibrary,
   updateWorkspaceLlmSettings,
   type AiDesignAgentStreamEvent,
   type WorkspaceDesignFile,
@@ -152,6 +160,15 @@ interface DesignNode {
   shadow?: string;
   innerShadow?: string;
   zIndex?: number;
+  sourceMeta?: {
+    hasClippingMask?: boolean;
+    activeClippingMask?: {
+      sourceLayerId?: string;
+      sourceLayerClass?: string;
+      name?: string;
+      hasClippingMask: true;
+    };
+  };
 }
 
 type DesignSvgNode = {
@@ -193,8 +210,18 @@ interface ImportedDesignComponent {
   id: string;
   name: string;
   sourceFileName: string;
+  libraryId?: string;
+  description?: string;
   nodeCount: number;
   nodes: DesignNode[];
+}
+
+interface LocalComponentLibrary {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ImportedDesignAsset {
@@ -260,6 +287,7 @@ interface DesignRenderTreeNode {
 }
 
 const LOCAL_COMPONENT_SOURCE_NAME = "本地组件集合";
+const DEFAULT_LOCAL_COMPONENT_LIBRARY_NAME = "默认组件库";
 
 const componentPresets: Array<{
   type: DesignNodeType;
@@ -327,7 +355,15 @@ export function AiDesignView() {
   const [expandedLayerIds, setExpandedLayerIds] = useState<string[]>([]);
   const [hoveredNodeId, setHoveredNodeId] = useState("");
   const [contextMenu, setContextMenu] = useState<DesignContextMenuState | null>(null);
-  const [componentCollectionView, setComponentCollectionView] = useState<"all" | "local">("all");
+  const [componentCollectionView, setComponentCollectionView] = useState<"all" | "libraries" | "library">("all");
+  const [selectedComponentLibraryId, setSelectedComponentLibraryId] = useState("");
+  const [libraryDialogMode, setLibraryDialogMode] = useState<"create" | "edit" | null>(null);
+  const [editingLibraryId, setEditingLibraryId] = useState("");
+  const [libraryForm, setLibraryForm] = useState({ name: "", description: "" });
+  const [createComponentDialog, setCreateComponentDialog] = useState<{ nodeIds: string[]; defaultName: string } | null>(null);
+  const [componentForm, setComponentForm] = useState({ name: "", libraryId: "", description: "" });
+  const [editComponentInfo, setEditComponentInfo] = useState<ImportedDesignComponent | null>(null);
+  const editingComponentId = searchParams.get("component-id") ?? "";
   const [importingDesignFile, setImportingDesignFile] = useState(false);
   const [aiMessages, setAiMessages] = useState<AiDesignChatMessage[]>([
     {
@@ -425,6 +461,8 @@ export function AiDesignView() {
   } | null>(null);
   const [dragPreviewNodeIds, setDragPreviewNodeIds] = useState<string[]>([]);
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
+  const canvasSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const canvasOverlayRef = useRef<HTMLDivElement | null>(null);
   const designImportInputRef = useRef<HTMLInputElement | null>(null);
   const applyingRemoteDesignRef = useRef(false);
   const saveDesignTimerRef = useRef<number | null>(null);
@@ -447,7 +485,10 @@ export function AiDesignView() {
     startY: number;
     originX: number;
     originY: number;
+    currentX: number;
+    currentY: number;
   } | null>(null);
+  const panPreviewFrameRef = useRef<number | null>(null);
   const selectionDragRef = useRef<{
     append: boolean;
   } | null>(null);
@@ -482,7 +523,6 @@ export function AiDesignView() {
   }, [dragPreviewNodeIds, selectedNodeIds, visibleNodes, visibleSceneBounds, zoom]);
   const hitTestNodes = renderedNodes;
   const canvasRenderedNodes = renderedNodes;
-  console.log(canvasRenderedNodes, 'canvasRenderedNodes')
   const dragPreviewNodes = useMemo(() => {
     if (dragPreviewNodeIds.length === 0) return [];
     const movingIds = new Set(dragPreviewNodeIds);
@@ -491,6 +531,11 @@ export function AiDesignView() {
   const layerTree = useMemo(() => buildDesignLayerTree(selectedPage.nodes, layerQuery), [layerQuery, selectedPage.nodes]);
   const localComponents = useMemo(() => (file.importedComponents ?? []).filter((component) => component.sourceFileName === LOCAL_COMPONENT_SOURCE_NAME), [file.importedComponents]);
   const externalImportedComponents = useMemo(() => (file.importedComponents ?? []).filter((component) => component.sourceFileName !== LOCAL_COMPONENT_SOURCE_NAME), [file.importedComponents]);
+  const componentLibraries = useMemo(() => file.componentLibraries ?? [], [file.componentLibraries]);
+  const selectedComponentLibrary = componentLibraries.find((library) => library.id === selectedComponentLibraryId) ?? componentLibraries[0] ?? null;
+  const selectedLibraryComponents = selectedComponentLibrary
+    ? localComponents.filter((component) => component.libraryId === selectedComponentLibrary.id)
+    : [];
   const contextMenuNode = contextMenu?.nodeId ? selectedPage.nodes.find((node) => node.id === contextMenu.nodeId) ?? null : null;
 
   const syncSelectedPageToQuery = (pageId: string, replace = true) => {
@@ -513,6 +558,15 @@ export function AiDesignView() {
   useEffect(() => {
     selectedPageIdRef.current = selectedPageId;
   }, [selectedPageId]);
+
+  useEffect(() => {
+    if (!selectedComponentLibraryId && componentLibraries[0]?.id) {
+      setSelectedComponentLibraryId(componentLibraries[0].id);
+    }
+    if (selectedComponentLibraryId && componentLibraries.length > 0 && !componentLibraries.some((library) => library.id === selectedComponentLibraryId)) {
+      setSelectedComponentLibraryId(componentLibraries[0].id);
+    }
+  }, [componentLibraries, selectedComponentLibraryId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -692,6 +746,16 @@ export function AiDesignView() {
 
   const updateFile = (updater: (current: AiDesignFile) => AiDesignFile) => {
     setFile((current) => updater(current));
+  };
+
+  const updateComponentStoreState = (updater: (current: AiDesignFile) => AiDesignFile) => {
+    applyingRemoteDesignRef.current = true;
+    setFile((current) => updater(current));
+  };
+
+  const applyRemoteDesignFile = (nextFile: WorkspaceDesignFile) => {
+    applyingRemoteDesignRef.current = true;
+    setFile(preserveLoadedDesignPages(normalizeDesignFile(nextFile, project?.name ?? "未命名设计"), file));
   };
 
   const updateSelectedPage = (updater: (page: DesignPage) => DesignPage) => {
@@ -1061,57 +1125,190 @@ export function AiDesignView() {
     toast.success(`已创建容器，并挂载 ${sourceNodes.length} 个图层`);
   };
 
-  const createLocalComponentFromContainer = (containerId?: string) => {
-    const container = selectedPage.nodes.find((node) => node.id === containerId);
-    if (!container || container.type !== "container") {
-      toast.error("只有容器右击菜单可以创建组件");
+  const openCreateComponentDialog = (anchorNodeId?: string) => {
+    const sourceIds = getContextActionNodeIds(anchorNodeId, selectedNodeIds);
+    const topLevelIds = getTopLevelNodeIds(sourceIds, selectedPage.nodes);
+    if (topLevelIds.length === 0) {
+      toast.error("请先框选或选择要创建为组件的图层");
       return;
     }
+    const defaultLibrary = componentLibraries[0];
+    setComponentForm({
+      name: `${selectedPage.nodes.find((node) => node.id === topLevelIds[0])?.name ?? "选区"} 组件`,
+      libraryId: defaultLibrary?.id ?? "",
+      description: ""
+    });
+    setCreateComponentDialog({
+      nodeIds: topLevelIds,
+      defaultName: `${selectedPage.nodes.find((node) => node.id === topLevelIds[0])?.name ?? "选区"} 组件`
+    });
+    setContextMenu(null);
+  };
 
-    const nodeIds = [container.id, ...getDescendantNodeIds(container.id, selectedPage.nodes)];
-    const sourceNodes = selectedPage.nodes.filter((node) => nodeIds.includes(node.id));
-    if (sourceNodes.length === 0) {
-      toast.error("容器内没有可保存的图层");
-      return;
+  const createComponentLibrary = async (input: { name: string; description?: string }) => {
+    const name = input.name.trim();
+    if (!name) {
+      toast.error("请输入组件库名称");
+      return undefined;
     }
-
-    const bounds = getNodesBoundsForSelection(sourceNodes);
-    if (!bounds) {
-      toast.error("无法生成组件预览");
-      return;
-    }
-
-    const componentNodes = cloneDesignNodesWithNewIds(sourceNodes, (node) => ({
-      x: Math.round(node.x - bounds.x),
-      y: Math.round(node.y - bounds.y),
-      locked: false,
-      visible: true
+    const library = await createAiDesignComponentLibrary(projectId, {
+      name,
+      description: input.description?.trim() || undefined
+    });
+    updateComponentStoreState((current) => ({
+      ...current,
+      componentLibraries: [library, ...(current.componentLibraries ?? []).filter((item) => item.id !== library.id)]
     }));
+    if (library) {
+      setSelectedComponentLibraryId(library.id);
+    }
+    return library;
+  };
+
+  const openCreateLibraryDialog = () => {
+    setLibraryForm({ name: "", description: "" });
+    setEditingLibraryId("");
+    setLibraryDialogMode("create");
+  };
+
+  const openEditLibraryDialog = (library: LocalComponentLibrary) => {
+    setLibraryForm({ name: library.name, description: library.description ?? "" });
+    setEditingLibraryId(library.id);
+    setLibraryDialogMode("edit");
+  };
+
+  const closeLibraryDialog = () => {
+    setLibraryDialogMode(null);
+    setEditingLibraryId("");
+    setLibraryForm({ name: "", description: "" });
+  };
+
+  const submitLibraryDialog = async () => {
+    if (libraryDialogMode === "edit") {
+      const name = libraryForm.name.trim();
+      if (!name) {
+        toast.error("请输入组件库名称");
+        return;
+      }
+      try {
+        const library = await updateAiDesignComponentLibrary(projectId, editingLibraryId, {
+          name,
+          description: libraryForm.description.trim() || undefined
+        });
+        updateComponentStoreState((current) => ({
+          ...current,
+          componentLibraries: (current.componentLibraries ?? []).map((item) => item.id === library.id ? library : item)
+        }));
+        closeLibraryDialog();
+        toast.success("组件库信息已更新");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "组件库保存失败");
+      }
+      return;
+    }
+
+    const library = await createComponentLibrary(libraryForm).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "组件库创建失败");
+      return undefined;
+    });
+    if (!library) return;
+    closeLibraryDialog();
+    if (createComponentDialog) {
+      setComponentForm((current) => ({ ...current, libraryId: library.id }));
+    } else {
+      setComponentCollectionView("library");
+    }
+    toast.success(`已创建组件库：${library.name}`);
+  };
+
+  const deleteComponentLibrary = async (library: LocalComponentLibrary) => {
+    const count = localComponents.filter((component) => component.libraryId === library.id).length;
+    const confirmed = window.confirm(count > 0
+      ? `确定删除组件库「${library.name}」吗？库下 ${count} 个组件也会被删除。`
+      : `确定删除组件库「${library.name}」吗？`);
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await deleteAiDesignComponentLibrary(projectId, library.id);
+      updateComponentStoreState((current) => ({
+        ...current,
+        componentLibraries: (current.componentLibraries ?? []).filter((item) => item.id !== library.id),
+        importedComponents: (current.importedComponents ?? []).filter((component) => component.libraryId !== library.id)
+      }));
+      if (selectedComponentLibraryId === library.id) {
+        const nextLibrary = componentLibraries.find((item) => item.id !== library.id);
+        setSelectedComponentLibraryId(nextLibrary?.id ?? "");
+        setComponentCollectionView("libraries");
+      }
+      toast.success(`已删除组件库：${library.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "组件库删除失败");
+    }
+  };
+
+  const submitCreateLocalComponent = async () => {
+    if (!createComponentDialog) return;
+    const library = componentLibraries.find((item) => item.id === componentForm.libraryId);
+    if (!library) {
+      toast.error("请选择组件库；没有组件库可以先创建一个");
+      return;
+    }
+    const childrenByParentId = new Map<string, DesignNode[]>();
+    selectedPage.nodes.forEach((node) => {
+      if (!node.parentId) return;
+      const children = childrenByParentId.get(node.parentId) ?? [];
+      children.push(node);
+      childrenByParentId.set(node.parentId, children);
+    });
+    const componentNodeIds = new Set<string>();
+    const collectComponentNode = (nodeId: string) => {
+      if (componentNodeIds.has(nodeId)) return;
+      componentNodeIds.add(nodeId);
+      (childrenByParentId.get(nodeId) ?? []).forEach((child) => collectComponentNode(child.id));
+    };
+    createComponentDialog.nodeIds.forEach(collectComponentNode);
+    const sourceNodes = selectedPage.nodes.filter((node) => componentNodeIds.has(node.id));
+    if (sourceNodes.length === 0) {
+      toast.error("选区内没有可保存的图层");
+      return;
+    }
+    const componentNodes = createLocalComponentNodes(sourceNodes);
     const component: ImportedDesignComponent = {
       id: createId("component"),
-      name: `${container.name} 组件`,
+      name: componentForm.name.trim() || createComponentDialog.defaultName,
+      description: componentForm.description.trim() || undefined,
+      libraryId: library.id,
       sourceFileName: LOCAL_COMPONENT_SOURCE_NAME,
       nodeCount: componentNodes.length,
       nodes: componentNodes
     };
-
-    updateFile((current) => ({
-      ...current,
-      importedComponents: [component, ...(current.importedComponents ?? [])]
-    }));
-    setLeftTab("components");
-    setComponentCollectionView("local");
-    setContextMenu(null);
-    toast.success(`已保存到本地组件集合：${component.name}`);
+    try {
+      const savedComponent = await createAiDesignComponent(projectId, component);
+      updateComponentStoreState((current) => ({
+        ...current,
+        importedComponents: [savedComponent, ...(current.importedComponents ?? []).filter((item) => item.id !== savedComponent.id)]
+      }));
+      setCreateComponentDialog(null);
+      setComponentForm({ name: "", libraryId: "", description: "" });
+      setSelectedComponentLibraryId(library.id);
+      setLeftTab("components");
+      setComponentCollectionView("library");
+      toast.success(`已保存到组件库「${library.name}」：${component.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "组件创建失败");
+    }
   };
 
-  const insertImportedComponent = (component: ImportedDesignComponent) => {
+  const insertImportedComponent = (component: ImportedDesignComponent, position?: { x: number; y: number }) => {
     const minX = Math.min(...component.nodes.map((node) => node.x), 0);
     const minY = Math.min(...component.nodes.map((node) => node.y), 0);
+    const targetX = Math.round(position?.x ?? 360);
+    const targetY = Math.round(position?.y ?? 260);
     const nextNodes = cloneDesignNodesWithNewIds(component.nodes, (node, index) => ({
       name: index === 0 ? component.name : node.name,
-      x: node.x - minX + 360 + index * 4,
-      y: node.y - minY + 260 + index * 4,
+      x: Math.round(node.x - minX + targetX),
+      y: Math.round(node.y - minY + targetY),
       locked: false,
       visible: true
     }));
@@ -1122,6 +1319,98 @@ export function AiDesignView() {
     }));
     selectNodes(nextNodes.map((node) => node.id));
     toast.success(`已插入组件：${component.name}`);
+  };
+
+  const openComponentLayerEditor = (component: ImportedDesignComponent) => {
+    const pageId = `component-edit-${component.id}`;
+    const editPage: DesignPage = {
+      id: pageId,
+      name: `编辑组件 / ${component.name}`,
+      nodes: createLocalComponentNodes(component.nodes),
+      nodeCount: component.nodes.length,
+      schemaLoaded: true
+    };
+    updateFile((current) => ({
+      ...current,
+      pages: current.pages.some((page) => page.id === pageId)
+        ? current.pages.map((page) => page.id === pageId ? editPage : page)
+        : [...current.pages, editPage]
+    }));
+    setLeftTab("layers");
+    setSelectedPageId(pageId);
+    selectNodes(editPage.nodes[0]?.id ? [editPage.nodes[0].id] : []);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("node-id", pageId);
+    nextParams.set("component-id", component.id);
+    setSearchParams(nextParams, { replace: false });
+  };
+
+  const saveEditingComponentLayer = async () => {
+    const component = localComponents.find((item) => item.id === editingComponentId);
+    if (!component) {
+      toast.error("当前没有正在编辑的组件");
+      return;
+    }
+    const nextNodes = createLocalComponentNodes(selectedPage.nodes);
+    try {
+      const savedComponent = await updateAiDesignComponent(projectId, component.id, {
+        ...component,
+        nodeCount: nextNodes.length,
+        nodes: nextNodes
+      });
+      updateComponentStoreState((current) => ({
+        ...current,
+        importedComponents: (current.importedComponents ?? []).map((item) => item.id === savedComponent.id ? savedComponent : item)
+      }));
+      toast.success(`已保存组件图层：${component.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "组件图层保存失败");
+    }
+  };
+
+  const submitEditComponentInfo = async () => {
+    if (!editComponentInfo) return;
+    const library = componentLibraries.find((item) => item.id === componentForm.libraryId);
+    if (!library) {
+      toast.error("请选择组件库");
+      return;
+    }
+    try {
+      const savedComponent = await updateAiDesignComponent(projectId, editComponentInfo.id, {
+        ...editComponentInfo,
+        name: componentForm.name.trim() || editComponentInfo.name,
+        libraryId: library.id,
+        description: componentForm.description.trim() || undefined
+      });
+      updateComponentStoreState((current) => ({
+        ...current,
+        importedComponents: (current.importedComponents ?? []).map((component) => component.id === savedComponent.id ? savedComponent : component)
+      }));
+      setEditComponentInfo(null);
+      toast.success("组件信息已更新");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "组件信息保存失败");
+    }
+  };
+
+  const deleteLocalComponent = async (component: ImportedDesignComponent) => {
+    const confirmed = window.confirm(`确定删除组件「${component.name}」吗？`);
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await deleteAiDesignComponent(projectId, component.id);
+      updateComponentStoreState((current) => ({
+        ...current,
+        importedComponents: (current.importedComponents ?? []).filter((item) => item.id !== component.id)
+      }));
+      if (editComponentInfo?.id === component.id) {
+        setEditComponentInfo(null);
+      }
+      toast.success(`已删除组件：${component.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "组件删除失败");
+    }
   };
 
   const insertImportedPage = async (page: DesignPage) => {
@@ -1196,7 +1485,7 @@ export function AiDesignView() {
         insertImportedAsset(payload.asset, scenePoint);
       }
       if (payload.kind === "component") {
-        insertImportedComponent(payload.component);
+        insertImportedComponent(payload.component, scenePoint);
       }
     } catch {
       toast.error("拖拽内容无法识别");
@@ -1254,6 +1543,52 @@ export function AiDesignView() {
     return dragIds
       .map((id) => selectedPage.nodes.find((item) => item.id === id))
       .filter((item): item is DesignNode => Boolean(item) && (!item.locked || hasSelectedAncestor(item, selectionIds, selectedPage.nodes)));
+  };
+
+  const clearPanPreviewStyles = () => {
+    if (panPreviewFrameRef.current !== null) {
+      window.cancelAnimationFrame(panPreviewFrameRef.current);
+      panPreviewFrameRef.current = null;
+    }
+    if (canvasSurfaceRef.current) {
+      canvasSurfaceRef.current.style.transform = "";
+    }
+    if (canvasOverlayRef.current) {
+      canvasOverlayRef.current.style.transform = "";
+    }
+    if (canvasViewportRef.current) {
+      canvasViewportRef.current.style.backgroundPosition = "";
+    }
+  };
+
+  const applyPanPreview = (nextPan: { x: number; y: number }) => {
+    const session = panDragRef.current;
+    if (!session) {
+      return;
+    }
+    session.currentX = nextPan.x;
+    session.currentY = nextPan.y;
+    if (panPreviewFrameRef.current !== null) {
+      return;
+    }
+    panPreviewFrameRef.current = window.requestAnimationFrame(() => {
+      panPreviewFrameRef.current = null;
+      const latest = panDragRef.current;
+      if (!latest) {
+        return;
+      }
+      const dx = latest.currentX - latest.originX;
+      const dy = latest.currentY - latest.originY;
+      if (canvasViewportRef.current) {
+        canvasViewportRef.current.style.backgroundPosition = `${latest.currentX}px ${latest.currentY}px`;
+      }
+      if (canvasSurfaceRef.current) {
+        canvasSurfaceRef.current.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+      }
+      if (canvasOverlayRef.current) {
+        canvasOverlayRef.current.style.transform = `translate(${latest.currentX}px, ${latest.currentY}px) scale(${zoom})`;
+      }
+    });
   };
 
   const startNodeDragSession = (selectionIds: string[], scenePoint: { x: number; y: number }) => {
@@ -1329,7 +1664,9 @@ export function AiDesignView() {
         startX: event.clientX,
         startY: event.clientY,
         originX: pan.x,
-        originY: pan.y
+        originY: pan.y,
+        currentX: pan.x,
+        currentY: pan.y
       };
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
@@ -1385,7 +1722,7 @@ export function AiDesignView() {
 
   const handleCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (panDragRef.current) {
-      setPan({
+      applyPanPreview({
         x: panDragRef.current.originX + event.clientX - panDragRef.current.startX,
         y: panDragRef.current.originY + event.clientY - panDragRef.current.startY
       });
@@ -1446,7 +1783,15 @@ export function AiDesignView() {
         selectNodes(selectionDragRef.current.append ? normalizeSelectionIds([...selectedNodeIds, ...nextIds], selectedPage.nodes) : nextIds);
       }
     }
-    panDragRef.current = null;
+    if (panDragRef.current) {
+      const nextPan = {
+        x: panDragRef.current.currentX,
+        y: panDragRef.current.currentY
+      };
+      panDragRef.current = null;
+      setPan(nextPan);
+      window.setTimeout(clearPanPreviewStyles, 0);
+    }
     if (nodeDragRef.current) {
       const dragSession = nodeDragRef.current;
       const originalById = new Map(dragSession.originals.map((item) => [item.id, item]));
@@ -1657,15 +2002,13 @@ export function AiDesignView() {
           >
             创建容器
           </button>
-          {contextMenuNode.type === "container" ? (
-            <button
-              type="button"
-              className="flex w-full items-center px-4 py-2.5 text-left hover:bg-[#f6f6f7]"
-              onClick={() => createLocalComponentFromContainer(contextMenu.nodeId)}
-            >
-              创建组件
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="flex w-full items-center px-4 py-2.5 text-left hover:bg-[#f6f6f7]"
+            onClick={() => openCreateComponentDialog(contextMenu.nodeId)}
+          >
+            创建组件
+          </button>
           <div className="my-2 h-px bg-[#eeeeef]" />
           <button
             type="button"
@@ -1797,7 +2140,7 @@ export function AiDesignView() {
                 <Import className="mr-2 size-4" />
                 {importingDesignFile ? "正在导入 Sketch / Figma..." : "导入 Sketch / Figma 文件"}
               </Button>
-              {componentCollectionView === "local" ? (
+              {componentCollectionView === "libraries" ? (
                 <div>
                   <Button type="button" variant="ghost" size="sm" className="mb-3 px-0" onClick={() => setComponentCollectionView("all")}>
                     <ArrowLeft className="mr-2 size-4" />
@@ -1805,34 +2148,155 @@ export function AiDesignView() {
                   </Button>
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-semibold">本地组件集合</div>
-                      <div className="mt-1 text-xs text-[#777]">从容器右键创建的组件会保存在这里。</div>
+                      <div className="text-sm font-semibold">本地组件库</div>
+                      <div className="mt-1 text-xs text-[#777]">组件按组件库管理，并同步给 Agent 使用。</div>
                     </div>
-                    <Badge variant="secondary">{localComponents.length}</Badge>
+                    <Button type="button" size="sm" className="rounded-full" onClick={openCreateLibraryDialog}>
+                      <Plus className="mr-1 size-3.5" />
+                      新建
+                    </Button>
                   </div>
-                  {localComponents.length ? (
+                  {componentLibraries.length ? (
                     <div className="space-y-2">
-                      {localComponents.map((component) => (
-                        <button
-                          key={component.id}
-                          type="button"
-                          draggable
-                          onDragStart={(event) => startDragPayload(event, { kind: "component", component })}
-                          onClick={() => insertImportedComponent(component)}
+                      {componentLibraries.map((library) => {
+                        const count = localComponents.filter((component) => component.libraryId === library.id).length;
+                        return (
+                        <div
+                          key={library.id}
                           className="w-full rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
                         >
-                          <DesignMiniPreview nodes={component.nodes} className="mb-3 h-[132px]" />
+                          <div className="flex items-center gap-2">
+                            <Component className="size-4 text-[#6d35d8]" />
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 truncate text-left text-sm font-semibold"
+                              onClick={() => {
+                                setSelectedComponentLibraryId(library.id);
+                                setComponentCollectionView("library");
+                              }}
+                            >
+                              {library.name}
+                            </button>
+                            <Badge variant="secondary">{count}</Badge>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="flex size-7 items-center justify-center rounded-full hover:bg-[#ececf1]"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditLibraryDialog(library)}>修改信息</DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => deleteComponentLibrary(library)}>删除组件库</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          <button
+                            type="button"
+                            className="mt-1 line-clamp-2 w-full text-left text-xs leading-5 text-[#777]"
+                            onClick={() => {
+                              setSelectedComponentLibraryId(library.id);
+                              setComponentCollectionView("library");
+                            }}
+                          >
+                            {library.description || "暂无描述"}
+                          </button>
+                        </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-[#d8d8dd] bg-[#fafafa] p-5 text-sm leading-6 text-[#777]">
+                      现在还没有组件库。可以先创建组件库，再从画布选区右击创建组件。
+                      <Button type="button" size="sm" className="mt-4 rounded-full" onClick={openCreateLibraryDialog}>
+                        <Plus className="mr-1 size-3.5" />
+                        创建组件库
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : componentCollectionView === "library" ? (
+                <div>
+                  <Button type="button" variant="ghost" size="sm" className="mb-3 px-0" onClick={() => setComponentCollectionView("libraries")}>
+                    <ArrowLeft className="mr-2 size-4" />
+                    返回组件库
+                  </Button>
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{selectedComponentLibrary?.name ?? "组件库"}</div>
+                        <div className="mt-1 text-xs text-[#777]">{selectedLibraryComponents.length} 个组件</div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary">本地</Badge>
+                        {selectedComponentLibrary ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" className="flex size-7 items-center justify-center rounded-full hover:bg-[#ececf1]">
+                                <MoreHorizontal className="size-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditLibraryDialog(selectedComponentLibrary)}>修改信息</DropdownMenuItem>
+                              <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => deleteComponentLibrary(selectedComponentLibrary)}>删除组件库</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null}
+                      </div>
+                    </div>
+                    {selectedComponentLibrary?.description ? (
+                      <div className="mt-2 line-clamp-2 text-xs leading-5 text-[#777]">{selectedComponentLibrary.description}</div>
+                    ) : null}
+                  </div>
+                  {selectedLibraryComponents.length ? (
+                    <div className="space-y-2">
+                      {selectedLibraryComponents.map((component) => (
+                        <div
+                          key={component.id}
+                          draggable
+                          onDragStart={(event) => startDragPayload(event, { kind: "component", component })}
+                          className="w-full rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
+                        >
                           <div className="flex items-center gap-2">
                             <Component className="size-4 text-[#6d35d8]" />
                             <span className="min-w-0 flex-1 truncate text-sm font-semibold">{component.name}</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="flex size-7 items-center justify-center rounded-full hover:bg-[#ececf1]"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openComponentLayerEditor(component)}>修改图层</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  setEditComponentInfo(component);
+                                  setComponentForm({
+                                    name: component.name,
+                                    libraryId: component.libraryId ?? selectedComponentLibrary?.id ?? "",
+                                    description: component.description ?? ""
+                                  });
+                                }}>修改信息</DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => deleteLocalComponent(component)}>删除组件</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
-                          <div className="mt-1 text-xs text-[#777]">{component.nodeCount} 个节点，点击插入画布</div>
-                        </button>
+                          <div className="mt-1 text-xs text-[#777]">{component.nodeCount} 个节点，拖拽插入画布</div>
+                          {component.description ? (
+                            <div className="mt-2 line-clamp-2 text-xs leading-5 text-[#777]">{component.description}</div>
+                          ) : null}
+                        </div>
                       ))}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-[#d8d8dd] bg-[#fafafa] p-5 text-sm leading-6 text-[#777]">
-                      现在还没有本地组件。请在图层或画布里右击一个容器，然后选择“创建组件”。
+                      这个组件库还没有组件。框选画布区域后右击“创建组件”，并选择当前组件库。
                     </div>
                   )}
                 </div>
@@ -1840,15 +2304,15 @@ export function AiDesignView() {
                 <>
               <button
                 type="button"
-                onClick={() => setComponentCollectionView("local")}
+                onClick={() => setComponentCollectionView("libraries")}
                 className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
               >
                 <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#ede7ff] text-[#6d35d8]">
                   <Component className="size-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold">本地组件集合</div>
-                  <div className="mt-1 truncate text-xs text-[#777]">{localComponents.length} 个已创建组件</div>
+                  <div className="text-sm font-semibold">本地组件库</div>
+                  <div className="mt-1 truncate text-xs text-[#777]">{componentLibraries.length} 个组件库，{localComponents.length} 个组件</div>
                 </div>
                 <ChevronDown className="-rotate-90 size-4 text-[#999]" />
               </button>
@@ -1882,7 +2346,6 @@ export function AiDesignView() {
                         onClick={() => insertImportedComponent(component)}
                         className="w-full rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
                       >
-                        <DesignMiniPreview nodes={component.nodes} className="mb-3 h-[112px]" />
                         <div className="flex items-center gap-2">
                           <Component className="size-4 text-[#6d35d8]" />
                           <span className="min-w-0 flex-1 truncate text-sm font-semibold">{component.name}</span>
@@ -1890,38 +2353,12 @@ export function AiDesignView() {
                         <div className="mt-1 truncate text-xs text-[#777]">
                           {component.sourceFileName} · {component.nodeCount} 个节点
                         </div>
-                        <div className="mt-2 max-h-24 overflow-y-auto rounded-xl bg-[#f8f8fa] px-2 py-1">
-                          {component.nodes.map((node) => (
-                            <div key={node.id} className="flex items-center gap-2 py-1 text-xs text-[#666]">
-                              {nodeIcon(node.type)}
-                              <span className="min-w-0 flex-1 truncate">{node.name}</span>
-                            </div>
-                          ))}
-                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
               ) : null}
               <div className="mt-6">
-                <div className="mb-3 text-sm font-semibold">页面预览</div>
-                <div className="space-y-3">
-                  {file.pages.map((page) => (
-                    <button
-                      key={page.id}
-                      type="button"
-                      onClick={() => void insertImportedPage(page)}
-                      className="w-full rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
-                    >
-                      <DesignMiniPreview nodes={page.nodes} className="mb-3 h-[132px]" />
-                      <div className="flex items-center gap-2">
-                        <FileText className="size-4 text-[#246bfe]" />
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{page.name}</span>
-                      </div>
-                      <div className="mt-1 text-xs text-[#777]">{page.nodeCount ?? page.nodes.length} 个节点，点击复制成新页面</div>
-                    </button>
-                  ))}
-                </div>
               </div>
               </>
               )}
@@ -2171,14 +2608,23 @@ export function AiDesignView() {
             onDrop={handleCanvasDrop}
             onWheel={handleCanvasWheel}
           >
-            <CanvasDesignRenderer nodes={canvasRenderedNodes} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
-            <CanvasDragPreviewRenderer nodes={dragPreviewNodes} previewRef={dragPreviewRef} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
+            <div ref={canvasSurfaceRef} className="pointer-events-none absolute inset-0 will-change-transform">
+              <CanvasDesignRenderer nodes={canvasRenderedNodes} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
+              <CanvasDragPreviewRenderer nodes={dragPreviewNodes} previewRef={dragPreviewRef} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
+            </div>
             {loadingPageId === selectedPageId ? (
               <div className="pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 rounded-full border border-[#e4e4e7] bg-white/90 px-4 py-2 text-xs font-semibold text-[#555] shadow-sm">
                 正在加载当前页面 schema...
               </div>
             ) : null}
+            {editingComponentId ? (
+              <div className="absolute left-1/2 top-6 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#d8d8dd] bg-white/95 px-4 py-2 text-xs shadow-sm">
+                <span className="font-semibold">正在编辑组件图层</span>
+                <Button type="button" size="sm" className="h-7 rounded-full px-3" onClick={saveEditingComponentLayer}>保存组件</Button>
+              </div>
+            ) : null}
             <div
+              ref={canvasOverlayRef}
               className="pointer-events-none absolute origin-top-left"
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`
@@ -2438,6 +2884,79 @@ export function AiDesignView() {
         </div>
       </DialogContent>
     </Dialog>
+    <Dialog open={Boolean(libraryDialogMode)} onOpenChange={(open) => !open && closeLibraryDialog()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{libraryDialogMode === "edit" ? "修改组件库信息" : "创建组件库"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input value={libraryForm.name} onChange={(event) => setLibraryForm((current) => ({ ...current, name: event.target.value }))} placeholder="组件库名称" />
+          <Textarea value={libraryForm.description} onChange={(event) => setLibraryForm((current) => ({ ...current, description: event.target.value }))} placeholder="组件库描述，供 Agent 识别风格和用途" className="min-h-24" />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={closeLibraryDialog}>取消</Button>
+            <Button type="button" onClick={submitLibraryDialog}>{libraryDialogMode === "edit" ? "保存" : "创建"}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={Boolean(createComponentDialog)} onOpenChange={(open) => !open && setCreateComponentDialog(null)}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>创建组件</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input value={componentForm.name} onChange={(event) => setComponentForm((current) => ({ ...current, name: event.target.value }))} placeholder="组件名称" />
+          <Select value={componentForm.libraryId} onValueChange={(value) => {
+            if (value === "__create__") {
+              openCreateLibraryDialog();
+              return;
+            }
+            setComponentForm((current) => ({ ...current, libraryId: value }));
+          }}>
+            <SelectTrigger>
+              <SelectValue placeholder="选择组件库" />
+            </SelectTrigger>
+            <SelectContent>
+              {componentLibraries.map((library) => (
+                <SelectItem key={library.id} value={library.id}>{library.name}</SelectItem>
+              ))}
+              <SelectItem value="__create__">创建新组件库...</SelectItem>
+            </SelectContent>
+          </Select>
+          <Textarea value={componentForm.description} onChange={(event) => setComponentForm((current) => ({ ...current, description: event.target.value }))} placeholder="组件描述，供 Agent 检索和复用" className="min-h-24" />
+          <div className="rounded-xl bg-[#f7f7f8] px-3 py-2 text-xs leading-5 text-[#777]">组件会以局部坐标保存，根节点 x/y 固定为 0；拖拽到画布时按落点插入。</div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setCreateComponentDialog(null)}>取消</Button>
+            <Button type="button" onClick={submitCreateLocalComponent}>创建组件</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={Boolean(editComponentInfo)} onOpenChange={(open) => !open && setEditComponentInfo(null)}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>修改组件信息</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input value={componentForm.name} onChange={(event) => setComponentForm((current) => ({ ...current, name: event.target.value }))} placeholder="组件名称" />
+          <Select value={componentForm.libraryId} onValueChange={(value) => setComponentForm((current) => ({ ...current, libraryId: value }))}>
+            <SelectTrigger>
+              <SelectValue placeholder="选择组件库" />
+            </SelectTrigger>
+            <SelectContent>
+              {componentLibraries.map((library) => (
+                <SelectItem key={library.id} value={library.id}>{library.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Textarea value={componentForm.description} onChange={(event) => setComponentForm((current) => ({ ...current, description: event.target.value }))} placeholder="组件描述" className="min-h-24" />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setEditComponentInfo(null)}>取消</Button>
+            <Button type="button" onClick={submitEditComponentInfo}>保存</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
@@ -2537,7 +3056,7 @@ function CanvasDesignRenderer({
     context.scale(zoom, zoom);
     const sortedNodes = [...nodes]
       .sort((first, second) => ((first.zIndex ?? 0) - (second.zIndex ?? 0)));
-    console.log(sortedNodes, 'sortedNodes')
+    console.log(JSON.stringify(sortedNodes), 'sortedNodes')
     sortedNodes.forEach((node) => drawDesignNodeOnCanvas(context, node, () => setImageRevision((current) => current + 1)));
     context.restore();
   }, [height, nodes, pan.x, pan.y, width, zoom]);
@@ -2734,6 +3253,8 @@ function DesignNodeView({
   const importedSketchNode = Boolean(node.sourceLayerClass);
   const importedSketchText = importedSketchNode && node.type === "text";
   const allowOverflow = shouldAllowDesignNodeOverflow(node);
+  const shouldClip = shouldClipDesignNode(node);
+  const contentOverflowVisible = (importedSketchText || allowOverflow) && !shouldClip;
   const baseStyle: CSSProperties = {
     left: node.x,
     top: node.y,
@@ -2758,8 +3279,8 @@ function DesignNodeView({
     transformOrigin: "center center",
     boxShadow: node.shadow || undefined,
     zIndex: node.zIndex,
-    clipPath: allowOverflow ? undefined : getNodeClipPath(node),
-    overflow: allowOverflow || (node.type === "text" && importedSketchNode) ? "visible" : undefined
+    clipPath: shouldClip ? getNodeClipPath(node) : undefined,
+    overflow: shouldClip ? "hidden" : allowOverflow || (node.type === "text" && importedSketchNode) ? "visible" : undefined
   };
 
   return (
@@ -2768,7 +3289,7 @@ function DesignNodeView({
       style={baseStyle}
       onPointerDown={onPointerDown}
     >
-      <div className={`pointer-events-none flex h-full w-full items-center justify-center text-center font-medium ${importedSketchText || allowOverflow ? "overflow-visible" : "overflow-hidden"} ${node.type === "image" || importedSketchNode ? "p-0" : "p-3"}`}>
+      <div className={`pointer-events-none flex h-full w-full items-center justify-center text-center font-medium ${contentOverflowVisible ? "overflow-visible" : "overflow-hidden"} ${node.type === "image" || importedSketchNode ? "p-0" : "p-3"}`}>
         {node.svgPath ? (
           <svg
             className="h-full w-full overflow-visible"
@@ -2787,15 +3308,15 @@ function DesignNodeView({
           </svg>
         ) : node.type === "table" && !importedSketchNode ? (
           <div className="h-full w-full overflow-hidden rounded bg-white text-left text-[13px] text-[#333]">
-            <div className="grid bg-[#eef1f7] px-3 py-2 font-semibold" style={{ gridTemplateColumns: `repeat(${getDesignTableColumns(node).length}, minmax(0, 1fr))` }}>
+            <div className="grid bg-[#eef1f7] px-3 py-2 font-semibold" style={{ gridTemplateColumns: `repeat(${Math.max(1, getDesignTableColumns(node).length)}, minmax(0, 1fr))` }}>
               {getDesignTableColumns(node).map((column) => (
                 <span key={column} className="truncate">{column}</span>
               ))}
             </div>
-            {[1, 2, 3, 4].map((row) => (
-              <div key={row} className="grid border-t border-[#e5e7eb] px-3 py-2" style={{ gridTemplateColumns: `repeat(${getDesignTableColumns(node).length}, minmax(0, 1fr))` }}>
+            {getDesignTableRows(node).map((row, rowIndex) => (
+              <div key={rowIndex} className="grid border-t border-[#e5e7eb] px-3 py-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, getDesignTableColumns(node).length)}, minmax(0, 1fr))` }}>
                 {getDesignTableColumns(node).map((column, index) => (
-                  <span key={`${row}-${column}`} className="truncate">{getDesignTableCellSample(column, row, index)}</span>
+                  <span key={`${rowIndex}-${column}`} className="truncate">{row[index] ?? ""}</span>
                 ))}
               </div>
             ))}
@@ -2811,7 +3332,7 @@ function DesignNodeView({
             <div className="flex h-full w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,#f0f4ff,#fff)] text-[#6b7280]">Image</div>
           )
         ) : (
-          <span className={`${importedSketchText || allowOverflow ? "overflow-visible" : "max-h-full overflow-hidden"} w-full whitespace-pre-wrap break-words ${importedSketchNode ? "px-0.5" : ""}`}>{node.text || (importedSketchNode ? "" : node.name)}</span>
+          <span className={`${contentOverflowVisible ? "overflow-visible" : "max-h-full overflow-hidden"} w-full whitespace-pre-wrap break-words ${importedSketchNode ? "px-0.5" : ""}`}>{node.text || (importedSketchNode ? "" : node.name)}</span>
         )}
       </div>
       {selected ? (
@@ -2923,7 +3444,9 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
   const { node, children } = treeNode;
   const textNode = node.type === "text";
   const imageNode = node.type === "image";
+  const importedSketchNode = Boolean(node.sourceLayerClass);
   const allowOverflow = shouldAllowDesignNodeOverflow(node);
+  const shouldClip = shouldClipDesignNode(node);
   const imageClip = getImageVisualClip(node);
   const visualX = imageClip ? imageClip.x : node.x;
   const visualY = imageClip ? imageClip.y : node.y;
@@ -2938,7 +3461,7 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
     width: visualWidth,
     height: textNode ? "auto" : visualHeight,
     minHeight: textNode ? node.height : undefined,
-    overflow: allowOverflow ? "visible" : imageNode || node.fillImageUrl || node.clipPath || node.clipBounds || visualRadius > 0 ? "hidden" : "visible",
+    overflow: shouldClip ? "hidden" : allowOverflow ? "visible" : imageNode || node.fillImageUrl || (!importedSketchNode && visualRadius > 0) ? "hidden" : "visible",
     ...backgroundStyle,
     borderColor: node.stroke,
     borderStyle: node.stroke !== "transparent" && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? "solid" : undefined,
@@ -2949,7 +3472,7 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
     transform: getDesignNodeCssTransform(node),
     transformOrigin: "center center",
     zIndex: node.zIndex,
-    clipPath: allowOverflow || imageClip ? undefined : getNodeClipPath(node),
+    clipPath: shouldClip && !imageClip ? getNodeClipPath(node) : undefined,
     color: node.textColor,
     fontFamily: getCssFontFamily(node),
     fontWeight: node.fontWeight ?? 400,
@@ -3457,7 +3980,7 @@ class SvgExportDefinitions {
   private counter = 0;
 
   paint(node: DesignNode, value: string | undefined, kind: "fill" | "stroke", fallback: string, suffix: string) {
-    const paint = value?.trim();
+    const paint = getFirstCanvasPaintLayer(value);
     if (!paint || paint === "transparent" || paint === "none") {
       return fallback;
     }
@@ -3491,7 +4014,9 @@ function buildSvgLinearGradientDefinition(id: string, value: string) {
   const args = extractCssFunctionArgs(value);
   const firstArg = args[0] ?? "";
   const angle = firstArg.endsWith("deg") ? Number(firstArg.replace("deg", "")) : 180;
-  const stops = (firstArg.endsWith("deg") ? args.slice(1) : args).map(parseCssColorStop);
+  const stops = (firstArg.endsWith("deg") ? args.slice(1) : args)
+    .map(parseCssColorStop)
+    .filter((stop): stop is { color: string; position: number } => Boolean(stop));
   const radians = (angle - 90) * Math.PI / 180;
   const x = Math.cos(radians) / 2;
   const y = Math.sin(radians) / 2;
@@ -3499,7 +4024,9 @@ function buildSvgLinearGradientDefinition(id: string, value: string) {
 }
 
 function buildSvgRadialGradientDefinition(id: string, value: string) {
-  const stops = extractCssFunctionArgs(value).map(parseCssColorStop);
+  const stops = extractCssFunctionArgs(value)
+    .map(parseCssColorStop)
+    .filter((stop): stop is { color: string; position: number } => Boolean(stop));
   return `<radialGradient${serializeSvgAttributes({ id, cx: "50%", cy: "50%", r: "70%" })}>${stops.map((stop) => `<stop${serializeSvgAttributes({ offset: `${Math.round(stop.position * 100)}%`, "stop-color": stop.color })}/>`).join("")}</radialGradient>`;
 }
 
@@ -3642,21 +4169,26 @@ function getCssFontFamily(node: DesignNode) {
 }
 
 function getDesignTableColumns(node: DesignNode) {
-  const match = /^columns:(.+)$/i.exec(node.text?.trim() ?? "");
+  const match = /^columns:(.*)$/im.exec(node.text?.trim() ?? "");
   const columns = match?.[1]
     ?.split("|")
     .map((item) => item.trim())
     .filter(Boolean);
-  return columns && columns.length > 0 ? columns.slice(0, 8) : ["日期", "姓名", "状态"];
+  return columns && columns.length > 0 ? columns.slice(0, 8) : [];
 }
 
-function getDesignTableCellSample(column: string, row: number, index: number) {
-  if (/日期|时间|date|time/i.test(column)) return row === 1 ? "2026-05-05" : "2026-05-03";
-  if (/状态|status/i.test(column)) return row % 2 === 0 ? "处理中" : "已上线";
-  if (/负责人|owner|用户|姓名|name/i.test(column)) return row === 1 ? "方宝" : `用户 ${row}`;
-  if (/操作|action/i.test(column)) return "查看";
-  if (/数量|金额|数值|count|amount/i.test(column)) return `${row * 12}`;
-  return index === 0 ? `记录 ${row}` : `${column} ${row}`;
+function getDesignTableRows(node: DesignNode) {
+  const text = node.text?.trim() ?? "";
+  const rowsMatch = /^rows:(.+)$/im.exec(text);
+  const rows = rowsMatch?.[1]
+    ?.split(";")
+    .map((row) => row.split("|").map((cell) => cell.trim()))
+    .filter((row) => row.some(Boolean));
+  if (rows && rows.length > 0) {
+    return rows.slice(0, 20);
+  }
+  const columnCount = getDesignTableColumns(node).length;
+  return Array.from({ length: 4 }, () => Array.from({ length: columnCount }, () => ""));
 }
 
 function getNodeTextDecoration(node: DesignNode) {
@@ -3710,8 +4242,12 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
 function drawTableNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
   drawBoxNode(context, node, requestRedraw);
   const columns = getDesignTableColumns(node);
+  const rows = getDesignTableRows(node).slice(0, 4);
+  if (columns.length === 0) {
+    return;
+  }
   const headerHeight = Math.min(48, Math.max(34, node.height * 0.16));
-  const rowHeight = Math.max(34, Math.min(46, (node.height - headerHeight) / 4));
+  const rowHeight = Math.max(34, Math.min(46, (node.height - headerHeight) / Math.max(1, rows.length)));
   const columnWidth = node.width / Math.max(1, columns.length);
 
   context.save();
@@ -3737,16 +4273,16 @@ function drawTableNode(context: CanvasRenderingContext2D, node: DesignNode, requ
 
   context.font = `400 13px ${getCssFontFamily(node)}`;
   context.fillStyle = "#475467";
-  for (let row = 1; row <= 4; row += 1) {
-    const y = headerHeight + (row - 1) * rowHeight;
+  rows.forEach((row, rowIndex) => {
+    const y = headerHeight + rowIndex * rowHeight;
     context.beginPath();
     context.moveTo(0, y);
     context.lineTo(node.width, y);
     context.stroke();
     columns.forEach((column, index) => {
-      drawCanvasSingleLineText(context, getDesignTableCellSample(column, row, index), index * columnWidth + 14, y + rowHeight / 2, columnWidth - 24);
+      drawCanvasSingleLineText(context, row[index] ?? "", index * columnWidth + 14, y + rowHeight / 2, columnWidth - 24);
     });
-  }
+  });
   context.restore();
 }
 
@@ -3763,6 +4299,9 @@ function drawCanvasSingleLineText(context: CanvasRenderingContext2D, text: strin
 }
 
 function applyCanvasClip(context: CanvasRenderingContext2D, node: DesignNode) {
+  if (!shouldClipDesignNode(node)) {
+    return;
+  }
   if (node.clipBounds) {
     context.beginPath();
     context.rect(node.clipBounds.x, node.clipBounds.y, node.clipBounds.width, node.clipBounds.height);
@@ -3778,6 +4317,12 @@ function applyCanvasClip(context: CanvasRenderingContext2D, node: DesignNode) {
       return;
     }
     context.translate(-node.clipPath.x, -node.clipPath.y);
+  }
+
+  if (node.sourceMeta?.hasClippingMask === true && !node.clipBounds && !node.clipPath) {
+    context.beginPath();
+    context.rect(node.x, node.y, node.width, node.height);
+    context.clip();
   }
 }
 
@@ -3871,7 +4416,7 @@ function drawSvgPathOnCanvas(
       context.save();
       applyCanvasSvgTransform(context, pathNode.transform);
     }
-    drawPathShadowLayers(context, path, node, fill || getCanvasPaint(pathNode.fill ?? node.fill) || "#ffffff");
+    drawPathShadowLayers(context, path, node, fill || getCanvasPaint(pathNode.fill ?? node.fill));
     if (fill) {
       context.fillStyle = fill;
       context.fill(path, pathNode.fillRule === "evenodd" ? "evenodd" : "nonzero");
@@ -3976,7 +4521,7 @@ function drawBoxNode(context: CanvasRenderingContext2D, node: DesignNode, reques
     node.height - strokeOffset * 2,
     Math.max(0, node.radius - strokeOffset)
   );
-  drawPathShadowLayers(context, path, node, fill || getCanvasPaint(node.fill) || "#ffffff");
+  drawPathShadowLayers(context, path, node, fill || getCanvasPaint(node.fill));
   if (node.fillImageUrl) {
     drawFillImage(context, node, path, requestRedraw);
   }
@@ -4006,7 +4551,7 @@ function drawPathShadowLayers(
   fallbackFill: string | CanvasGradient
 ) {
   const shadows = parseCanvasShadows(node.shadow);
-  if (shadows.length === 0) {
+  if (shadows.length === 0 || !fallbackFill) {
     return;
   }
 
@@ -4582,7 +5127,7 @@ function getCanvasPaint(value: string | undefined) {
 }
 
 function getCanvasStrokeStyle(context: CanvasRenderingContext2D, node: DesignNode): string | CanvasGradient {
-  const stroke = node.stroke?.trim();
+  const stroke = getFirstCanvasPaintLayer(node.stroke);
   if (isTransparentPaint(stroke) || stroke?.startsWith("url(")) {
     return "";
   }
@@ -4613,7 +5158,7 @@ function getMinimapNodeColor(node: DesignNode) {
 }
 
 function getCanvasFillStyle(context: CanvasRenderingContext2D, node: DesignNode, value: string | undefined): string | CanvasGradient {
-  const paint = value?.trim();
+  const paint = getFirstCanvasPaintLayer(value);
   if (isTransparentPaint(paint) || paint?.startsWith("url(")) {
     return "";
   }
@@ -4645,7 +5190,13 @@ function createCanvasLinearGradient(context: CanvasRenderingContext2D, node: Des
   const dx = Math.cos(radians) * length / 2;
   const dy = Math.sin(radians) * length / 2;
   const gradient = context.createLinearGradient(centerX - dx, centerY - dy, centerX + dx, centerY + dy);
-  stops.forEach((stop) => gradient.addColorStop(stop.position, stop.color));
+  stops.forEach((stop) => {
+    try {
+      gradient.addColorStop(stop.position, stop.color);
+    } catch {
+      // Ignore malformed imported color stops; falling back would be worse than skipping one stop.
+    }
+  });
   return gradient;
 }
 
@@ -4657,7 +5208,13 @@ function createCanvasRadialGradient(context: CanvasRenderingContext2D, node: Des
 
   const radius = Math.max(node.width, node.height) / 2;
   const gradient = context.createRadialGradient(node.width / 2, node.height / 2, 0, node.width / 2, node.height / 2, radius);
-  stops.forEach((stop) => gradient.addColorStop(stop.position, stop.color));
+  stops.forEach((stop) => {
+    try {
+      gradient.addColorStop(stop.position, stop.color);
+    } catch {
+      // Ignore malformed imported color stops; falling back would be worse than skipping one stop.
+    }
+  });
   return gradient;
 }
 
@@ -4687,6 +5244,14 @@ function extractCssFunctionArgs(value: string) {
   return args;
 }
 
+function getFirstCanvasPaintLayer(value: string | undefined) {
+  const paint = value?.trim();
+  if (!paint) {
+    return undefined;
+  }
+  return splitCssLayers(paint)[0]?.trim() || paint;
+}
+
 function splitCssLayers(value: string | undefined) {
   if (!value) {
     return [];
@@ -4713,12 +5278,27 @@ function splitCssLayers(value: string | undefined) {
 function parseCssColorStop(value: string) {
   const match = /^(?<color>.+?)\s+(?<position>-?\d+(?:\.\d+)?)%$/.exec(value.trim());
   if (!match?.groups) {
-    return { color: value.trim(), position: 0 };
+    const color = value.trim();
+    return isValidCssColor(color) ? { color, position: 0 } : undefined;
+  }
+  const color = match.groups.color.trim();
+  if (!isValidCssColor(color)) {
+    return undefined;
   }
   return {
-    color: match.groups.color.trim(),
+    color,
     position: Math.max(0, Math.min(1, Number(match.groups.position) / 100))
   };
+}
+
+function isValidCssColor(value: string) {
+  if (!value || /gradient\s*\(|\)$/.test(value)) {
+    return false;
+  }
+  if (typeof CSS !== "undefined" && typeof CSS.supports === "function") {
+    return CSS.supports("color", value);
+  }
+  return /^(#(?:[0-9a-f]{3,8})|rgba?\([^)]+\)|hsla?\([^)]+\)|[a-z]+|currentColor|none)$/i.test(value);
 }
 
 function getSvgPaint(value: string | undefined, fallback: string) {
@@ -4733,7 +5313,7 @@ function getSvgPaint(value: string | undefined, fallback: string) {
 }
 
 function getSvgPaintDescriptor(node: DesignNode, value: string | undefined, kind: "fill" | "stroke", fallback: string, idSuffix = "") {
-  const paint = value?.trim();
+  const paint = getFirstCanvasPaintLayer(value);
   if (kind === "fill" && isTransparentPaint(paint) && isLikelySketchSidebarBackground(node)) {
     return { paint: "#f8f8fa", definition: null as ReactNode };
   }
@@ -4790,10 +5370,19 @@ function renderSvgRadialGradient(id: string, value: string) {
 }
 
 function shouldAllowDesignNodeOverflow(node: DesignNode) {
+  if (shouldClipDesignNode(node)) {
+    return false;
+  }
   if (node.type === "image" || node.fillImageUrl || node.imageUrl) {
     return false;
   }
   return node.type === "frame" || node.type === "container" || node.type === "card";
+}
+
+function shouldClipDesignNode(node: DesignNode) {
+  return node.sourceMeta?.hasClippingMask === true
+    || node.sourceMeta?.activeClippingMask?.hasClippingMask === true
+    || Boolean(node.clipBounds || node.clipPath);
 }
 
 function getNodeClipPath(node: DesignNode) {
@@ -4942,6 +5531,10 @@ function getTopLevelNodeIds(ids: string[], nodes: DesignNode[]) {
     const node = nodes.find((item) => item.id === id);
     return Boolean(node) && !getAncestorNodes(node!, nodes).some((ancestor) => idSet.has(ancestor.id));
   });
+}
+
+function isDescendantOfNode(node: DesignNode, ancestorId: string, nodes: DesignNode[]) {
+  return getAncestorNodes(node, nodes).some((ancestor) => ancestor.id === ancestorId);
 }
 
 function rectContainsPoint(rect: RectBounds, point: { x: number; y: number }) {
@@ -5313,6 +5906,46 @@ function cloneDesignNodesWithNewIds(
   }));
 }
 
+function createLocalComponentNodes(sourceNodes: DesignNode[]) {
+  if (sourceNodes.length === 0) {
+    return [];
+  }
+  const bounds = getNodesBoundsForSelection(sourceNodes) ?? getNodesBounds(sourceNodes);
+  const topLevelNodes = sourceNodes.filter((node) => !node.parentId || !sourceNodes.some((candidate) => candidate.id === node.parentId));
+  const shouldWrap = topLevelNodes.length > 1;
+  const wrapperId = shouldWrap ? createId("node") : "";
+  const clonedNodes = cloneDesignNodesWithNewIds(sourceNodes, (node, index) => ({
+    x: Math.round(node.x - bounds.x),
+    y: Math.round(node.y - bounds.y),
+    zIndex: index,
+    locked: false,
+    visible: true
+  }));
+  if (!shouldWrap) {
+    return clonedNodes.map((node, index) => index === 0 ? { ...node, x: 0, y: 0, parentId: undefined } : node);
+  }
+  return [
+    createNode("container", {
+      id: wrapperId,
+      name: "组件根节点",
+      x: 0,
+      y: 0,
+      width: Math.max(1, Math.round(bounds.width)),
+      height: Math.max(1, Math.round(bounds.height)),
+      fill: "transparent",
+      stroke: "transparent",
+      strokeWidth: 0,
+      text: "",
+      zIndex: 0
+    }),
+    ...clonedNodes.map((node, index) => ({
+      ...node,
+      parentId: topLevelNodes.some((topNode) => topNode.id === sourceNodes[index]?.id) ? wrapperId : node.parentId,
+      zIndex: index + 1
+    }))
+  ];
+}
+
 function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile {
   const fallback = createInitialDesignFile(projectName);
   if (!value || typeof value !== "object") {
@@ -5323,6 +5956,20 @@ function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile 
   const pages = Array.isArray(source.pages) && source.pages.length > 0
     ? source.pages
     : fallback.pages;
+  const localComponents = Array.isArray(source.importedComponents)
+    ? source.importedComponents.filter((component) => component.sourceFileName === LOCAL_COMPONENT_SOURCE_NAME)
+    : [];
+  const existingLibraries = Array.isArray(source.componentLibraries) ? source.componentLibraries : [];
+  const componentLibraries = existingLibraries.length > 0 || localComponents.length === 0
+    ? existingLibraries
+    : [{
+        id: createId("component-library"),
+        name: DEFAULT_LOCAL_COMPONENT_LIBRARY_NAME,
+        description: "从画布选区创建的本地组件。",
+        createdAt: source.updatedAt ?? fallback.updatedAt,
+        updatedAt: source.updatedAt ?? fallback.updatedAt
+      }];
+  const defaultLibraryId = componentLibraries[0]?.id;
 
   return {
     ...fallback,
@@ -5332,7 +5979,12 @@ function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile 
     prdText: source.prdText ?? fallback.prdText,
     aiSettings: source.aiSettings ?? fallback.aiSettings,
     pages,
-    importedComponents: Array.isArray(source.importedComponents) ? source.importedComponents : [],
+    componentLibraries,
+    importedComponents: Array.isArray(source.importedComponents)
+      ? source.importedComponents.map((component) => component.sourceFileName === LOCAL_COMPONENT_SOURCE_NAME && !component.libraryId && defaultLibraryId
+        ? { ...component, libraryId: defaultLibraryId }
+        : component)
+      : [],
     importedAssets: Array.isArray(source.importedAssets) ? source.importedAssets : [],
     updatedAt: source.updatedAt ?? fallback.updatedAt
   };
@@ -5425,6 +6077,7 @@ function createInitialDesignFile(projectName: string): AiDesignFile {
       systemPrompt: ""
     },
     updatedAt: now,
+    componentLibraries: [],
     importedComponents: [],
     importedAssets: [],
     pages: [

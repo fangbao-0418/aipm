@@ -163,8 +163,18 @@ export interface WorkspaceDesignComponent {
   id: string;
   name: string;
   sourceFileName: string;
+  libraryId?: string;
+  description?: string;
   nodeCount: number;
   nodes: WorkspaceDesignNode[];
+}
+
+export interface WorkspaceDesignComponentLibrary {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WorkspaceDesignAsset {
@@ -193,6 +203,7 @@ export interface WorkspaceDesignFile {
     systemPrompt?: string;
   };
   pages: WorkspaceDesignPage[];
+  componentLibraries?: WorkspaceDesignComponentLibrary[];
   importedComponents: WorkspaceDesignComponent[];
   importedAssets: WorkspaceDesignAsset[];
   updatedAt: string;
@@ -680,6 +691,46 @@ export async function saveAiDesignFile(projectId: string, file: WorkspaceDesignF
   return requestJson<WorkspaceDesignFile>(`/api/workspace/projects/${projectId}/design/file`, {
     method: "PUT",
     body: JSON.stringify(file)
+  });
+}
+
+export async function createAiDesignComponentLibrary(projectId: string, input: { name: string; description?: string }) {
+  return requestJson<WorkspaceDesignComponentLibrary>(`/api/workspace/projects/${projectId}/design/component-libraries`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function updateAiDesignComponentLibrary(projectId: string, libraryId: string, input: { name: string; description?: string }) {
+  return requestJson<WorkspaceDesignComponentLibrary>(`/api/workspace/projects/${projectId}/design/component-libraries/${libraryId}`, {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function deleteAiDesignComponentLibrary(projectId: string, libraryId: string) {
+  return requestJson<{ ok: boolean; id: string }>(`/api/workspace/projects/${projectId}/design/component-libraries/${libraryId}`, {
+    method: "DELETE"
+  });
+}
+
+export async function createAiDesignComponent(projectId: string, component: WorkspaceDesignComponent) {
+  return requestJson<WorkspaceDesignComponent>(`/api/workspace/projects/${projectId}/design/components`, {
+    method: "POST",
+    body: JSON.stringify(component)
+  });
+}
+
+export async function updateAiDesignComponent(projectId: string, componentId: string, component: WorkspaceDesignComponent) {
+  return requestJson<WorkspaceDesignComponent>(`/api/workspace/projects/${projectId}/design/components/${componentId}`, {
+    method: "PUT",
+    body: JSON.stringify(component)
+  });
+}
+
+export async function deleteAiDesignComponent(projectId: string, componentId: string) {
+  return requestJson<{ ok: boolean; id: string }>(`/api/workspace/projects/${projectId}/design/components/${componentId}`, {
+    method: "DELETE"
   });
 }
 

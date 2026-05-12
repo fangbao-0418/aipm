@@ -5,6 +5,8 @@ import { IndexDatabase } from "../db/index-database.js";
 import { readJsonFile, writeJsonFile } from "../../shared/utils/json.js";
 import type {
   WorkspaceBundle,
+  WorkspaceDesignComponent,
+  WorkspaceDesignComponentLibrary,
   WorkspaceDesignFile,
   WorkspaceDesignPage,
   WorkspaceProjectDocument,
@@ -308,6 +310,30 @@ export class WorkspaceProjectRepository {
 
   async getDesignPage(projectId: string, pageId: string) {
     return readJsonFile<WorkspaceDesignPage>(this.designPagePath(projectId, pageId));
+  }
+
+  async upsertDesignComponentLibrary(projectId: string, library: WorkspaceDesignComponentLibrary) {
+    await this.index.upsertWorkspaceComponentLibrary(projectId, library);
+  }
+
+  async listDesignComponentLibraries(projectId: string) {
+    return this.index.listWorkspaceComponentLibraries(projectId);
+  }
+
+  async deleteDesignComponentLibrary(projectId: string, libraryId: string) {
+    await this.index.deleteWorkspaceComponentLibrary(projectId, libraryId);
+  }
+
+  async upsertDesignComponent(projectId: string, component: WorkspaceDesignComponent) {
+    await this.index.upsertWorkspaceDesignComponent(projectId, component);
+  }
+
+  async listDesignComponents(projectId: string) {
+    return this.index.listWorkspaceDesignComponents(projectId);
+  }
+
+  async deleteDesignComponent(projectId: string, componentId: string) {
+    await this.index.deleteWorkspaceDesignComponent(projectId, componentId);
   }
 
   async upsertAgentConversation(input: {

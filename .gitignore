@@ -6,3 +6,4 @@ coverage
 .env
 .env.local
 workspace/projects/*
+temp

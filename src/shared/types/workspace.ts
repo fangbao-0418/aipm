@@ -200,6 +200,13 @@ export interface WorkspaceDesignNode {
     flow?: Record<string, unknown>;
     exportOptions?: Record<string, unknown>;
     userInfo?: Record<string, unknown>;
+    hasClippingMask?: boolean;
+    activeClippingMask?: {
+      sourceLayerId?: string;
+      sourceLayerClass?: string;
+      name?: string;
+      hasClippingMask: true;
+    };
   };
   /** Layer opacity after style context settings are applied. */
   opacity?: number;
@@ -274,8 +281,18 @@ export interface WorkspaceDesignComponent {
   id: string;
   name: string;
   sourceFileName: string;
+  libraryId?: string;
+  description?: string;
   nodeCount: number;
   nodes: WorkspaceDesignNode[];
+}
+
+export interface WorkspaceDesignComponentLibrary {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WorkspaceDesignAsset {
@@ -298,6 +315,7 @@ export interface WorkspaceDesignFile {
     systemPrompt?: string;
   };
   pages: WorkspaceDesignPage[];
+  componentLibraries?: WorkspaceDesignComponentLibrary[];
   importedComponents: WorkspaceDesignComponent[];
   importedAssets: WorkspaceDesignAsset[];
   updatedAt: string;
