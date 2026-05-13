@@ -118,8 +118,10 @@ export const designAgentToolNameSchema = z.enum([
   "schema.duplicate_node",
   "schema.generate_from_prompt",
   "component_library.list",
+  "component_library.create",
   "component.search",
   "component.insert",
+  "component.create_from_nodes",
   "workspace.read_file",
   "canvas.capture",
   "ui.analyze_layout",
@@ -322,6 +324,11 @@ export const designAgentToolDescriptions: Array<{
     inputSchema: {}
   },
   {
+    name: "component_library.create",
+    description: "创建本地组件库，保存到 SQLite。用于项目还没有合适组件库，或需要沉淀一套新的业务/风格组件库时。",
+    inputSchema: { name: "string", description: "optional string" }
+  },
+  {
     name: "component.search",
     description: "按组件库、组件名称、描述、文本内容和节点类型搜索本地组件。用于选择最匹配的组件资产，不直接修改画布。",
     inputSchema: { libraryId: "optional string", libraryName: "optional string", query: "optional string", componentName: "optional string", limit: "optional number" }
@@ -330,6 +337,11 @@ export const designAgentToolDescriptions: Array<{
     name: "component.insert",
     description: "把本地组件库里的组件插入到当前页面。会克隆节点 id，并按 x/y 或目标区域坐标平移组件，保持组件内部相对位置。",
     inputSchema: { pageId: "optional string", componentId: "optional string", componentName: "optional string", libraryId: "optional string", libraryName: "optional string", query: "optional string", x: "optional number", y: "optional number" }
+  },
+  {
+    name: "component.create_from_nodes",
+    description: "把当前页面的一组节点保存为本地组件库组件，保存到 SQLite。组件内部坐标会归零，适合把高质量 UI 稿中的查询区、表格区、卡片、页头等沉淀成模板。",
+    inputSchema: { pageId: "optional string", nodeIds: "string[] optional", match: "optional object", libraryId: "optional string", libraryName: "optional string", libraryDescription: "optional string", componentName: "string", componentDescription: "optional string", includeDescendants: "optional boolean" }
   },
   {
     name: "workspace.read_file",
@@ -474,10 +486,14 @@ export class DesignAgentToolService {
         return this.generateSchemaFromPrompt(context.projectId, normalized.input, context.selectedPageId);
       case "component_library.list":
         return this.listComponentLibraries(context.projectId);
+      case "component_library.create":
+        return this.createComponentLibrary(context.projectId, normalized.input);
       case "component.search":
         return this.searchComponents(context.projectId, normalized.input);
       case "component.insert":
         return this.insertComponent(context.projectId, normalized.input, context.selectedPageId);
+      case "component.create_from_nodes":
+        return this.createComponentFromNodes(context.projectId, normalized.input, context.selectedPageId);
       case "workspace.read_file":
         return this.readWorkspaceFile(context.projectId, normalized.input.path as string | undefined);
       case "canvas.capture":
@@ -623,6 +639,17 @@ export class DesignAgentToolService {
         capabilityProfile,
         resolvedImageAssets
       ).filter((node) => node.id !== targetFrame.id);
+      const irrelevantContent = detectIrrelevantGeneratedBusinessContent(String(input.userRequest ?? ""), generatedNodes);
+      if (irrelevantContent.length > 0) {
+        return {
+          ok: false,
+          message: `生成内容包含用户未要求的业务对象：${irrelevantContent.join("、")}。已拦截落盘，请重新生成并严格按原始需求，不要套订单/商品等默认模板。`,
+          file,
+          page,
+          selectedPageId: page.id,
+          data: { irrelevantContent }
+        };
+      }
       const nextPage: WorkspaceDesignPage = {
         ...page,
         nodes: [...page.nodes, ...generatedNodes],
@@ -657,6 +684,17 @@ export class DesignAgentToolService {
       userRequest: String(input.userRequest ?? "")
     });
     const generatedNodes = enhanceGeneratedUiNodes(createUiNodesFromSchemaDraft(schemaDraft, placement, capabilityProfile), capabilityProfile, resolvedImageAssets);
+    const irrelevantContent = detectIrrelevantGeneratedBusinessContent(String(input.userRequest ?? ""), generatedNodes);
+    if (irrelevantContent.length > 0) {
+      return {
+        ok: false,
+        message: `生成内容包含用户未要求的业务对象：${irrelevantContent.join("、")}。已拦截落盘，请重新生成并严格按原始需求，不要套订单/商品等默认模板。`,
+        file,
+        page,
+        selectedPageId: page.id,
+        data: { irrelevantContent }
+      };
+    }
     const generatedFrameIds = generatedNodes.filter((node) => node.type === "frame" && !node.parentId).map((node) => node.id);
     const nextPage: WorkspaceDesignPage = {
       ...page,
@@ -1286,6 +1324,39 @@ export class DesignAgentToolService {
     };
   }
 
+  private async createComponentLibrary(projectId: string, input: Record<string, unknown>): Promise<DesignAgentToolResult> {
+    const file = await this.getFile(projectId);
+    const name = String(input.name ?? "").trim();
+    if (!name) {
+      return { ok: false, message: "缺少组件库名称。", file };
+    }
+    const existing = await this.repository.listDesignComponentLibraries(projectId).catch(() => []);
+    const duplicate = existing.find((library) => library.name.trim().toLowerCase() === name.toLowerCase());
+    if (duplicate) {
+      return {
+        ok: true,
+        message: `组件库「${duplicate.name}」已存在，后续可直接复用。`,
+        file,
+        data: { library: duplicate, created: false }
+      };
+    }
+    const now = nowIso();
+    const library: WorkspaceDesignComponentLibrary = {
+      id: createDesignId("component-library"),
+      name,
+      description: String(input.description ?? "").trim() || undefined,
+      createdAt: now,
+      updatedAt: now
+    };
+    await this.repository.upsertDesignComponentLibrary(projectId, library);
+    return {
+      ok: true,
+      message: `已创建本地组件库「${library.name}」。`,
+      file: await this.getFile(projectId),
+      data: { library, created: true }
+    };
+  }
+
   private async searchComponents(projectId: string, input: Record<string, unknown>): Promise<DesignAgentToolResult> {
     const file = await this.getFile(projectId);
     const componentLibraries = await this.repository.listDesignComponentLibraries(projectId).catch(() => []);
@@ -1304,6 +1375,53 @@ export class DesignAgentToolService {
           query: input.query
         },
         components: matches.slice(0, limit).map(({ component, library, score }) => summarizeComponentForAgent(component, library, score))
+      }
+    };
+  }
+
+  private async createComponentFromNodes(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可创建组件的页面。", file };
+
+    const componentName = String(input.componentName ?? input.name ?? "").trim();
+    if (!componentName) {
+      return { ok: false, message: "缺少组件名称 componentName。", file, page, selectedPageId: page.id };
+    }
+
+    const libraries = await this.repository.listDesignComponentLibraries(projectId).catch(() => []);
+    const library = await this.resolveOrCreateComponentLibrary(projectId, libraries, input);
+    const sourceNodes = selectComponentSourceNodes(page, input);
+    if (sourceNodes.length === 0) {
+      return {
+        ok: false,
+        message: "没有找到可保存为组件的节点。请传 nodeIds，或传 match 指定 type/name/text/position。",
+        file,
+        page,
+        selectedPageId: page.id
+      };
+    }
+
+    const componentNodes = createComponentTemplateNodes(sourceNodes);
+    const component: WorkspaceDesignComponent = {
+      id: createDesignId("component"),
+      name: componentName,
+      libraryId: library.id,
+      description: String(input.componentDescription ?? input.description ?? "").trim() || inferComponentDescription(componentName, componentNodes),
+      sourceFileName: "本地组件集合",
+      nodeCount: componentNodes.length,
+      nodes: componentNodes
+    };
+    await this.repository.upsertDesignComponent(projectId, component);
+    return {
+      ok: true,
+      message: `已把 ${sourceNodes.length} 个节点保存为组件「${component.name}」，归入组件库「${library.name}」。`,
+      file: await this.getFile(projectId),
+      page,
+      selectedPageId: page.id,
+      data: {
+        library: { id: library.id, name: library.name },
+        component: summarizeComponentForAgent(component, library),
+        sourceNodeIds: sourceNodes.map((node) => node.id)
       }
     };
   }
@@ -1362,6 +1480,33 @@ export class DesignAgentToolService {
         y: target.y
       }
     };
+  }
+
+  private async resolveOrCreateComponentLibrary(
+    projectId: string,
+    libraries: WorkspaceDesignComponentLibrary[],
+    input: Record<string, unknown>
+  ) {
+    const libraryId = String(input.libraryId ?? "").trim();
+    const libraryName = String(input.libraryName ?? "").trim();
+    const existingById = libraryId ? libraries.find((library) => library.id === libraryId) : undefined;
+    if (existingById) return existingById;
+    const existingByName = libraryName
+      ? libraries.find((library) => library.name.trim().toLowerCase() === libraryName.toLowerCase())
+      : undefined;
+    if (existingByName) return existingByName;
+    const fallback = libraries[0];
+    if (!libraryName && fallback) return fallback;
+    const now = nowIso();
+    const library: WorkspaceDesignComponentLibrary = {
+      id: createDesignId("component-library"),
+      name: libraryName || "Agent 组件库",
+      description: String(input.libraryDescription ?? "").trim() || "Agent 从高质量 UI 稿中沉淀的本地组件库。",
+      createdAt: now,
+      updatedAt: now
+    };
+    await this.repository.upsertDesignComponentLibrary(projectId, library);
+    return library;
   }
 
   private async readWorkspaceFile(projectId: string, filePath?: string): Promise<DesignAgentToolResult> {
@@ -1563,6 +1708,7 @@ function summarizeComponentLibrariesForAgent(componentLibraries: WorkspaceDesign
 }
 
 function summarizeComponentForAgent(component: WorkspaceDesignComponent, library?: WorkspaceDesignComponentLibrary, score?: number) {
+  const bounds = getNodesBounds(component.nodes);
   return {
     id: component.id,
     name: component.name,
@@ -1571,9 +1717,52 @@ function summarizeComponentForAgent(component: WorkspaceDesignComponent, library
     description: component.description ?? "",
     nodeCount: component.nodeCount,
     nodeTypes: Array.from(new Set(component.nodes.map((node) => node.type))).slice(0, 12),
+    size: { width: Math.round(bounds.width), height: Math.round(bounds.height) },
+    layoutHints: inferComponentLayoutHints(component.nodes),
+    aliases: inferComponentAliases(component),
     keyTexts: extractComponentKeyTexts(component),
     score
   };
+}
+
+function inferComponentLayoutHints(nodes: WorkspaceDesignNode[]) {
+  const bounds = getNodesBounds(nodes);
+  const hasTable = nodes.some((node) => node.type === "table");
+  const hasInputs = nodes.some((node) => node.type === "input");
+  const hasButtons = nodes.some((node) => node.type === "button");
+  const text = nodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" ");
+  return {
+    kind: hasTable ? "table-section" : hasInputs && hasButtons ? "query-or-form-section" : /标题|页头|header/i.test(text) ? "page-header" : "generic-component",
+    recommendedUse: hasTable
+      ? "列表/数据管理页面的主表格区域"
+      : hasInputs && hasButtons
+        ? "列表页查询区或表单录入区"
+        : bounds.width > bounds.height * 3
+          ? "横向工具栏/页头区域"
+          : "可复用 UI 区块",
+    aspectRatio: Number((bounds.width / Math.max(1, bounds.height)).toFixed(2))
+  };
+}
+
+function inferComponentAliases(component: WorkspaceDesignComponent) {
+  const aliases = new Set<string>();
+  const text = [
+    component.name,
+    component.description ?? "",
+    ...component.nodes.flatMap((node) => [node.type, node.name, node.text ?? ""])
+  ].join(" ").toLowerCase();
+  component.nodes.forEach((node) => {
+    if (node.type === "table") ["表格", "数据表", "列表", "table"].forEach((item) => aliases.add(item));
+    if (node.type === "input") ["输入框", "输入", "搜索框", "查询条件", "input"].forEach((item) => aliases.add(item));
+    if (node.type === "button") ["按钮", "操作", "主按钮", "button"].forEach((item) => aliases.add(item));
+    if (/状态|tag|标签|上架|下架|启用|停用|成功|失败|审核/.test(`${node.name} ${node.text ?? ""}`)) {
+      ["状态", "标签", "状态标签", "tag", "status"].forEach((item) => aliases.add(item));
+    }
+  });
+  if (/查询|搜索|筛选|filter|search/.test(text)) ["查询区", "搜索区", "筛选区", "SearchForm"].forEach((item) => aliases.add(item));
+  if (/工具栏|操作栏|toolbar|批量|导出|新增/.test(text)) ["工具栏", "操作栏", "Toolbar"].forEach((item) => aliases.add(item));
+  if (/分页|上一页|下一页|pagination/.test(text)) ["分页", "Pagination"].forEach((item) => aliases.add(item));
+  return Array.from(aliases).slice(0, 20);
 }
 
 function findLocalComponents(
@@ -1601,6 +1790,7 @@ function findLocalComponents(
       library?.name ?? "",
       library?.description ?? "",
       extractComponentKeyTexts(component).join(" "),
+      inferComponentAliases(component).join(" "),
       Array.from(new Set(component.nodes.map((node) => node.type))).join(" ")
     ].join(" ").toLowerCase();
     let score = 0;
@@ -1609,7 +1799,8 @@ function findLocalComponents(
       if (component.name.toLowerCase().includes(componentName)) score += 60;
     }
     if (query) {
-      query.split(/\s+/).filter(Boolean).forEach((token) => {
+      if (searchable.includes(query)) score += 36;
+      splitComponentSearchQuery(query).forEach((token) => {
         if (searchable.includes(token)) score += 12;
       });
     }
@@ -1619,12 +1810,89 @@ function findLocalComponents(
   return matches.sort((a, b) => b.score - a.score || a.component.name.localeCompare(b.component.name, "zh-CN"));
 }
 
+function splitComponentSearchQuery(query: string) {
+  const normalized = query.trim().toLowerCase();
+  const tokens = new Set(normalized.split(/[\s,，、;；/|]+/).filter(Boolean));
+  const phraseWords = normalized.match(/[\u4e00-\u9fa5]{2,}|[a-z0-9_-]{2,}/gi) ?? [];
+  phraseWords.forEach((word) => {
+    tokens.add(word.toLowerCase());
+    if (/[\u4e00-\u9fa5]/.test(word) && word.length > 4) {
+      for (let index = 0; index <= word.length - 2; index += 1) {
+        tokens.add(word.slice(index, index + 2).toLowerCase());
+      }
+    }
+  });
+  Array.from(tokens).forEach((token) => expandComponentSearchToken(token).forEach((item) => tokens.add(item)));
+  return Array.from(tokens).slice(0, 40);
+}
+
+function expandComponentSearchToken(token: string) {
+  const expansions: string[] = [];
+  if (/表格|数据表|列表/.test(token)) expansions.push("table", "表格", "数据表");
+  if (/状态|标签|tag|status/.test(token)) expansions.push("状态", "标签", "tag", "status");
+  if (/输入|搜索框|查询条件|筛选条件/.test(token)) expansions.push("input", "输入框", "查询", "搜索");
+  if (/按钮|操作|button/.test(token)) expansions.push("button", "按钮", "操作");
+  if (/查询|搜索|筛选|filter|search/.test(token)) expansions.push("SearchForm", "查询区", "搜索区", "input", "button");
+  if (/分页|pagination/.test(token)) expansions.push("Pagination", "分页");
+  return expansions;
+}
+
 function extractComponentKeyTexts(component: WorkspaceDesignComponent) {
   return component.nodes
     .map((node) => node.text?.trim())
     .filter((text): text is string => Boolean(text))
     .filter((text, index, array) => array.indexOf(text) === index)
     .slice(0, 20);
+}
+
+function selectComponentSourceNodes(page: WorkspaceDesignPage, input: Record<string, unknown>) {
+  const nodeIds = Array.isArray(input.nodeIds) ? input.nodeIds.map(String).filter(Boolean) : [];
+  const includeDescendants = input.includeDescendants !== false;
+  const selectedIds = new Set<string>();
+  nodeIds.forEach((id) => {
+    if (!page.nodes.some((node) => node.id === id)) return;
+    selectedIds.add(id);
+    if (includeDescendants) {
+      collectDescendantNodeIds(page.nodes, id).forEach((descendantId) => selectedIds.add(descendantId));
+    }
+  });
+  if (selectedIds.size === 0 && isRecord(input.match)) {
+    findNodesByQuery(page, input.match)
+      .filter((node) => node.visible !== false && !node.locked)
+      .forEach((node) => {
+        selectedIds.add(node.id);
+        if (includeDescendants) {
+          collectDescendantNodeIds(page.nodes, node.id).forEach((descendantId) => selectedIds.add(descendantId));
+        }
+      });
+  }
+  if (selectedIds.size === 0 && typeof input.nodeId === "string") {
+    selectedIds.add(input.nodeId);
+    if (includeDescendants) {
+      collectDescendantNodeIds(page.nodes, input.nodeId).forEach((descendantId) => selectedIds.add(descendantId));
+    }
+  }
+  return page.nodes.filter((node) => selectedIds.has(node.id) && node.visible !== false);
+}
+
+function createComponentTemplateNodes(sourceNodes: WorkspaceDesignNode[]) {
+  if (sourceNodes.length === 0) return [];
+  const bounds = getNodesBounds(sourceNodes);
+  const idMap = new Map(sourceNodes.map((node) => [node.id, createDesignId("node")]));
+  return sourceNodes.map((node, index) => normalizePatchedNode({
+    ...translateDesignNode(node, -bounds.x, -bounds.y),
+    id: idMap.get(node.id) ?? createDesignId("node"),
+    parentId: node.parentId && idMap.has(node.parentId) ? idMap.get(node.parentId) : undefined,
+    zIndex: index,
+    locked: false,
+    visible: node.visible !== false
+  }));
+}
+
+function inferComponentDescription(componentName: string, nodes: WorkspaceDesignNode[]) {
+  const nodeTypes = Array.from(new Set(nodes.map((node) => node.type))).join("、");
+  const keyTexts = nodes.map((node) => node.text || node.name).filter(Boolean).slice(0, 8).join("、");
+  return [`由 Agent 沉淀的「${componentName}」组件模板。`, nodeTypes ? `节点类型：${nodeTypes}。` : "", keyTexts ? `关键文本：${keyTexts}。` : ""].filter(Boolean).join("");
 }
 
 function getComponentInsertTarget(page: WorkspaceDesignPage, input: Record<string, unknown>) {
@@ -1638,16 +1906,50 @@ function getComponentInsertTarget(page: WorkspaceDesignPage, input: Record<strin
 function instantiateComponentNodes(component: WorkspaceDesignComponent, targetX: number, targetY: number) {
   const bounds = getNodesBounds(component.nodes);
   const idMap = new Map(component.nodes.map((node) => [node.id, createDesignId("node")]));
-  return component.nodes.map((node, index) => normalizePatchedNode({
-    ...node,
+  return component.nodes.map((node, index) => {
+    const dx = Math.round(targetX - bounds.x);
+    const dy = Math.round(targetY - bounds.y);
+    return normalizePatchedNode({
+    ...translateDesignNode(node, dx, dy),
     id: idMap.get(node.id) ?? createDesignId("node"),
     parentId: node.parentId ? idMap.get(node.parentId) : undefined,
     name: index === 0 ? component.name : node.name,
-    x: Math.round(node.x - bounds.x + targetX),
-    y: Math.round(node.y - bounds.y + targetY),
     locked: false,
     visible: node.visible !== false
-  }));
+    });
+  });
+}
+
+function detectIrrelevantGeneratedBusinessContent(userRequest: string, nodes: WorkspaceDesignNode[]) {
+  const request = userRequest.toLowerCase();
+  const generatedText = nodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" ");
+  const rules = [
+    { label: "订单", allowed: /订单|交易|支付|退款|发货|电商|商城/.test(userRequest), pattern: /订单|退款|发货|ORD\d*/i },
+    { label: "商品", allowed: /商品|产品|SKU|库存|电商|商城/.test(userRequest), pattern: /商品|SKU|库存|上架|下架|低库存/i },
+    { label: "客户", allowed: /客户|会员|CRM|用户/.test(userRequest), pattern: /客户管理|客户列表|客户等级|会员等级/i }
+  ];
+  return rules
+    .filter((rule) => !rule.allowed && rule.pattern.test(generatedText) && !request.includes(rule.label.toLowerCase()))
+    .map((rule) => rule.label);
+}
+
+function translateDesignNode(node: WorkspaceDesignNode, dx: number, dy: number): WorkspaceDesignNode {
+  if (dx === 0 && dy === 0) return node;
+  return {
+    ...node,
+    x: Math.round(node.x + dx),
+    y: Math.round(node.y + dy),
+    clipBounds: node.clipBounds ? {
+      ...node.clipBounds,
+      x: Math.round(node.clipBounds.x + dx),
+      y: Math.round(node.clipBounds.y + dy)
+    } : undefined,
+    clipPath: node.clipPath ? {
+      ...node.clipPath,
+      x: Math.round(node.clipPath.x + dx),
+      y: Math.round(node.clipPath.y + dy)
+    } : undefined
+  };
 }
 
 function getNodesBounds(nodes: WorkspaceDesignNode[]) {
@@ -2918,7 +3220,79 @@ function reflowOverlappingNodes(nodes: WorkspaceDesignNode[], spacing: number) {
     yById.set(node.id, nextY);
   });
   const movedNodes = readableNodes.map((node) => ({ ...node, y: yById.get(node.id) ?? node.y }));
-  return expandFramesToFitChildren(movedNodes, spacing);
+  return expandFramesToFitChildren(stabilizeCanvasModuleLayout(movedNodes, spacing), spacing);
+}
+
+function stabilizeCanvasModuleLayout(nodes: WorkspaceDesignNode[], spacing: number) {
+  let nextNodes = [...nodes];
+  const frames = nextNodes.filter((node) => node.type === "frame").sort((a, b) => a.y - b.y || a.x - b.x);
+  frames.forEach((frame) => {
+    const modules = nextNodes
+      .filter((node) => node.parentId === frame.id && shouldReflowAsCanvasModule(node, frame))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+    if (modules.length < 2) return;
+    const rows = groupCanvasModulesIntoRows(modules);
+    const shifts = new Map<string, number>();
+    let cursorBottom = rows[0]?.bounds.y ?? frame.y + spacing;
+    rows.forEach((row, index) => {
+      const minY = index === 0 ? row.bounds.y : cursorBottom + spacing;
+      const dy = Math.max(0, Math.ceil(minY - row.bounds.y));
+      if (dy > 0) row.nodes.forEach((node) => shifts.set(node.id, (shifts.get(node.id) ?? 0) + dy));
+      cursorBottom = row.bounds.y + dy + row.bounds.height;
+    });
+    if (shifts.size > 0) nextNodes = translateCanvasModulesAndChildren(nextNodes, shifts);
+  });
+  return nextNodes;
+}
+
+function groupCanvasModulesIntoRows(nodes: WorkspaceDesignNode[]) {
+  const rows: Array<{ nodes: WorkspaceDesignNode[]; bounds: ReturnType<typeof getNodesBounds> }> = [];
+  nodes.forEach((node) => {
+    const nodeBounds = getNodesBounds([node]);
+    const row = rows.find((item) => nodeBounds.y < item.bounds.y + item.bounds.height && nodeBounds.y + nodeBounds.height > item.bounds.y);
+    if (!row) {
+      rows.push({ nodes: [node], bounds: nodeBounds });
+      return;
+    }
+    row.nodes.push(node);
+    row.bounds = getNodesBounds(row.nodes);
+  });
+  return rows.sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x);
+}
+
+function translateCanvasModulesAndChildren(nodes: WorkspaceDesignNode[], shifts: Map<string, number>) {
+  const childrenByParent = new Map<string, WorkspaceDesignNode[]>();
+  nodes.forEach((node) => {
+    if (!node.parentId) return;
+    const children = childrenByParent.get(node.parentId) ?? [];
+    children.push(node);
+    childrenByParent.set(node.parentId, children);
+  });
+  const shiftById = new Map<string, number>();
+  shifts.forEach((dy, id) => {
+    const visit = (nodeId: string) => {
+      shiftById.set(nodeId, Math.max(shiftById.get(nodeId) ?? 0, dy));
+      (childrenByParent.get(nodeId) ?? []).forEach((child) => visit(child.id));
+    };
+    visit(id);
+  });
+  return nodes.map((node) => {
+    const dy = shiftById.get(node.id) ?? 0;
+    return dy > 0 ? translateDesignNode(node, 0, dy) : node;
+  });
+}
+
+function shouldReflowAsCanvasModule(node: WorkspaceDesignNode, frame: WorkspaceDesignNode) {
+  if (node.visible === false || node.type === "frame") return false;
+  if (node.width < 48 || node.height < 16) return false;
+  const label = `${node.name} ${node.text ?? ""}`;
+  if (/侧边|导航|菜单|顶部|工具栏|TopBar|Sidebar|Navigation/i.test(label)) return false;
+  if (node.height >= frame.height * 0.72) return false;
+  if (node.width >= frame.width * 0.86 && node.height <= 96) return false;
+  return node.type === "container"
+    || node.type === "card"
+    || node.type === "table"
+    || (node.type === "image" && node.width >= 160 && node.height >= 96);
 }
 
 function isReflowMovableNode(node: WorkspaceDesignNode) {

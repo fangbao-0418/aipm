@@ -1965,3 +1965,76 @@ Agent 在生成页面时获得本地组件库上下文
 核心原则：
 
 > 用户管理的是本地组件资产，Agent 使用的是组件库能力；两者共享同一套 SQLite 数据，但交互目标不同。
+
+## 11. Agent 组件库工具闭环
+
+本地组件库已经不是纯 UI 面板能力，Agent 也要能直接调用组件库工具：
+
+```txt
+component_library.list
+component_library.create
+component.search
+component.insert
+component.create_from_nodes
+```
+
+这里要分清两个动作：
+
+```txt
+创建组件库：component_library.create
+把节点保存成组件：component.create_from_nodes
+```
+
+用户只说“创建组件库 / 新建本地组件库”时，只调用：
+
+```txt
+component_library.create({
+  name,
+  description
+})
+```
+
+不要强行读取页面 schema，也不要强行创建组件。
+
+只有用户说“把选区/当前区域/这些节点保存成组件、沉淀组件模板”时，才进入：
+
+```txt
+page.get_schema
+component_library.create（没有库时）
+component.create_from_nodes
+```
+
+推荐使用方式：
+
+```txt
+1. 生成 UI 前：component_library.list / component.search
+2. 有匹配组件：component.insert，避免重新自由生成近似 schema
+3. 没有匹配组件：schema.generate_ui_from_requirements 生成高质量区块
+4. 生成后发现高质量可复用区块：component.create_from_nodes 沉淀为本地组件
+5. 没有合适组件库：component_library.create 自动创建组件库
+```
+
+`component.create_from_nodes` 要把组件内部坐标归零，并同步处理 `clipBounds / clipPath`，否则后续插入和移动时裁剪区域会错位。
+
+Agent 生成 UI 稿时的质量策略：
+
+```txt
+优先复用用户确认过的本地组件
+其次使用 DesignKit / Layout Compiler
+最后才允许通用 schema 生成
+```
+
+组件摘要要提供给模型：
+
+```txt
+组件库名称
+组件库描述
+组件名称
+组件描述
+节点类型
+关键文本 keyTexts
+组件尺寸
+布局用途提示 layoutHints
+```
+
+这样模型才能判断“查询区组件适合搜索表单”“表格组件适合列表页主区域”，而不是只按名字猜。

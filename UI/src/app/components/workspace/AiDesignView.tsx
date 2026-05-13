@@ -491,6 +491,8 @@ export function AiDesignView() {
   const panPreviewFrameRef = useRef<number | null>(null);
   const selectionDragRef = useRef<{
     append: boolean;
+    start: { x: number; y: number };
+    current: { x: number; y: number };
   } | null>(null);
   const resizeDragRef = useRef<ResizeSession | null>(null);
 
@@ -500,7 +502,7 @@ export function AiDesignView() {
   const selectionBounds = getNodesBoundsForSelection(selectedNodes);
   const hoveredNode = hoveredNodeId ? selectedPage.nodes.find((node) => node.id === hoveredNodeId) ?? null : null;
   const hoverBounds = hoveredNode && !selectedNodeIds.includes(hoveredNode.id) ? nodeToBounds(hoveredNode) : null;
-  const visibleNodes = selectedPage.nodes.filter((node) => node.visible);
+  const visibleNodes = selectedPage.nodes.filter((node) => node.visible !== false);
   const sceneContentBounds = useMemo(() => expandBounds(getNodesBounds(visibleNodes), 360), [visibleNodes]);
   const visibleSceneBounds = useMemo(() => ({
     x: -pan.x / zoom,
@@ -1711,7 +1713,9 @@ export function AiDesignView() {
     }
 
     selectionDragRef.current = {
-      append: event.shiftKey || event.metaKey || event.ctrlKey
+      append: event.shiftKey || event.metaKey || event.ctrlKey,
+      start: scenePoint,
+      current: scenePoint
     };
     setSelectionRect({ start: scenePoint, current: scenePoint });
     if (!selectionDragRef.current.append) {
@@ -1764,23 +1768,25 @@ export function AiDesignView() {
     }
 
     if (selectionDragRef.current && selectionRect) {
+      const current = getScenePoint(event.clientX, event.clientY);
+      selectionDragRef.current.current = current;
       setSelectionRect({
         ...selectionRect,
-        current: getScenePoint(event.clientX, event.clientY)
+        current
       });
     }
   };
 
   const handleCanvasPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (selectionDragRef.current && selectionRect) {
-      const rect = normalizeRect(selectionRect.start, selectionRect.current);
+    if (selectionDragRef.current) {
+      selectionDragRef.current.current = getScenePoint(event.clientX, event.clientY);
+      const rect = normalizeRect(selectionDragRef.current.start, selectionDragRef.current.current);
       if (rect.width > 3 || rect.height > 3) {
-        const matchedIds = hitTestNodes
-          .filter((node) => rectsIntersect(rect, nodeToBounds(node)) && !node.locked)
-          .map((node) => getCanvasSelectionTarget(node, selectedPage.nodes, selectedNodeIds)?.id)
-          .filter((id): id is string => Boolean(id));
-        const nextIds = normalizeSelectionIds(matchedIds, selectedPage.nodes);
-        selectNodes(selectionDragRef.current.append ? normalizeSelectionIds([...selectedNodeIds, ...nextIds], selectedPage.nodes) : nextIds);
+        const matchedIds = selectedPage.nodes
+          .filter((node) => node.visible !== false && rectContainsRect(rect, nodeToBounds(node)) && !node.locked)
+          .map((node) => node.id);
+        const nextIds = Array.from(new Set(matchedIds));
+        selectNodes(selectionDragRef.current.append ? Array.from(new Set([...selectedNodeIds, ...nextIds])) : nextIds);
       }
     }
     if (panDragRef.current) {
@@ -1800,11 +1806,14 @@ export function AiDesignView() {
           ...page,
           nodes: page.nodes.map((node) => {
             const original = originalById.get(node.id);
-            return original ? {
-              ...node,
+            if (!original) {
+              return node;
+            }
+            return {
+              ...translateDesignNode(node, dragSession.currentDx, dragSession.currentDy),
               x: original.x + dragSession.currentDx,
               y: original.y + dragSession.currentDy
-            } : node;
+            };
           })
         }));
       }
@@ -2617,12 +2626,12 @@ export function AiDesignView() {
                 正在加载当前页面 schema...
               </div>
             ) : null}
-            {editingComponentId ? (
+            {/* {editingComponentId ? (
               <div className="absolute left-1/2 top-6 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#d8d8dd] bg-white/95 px-4 py-2 text-xs shadow-sm">
                 <span className="font-semibold">正在编辑组件图层</span>
                 <Button type="button" size="sm" className="h-7 rounded-full px-3" onClick={saveEditingComponentLayer}>保存组件</Button>
               </div>
-            ) : null}
+            ) : null} */}
             <div
               ref={canvasOverlayRef}
               className="pointer-events-none absolute origin-top-left"
@@ -3255,14 +3264,15 @@ function DesignNodeView({
   const allowOverflow = shouldAllowDesignNodeOverflow(node);
   const shouldClip = shouldClipDesignNode(node);
   const contentOverflowVisible = (importedSketchText || allowOverflow) && !shouldClip;
+  const vectorOnlyNode = hasVectorOnlyPaint(node);
   const baseStyle: CSSProperties = {
     left: node.x,
     top: node.y,
     width: node.width,
     height: node.height,
-    background: node.svgPath ? "transparent" : node.fill || "transparent",
+    background: vectorOnlyNode ? "transparent" : node.fill || "transparent",
     borderColor: selected ? "#246bfe" : node.stroke,
-    borderWidth: selected ? Math.max(1, node.strokeWidth ?? 1) : node.svgPath || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
+    borderWidth: selected ? Math.max(1, node.strokeWidth ?? 1) : vectorOnlyNode || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
     borderRadius: node.radius,
     color: node.textColor,
     fontFamily: getCssFontFamily(node),
@@ -3291,21 +3301,7 @@ function DesignNodeView({
     >
       <div className={`pointer-events-none flex h-full w-full items-center justify-center text-center font-medium ${contentOverflowVisible ? "overflow-visible" : "overflow-hidden"} ${node.type === "image" || importedSketchNode ? "p-0" : "p-3"}`}>
         {node.svgPath ? (
-          <svg
-            className="h-full w-full overflow-visible"
-            viewBox={`0 0 ${Math.max(1, node.width)} ${Math.max(1, node.height)}`}
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <path
-              d={node.svgPath}
-              fill={getSvgPaint(node.fill, "transparent")}
-              fillRule={node.svgFillRule ?? "nonzero"}
-              stroke={getSvgPaint(node.stroke, "none")}
-              strokeWidth={node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1)}
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
+          <DomSvgPathNode node={node} />
         ) : node.type === "table" && !importedSketchNode ? (
           <div className="h-full w-full overflow-hidden rounded bg-white text-left text-[13px] text-[#333]">
             <div className="grid bg-[#eef1f7] px-3 py-2 font-semibold" style={{ gridTemplateColumns: `repeat(${Math.max(1, getDesignTableColumns(node).length)}, minmax(0, 1fr))` }}>
@@ -3367,9 +3363,9 @@ function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; cla
               top: node.y,
               width: node.width,
               height: node.height,
-              background: node.svgPath ? "transparent" : node.type === "image" && node.imageUrl ? `url(${node.imageUrl}) center / 100% 100% no-repeat` : node.fill || "transparent",
+              background: hasVectorOnlyPaint(node) ? "transparent" : node.type === "image" && node.imageUrl ? `url(${node.imageUrl}) center / 100% 100% no-repeat` : node.fill || "transparent",
               borderColor: node.stroke,
-              borderWidth: node.svgPath || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
+              borderWidth: hasVectorOnlyPaint(node) || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
               borderRadius: Math.max(2, node.radius),
               color: node.textColor,
               fontFamily: getCssFontFamily(node),
@@ -3390,24 +3386,7 @@ function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; cla
             }}
           >
             {node.svgPath ? (
-              <svg
-                className="h-full w-full overflow-visible"
-                viewBox={`0 0 ${Math.max(1, node.width)} ${Math.max(1, node.height)}`}
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                <path
-                  d={node.svgPath}
-                  fill={getSvgPaint(node.fill, "transparent")}
-                  fillRule={node.svgFillRule ?? "nonzero"}
-                  stroke={getSvgPaint(node.stroke, "none")}
-                  strokeWidth={node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1)}
-                  strokeDasharray={node.strokeDashPattern?.join(" ")}
-                  strokeLinecap={node.strokeLineCap ?? "butt"}
-                  strokeLinejoin={node.strokeLineJoin ?? "miter"}
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
+              <DomSvgPathNode node={node} />
             ) : node.type !== "image" && (node.text || node.name) ? (
               <div className="flex h-full w-full items-center justify-center overflow-hidden p-2 text-center">
                 <span className="truncate">{node.text || node.name}</span>
@@ -3510,6 +3489,8 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
             height: "100%"
           }}
         />
+      ) : textNode && isIconFontNode(node) && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? (
+        <DomIconFontFallback node={node} />
       ) : textNode && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? (
         <DomSvgTextContent node={node} />
       ) : node.text && !node.svgTree && !node.svgPath && !node.svgPaths?.length ? (
@@ -3521,6 +3502,45 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
         <DomSvgDesignNode key={child.node.id} treeNode={child} parentNode={node} />
       ))}
     </div>
+  );
+}
+
+function hasVectorOnlyPaint(node: DesignNode) {
+  return Boolean((node.svgTree || node.svgPaths?.length || node.svgPath) && !node.fill?.includes("gradient("));
+}
+
+function DomIconFontFallback({ node }: { node: DesignNode }) {
+  const color = node.textRuns?.[0]?.color ?? node.textColor ?? "#8a8f99";
+  const label = `${node.name} ${node.text ?? ""}`.toLowerCase();
+  const strokeWidth = Math.max(1.5, Math.min(node.width, node.height) / 12);
+  const common = {
+    fill: "none",
+    stroke: color,
+    strokeWidth,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const
+  };
+  const fillCommon = { fill: color, stroke: "none" };
+  let content: ReactNode;
+  if (/phone|mobile|tel|手机|电话/.test(label)) {
+    content = <path {...common} d="M33 12h30a5 5 0 0 1 5 5v62a5 5 0 0 1-5 5H33a5 5 0 0 1-5-5V17a5 5 0 0 1 5-5Zm7 8h16M44 76h8" />;
+  } else if (/left|back|返回|上一|chevron-left/.test(label)) {
+    content = <path {...common} d="M58 22 34 48l24 26" />;
+  } else if (/right|next|chevron|arrow|更多|进入|下一/.test(label)) {
+    content = <path {...common} d="m38 22 24 26-24 26" />;
+  } else if (/close|delete|remove|取消|关闭|删除/.test(label)) {
+    content = <path {...common} d="M30 30 66 66M66 30 30 66" />;
+  } else if (/plus|add|新增|添加|上传/.test(label)) {
+    content = <path {...common} d="M48 24v48M24 48h48" />;
+  } else if (/check|勾|选中|确认/.test(label)) {
+    content = <path {...common} d="M24 50 40 66 72 30" />;
+  } else {
+    content = <circle {...fillCommon} cx="48" cy="48" r="10" />;
+  }
+  return (
+    <svg className="h-full w-full" viewBox="0 0 96 96" aria-hidden="true">
+      {content}
+    </svg>
   );
 }
 
@@ -4020,14 +4040,20 @@ function buildSvgLinearGradientDefinition(id: string, value: string) {
   const radians = (angle - 90) * Math.PI / 180;
   const x = Math.cos(radians) / 2;
   const y = Math.sin(radians) / 2;
-  return `<linearGradient${serializeSvgAttributes({ id, x1: 0.5 - x, y1: 0.5 - y, x2: 0.5 + x, y2: 0.5 + y })}>${stops.map((stop) => `<stop${serializeSvgAttributes({ offset: `${Math.round(stop.position * 100)}%`, "stop-color": stop.color })}/>`).join("")}</linearGradient>`;
+  return `<linearGradient${serializeSvgAttributes({ id, x1: 0.5 - x, y1: 0.5 - y, x2: 0.5 + x, y2: 0.5 + y })}>${stops.map((stop) => {
+    const paint = normalizeSvgGradientStopPaint(stop.color);
+    return `<stop${serializeSvgAttributes({ offset: `${Math.round(stop.position * 100)}%`, "stop-color": paint.color, "stop-opacity": paint.opacity })}/>`;
+  }).join("")}</linearGradient>`;
 }
 
 function buildSvgRadialGradientDefinition(id: string, value: string) {
   const stops = extractCssFunctionArgs(value)
     .map(parseCssColorStop)
     .filter((stop): stop is { color: string; position: number } => Boolean(stop));
-  return `<radialGradient${serializeSvgAttributes({ id, cx: "50%", cy: "50%", r: "70%" })}>${stops.map((stop) => `<stop${serializeSvgAttributes({ offset: `${Math.round(stop.position * 100)}%`, "stop-color": stop.color })}/>`).join("")}</radialGradient>`;
+  return `<radialGradient${serializeSvgAttributes({ id, cx: "50%", cy: "50%", r: "70%" })}>${stops.map((stop) => {
+    const paint = normalizeSvgGradientStopPaint(stop.color);
+    return `<stop${serializeSvgAttributes({ offset: `${Math.round(stop.position * 100)}%`, "stop-color": paint.color, "stop-opacity": paint.opacity })}/>`;
+  }).join("")}</radialGradient>`;
 }
 
 function serializeSvgAttributes(attributes: Record<string, string | number | boolean | undefined | null>) {
@@ -4217,7 +4243,9 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
   context.globalCompositeOperation = (node.blendMode ?? "source-over") as GlobalCompositeOperation;
   context.filter = node.blurRadius ? `blur(${node.blurRadius}px)` : "none";
 
-  if (node.svgTree || node.svgPaths?.length || node.svgPath) {
+  if (shouldDrawNodeAsGradientBox(node)) {
+    drawBoxNode(context, node, requestRedraw);
+  } else if (node.svgTree || node.svgPaths?.length || node.svgPath) {
     drawSvgVectorNode(context, node);
   } else if (node.type === "image" && node.imageUrl) {
     drawImageNode(context, node, requestRedraw);
@@ -4237,6 +4265,12 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
   }
 
   context.restore();
+}
+
+function shouldDrawNodeAsGradientBox(node: DesignNode) {
+  return node.sourceLayerClass === "rectangle"
+    && Boolean(node.svgPath)
+    && Boolean(node.fill?.includes("gradient("));
 }
 
 function drawTableNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
@@ -4439,7 +4473,9 @@ function drawSvgPathOnCanvas(
       context.restore();
     }
   } catch {
-    drawBoxNode(context, node);
+    if (!node.sourceLayerClass && !node.svgPath && !node.svgPaths?.length && !node.svgTree) {
+      drawBoxNode(context, node);
+    }
   }
 }
 
@@ -4943,6 +4979,40 @@ function drawIconFontFallback(context: CanvasRenderingContext2D, node: DesignNod
     context.lineTo(cx - size * 0.04, cy + size * 0.12);
     context.lineTo(cx + size * 0.18, cy - size * 0.14);
     context.stroke();
+  } else if (/phone|mobile|tel|手机|电话/.test(label)) {
+    context.strokeRect(cx - size * 0.18, cy - size * 0.34, size * 0.36, size * 0.68);
+    context.beginPath();
+    context.moveTo(cx - size * 0.08, cy - size * 0.24);
+    context.lineTo(cx + size * 0.08, cy - size * 0.24);
+    context.moveTo(cx - size * 0.04, cy + size * 0.25);
+    context.lineTo(cx + size * 0.04, cy + size * 0.25);
+    context.stroke();
+  } else if (/left|back|返回|上一|chevron-left/.test(label)) {
+    context.beginPath();
+    context.moveTo(cx + size * 0.18, cy - size * 0.28);
+    context.lineTo(cx - size * 0.14, cy);
+    context.lineTo(cx + size * 0.18, cy + size * 0.28);
+    context.stroke();
+  } else if (/right|next|chevron|arrow|更多|进入|下一/.test(label)) {
+    context.beginPath();
+    context.moveTo(cx - size * 0.18, cy - size * 0.28);
+    context.lineTo(cx + size * 0.14, cy);
+    context.lineTo(cx - size * 0.18, cy + size * 0.28);
+    context.stroke();
+  } else if (/close|delete|remove|取消|关闭|删除/.test(label)) {
+    context.beginPath();
+    context.moveTo(cx - size * 0.24, cy - size * 0.24);
+    context.lineTo(cx + size * 0.24, cy + size * 0.24);
+    context.moveTo(cx + size * 0.24, cy - size * 0.24);
+    context.lineTo(cx - size * 0.24, cy + size * 0.24);
+    context.stroke();
+  } else if (/plus|add|新增|添加|上传/.test(label)) {
+    context.beginPath();
+    context.moveTo(cx, cy - size * 0.32);
+    context.lineTo(cx, cy + size * 0.32);
+    context.moveTo(cx - size * 0.32, cy);
+    context.lineTo(cx + size * 0.32, cy);
+    context.stroke();
   } else if (/hand|小手|cursor|pointer/.test(label)) {
     context.beginPath();
     context.moveTo(cx - size * 0.08, cy + size * 0.34);
@@ -5334,7 +5404,7 @@ function getSvgPaintDescriptor(node: DesignNode, value: string | undefined, kind
       definition: renderSvgRadialGradient(id, paint)
     };
   }
-  return { paint: getSvgPaint(value, fallback), definition: null as ReactNode };
+  return { paint: getSvgPaint(paint, fallback), definition: null as ReactNode };
 }
 
 function renderSvgLinearGradient(id: string, value: string) {
@@ -5349,9 +5419,12 @@ function renderSvgLinearGradient(id: string, value: string) {
   const y = Math.sin(radians) / 2;
   return (
     <linearGradient key={id} id={id} x1={0.5 - x} y1={0.5 - y} x2={0.5 + x} y2={0.5 + y}>
-      {stops.map((stop, index) => (
-        <stop key={`${id}-${index}`} offset={`${Math.round(stop.position * 100)}%`} stopColor={stop.color} />
-      ))}
+      {stops.map((stop, index) => {
+        const paint = normalizeSvgGradientStopPaint(stop.color);
+        return (
+          <stop key={`${id}-${index}`} offset={`${Math.round(stop.position * 100)}%`} stopColor={paint.color} stopOpacity={paint.opacity} />
+        );
+      })}
     </linearGradient>
   );
 }
@@ -5362,11 +5435,25 @@ function renderSvgRadialGradient(id: string, value: string) {
     .filter(Boolean) as Array<{ color: string; position: number }>;
   return (
     <radialGradient key={id} id={id} cx="50%" cy="50%" r="70%">
-      {stops.map((stop, index) => (
-        <stop key={`${id}-${index}`} offset={`${Math.round(stop.position * 100)}%`} stopColor={stop.color} />
-      ))}
+      {stops.map((stop, index) => {
+        const paint = normalizeSvgGradientStopPaint(stop.color);
+        return (
+          <stop key={`${id}-${index}`} offset={`${Math.round(stop.position * 100)}%`} stopColor={paint.color} stopOpacity={paint.opacity} />
+        );
+      })}
     </radialGradient>
   );
+}
+
+function normalizeSvgGradientStopPaint(color: string) {
+  const match = /^rgba\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d?(?:\.\d+)?)\s*\)$/i.exec(color.trim());
+  if (!match) {
+    return { color, opacity: undefined };
+  }
+  return {
+    color: `rgb(${Math.round(Number(match[1]))}, ${Math.round(Number(match[2]))}, ${Math.round(Number(match[3]))})`,
+    opacity: Math.max(0, Math.min(1, Number(match[4])))
+  };
 }
 
 function shouldAllowDesignNodeOverflow(node: DesignNode) {
@@ -5539,6 +5626,13 @@ function isDescendantOfNode(node: DesignNode, ancestorId: string, nodes: DesignN
 
 function rectContainsPoint(rect: RectBounds, point: { x: number; y: number }) {
   return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
+}
+
+function rectContainsRect(outer: RectBounds, inner: RectBounds) {
+  return inner.x >= outer.x
+    && inner.y >= outer.y
+    && inner.x + inner.width <= outer.x + outer.width
+    && inner.y + inner.height <= outer.y + outer.height;
 }
 
 function translateSvgPath(path: string, offsetX: number, offsetY: number) {
@@ -5898,12 +5992,17 @@ function cloneDesignNodesWithNewIds(
   patch: (node: DesignNode, index: number) => Partial<DesignNode>
 ) {
   const idMap = new Map(nodes.map((node) => [node.id, createId("node")]));
-  return nodes.map((node, index) => ({
-    ...node,
-    ...patch(node, index),
-    id: idMap.get(node.id) ?? createId("node"),
-    parentId: node.parentId && idMap.has(node.parentId) ? idMap.get(node.parentId) : undefined
-  }));
+  return nodes.map((node, index) => {
+    const nextPatch = patch(node, index);
+    const dx = nextPatch.x !== undefined ? nextPatch.x - node.x : 0;
+    const dy = nextPatch.y !== undefined ? nextPatch.y - node.y : 0;
+    return {
+      ...translateDesignNode(node, dx, dy),
+      ...nextPatch,
+      id: idMap.get(node.id) ?? createId("node"),
+      parentId: node.parentId && idMap.has(node.parentId) ? idMap.get(node.parentId) : undefined
+    };
+  });
 }
 
 function createLocalComponentNodes(sourceNodes: DesignNode[]) {
@@ -5999,8 +6098,29 @@ function applyDragPreviewToNodes(
   }
   const movingIds = new Set(dragPreview.nodeIds);
   return nodes.map((node) => movingIds.has(node.id)
-    ? { ...node, x: node.x + dragPreview.dx, y: node.y + dragPreview.dy }
+    ? translateDesignNode(node, dragPreview.dx, dragPreview.dy)
     : node);
+}
+
+function translateDesignNode(node: DesignNode, dx: number, dy: number): DesignNode {
+  if (dx === 0 && dy === 0) {
+    return node;
+  }
+  return {
+    ...node,
+    x: node.x + dx,
+    y: node.y + dy,
+    clipBounds: node.clipBounds ? {
+      ...node.clipBounds,
+      x: node.clipBounds.x + dx,
+      y: node.clipBounds.y + dy
+    } : undefined,
+    clipPath: node.clipPath ? {
+      ...node.clipPath,
+      x: node.clipPath.x + dx,
+      y: node.clipPath.y + dy
+    } : undefined
+  };
 }
 
 function mergeAgentPageIntoFile(file: AiDesignFile, page?: DesignPage): AiDesignFile {

@@ -45,6 +45,8 @@ export interface SceneGraphBuildResult {
   diagnostics: string[];
 }
 
+type LayoutBounds = { x: number; y: number; width: number; height: number };
+
 export interface StitchUiSchemaDraft {
   intent?: string;
   platform?: "web" | "mobile_app" | string;
@@ -198,7 +200,8 @@ export function compileWorkspaceNodesToSceneGraph(
   const componentNormalized = tokenized.map((node) => normalizeComponentNode(node, profile));
   const clamped = clampNodesIntoArtboards(componentNormalized, profile);
   const stacked = stackFunctionalSiblings(clamped, profile);
-  const nodes = expandFramesToFitChildren(stacked, getCompilerSpacing(profile, "md"));
+  const stabilized = stabilizeArtboardModuleLayout(stacked, profile);
+  const nodes = expandFramesToFitChildren(stabilized, getCompilerSpacing(profile, "md"));
   const semanticTree = buildSemanticTreeFromNodes(nodes, profile);
   const layoutTree = buildLayoutTreeFromSemanticTree(semanticTree, getSceneCanvasBounds(nodes), profile);
   return {
@@ -476,7 +479,7 @@ function inferSemanticUiPlan(input: {
     targetSection: input.targetSection,
     hasCollection: tasks.includes("browse") || /列表|管理|记录|table|list/i.test(request),
     hasFilters: /筛选|查询|搜索|filter|search|列表|管理/i.test(request),
-    hasMetrics: /概览|统计|指标|dashboard|列表|管理|订单|商品/i.test(request)
+    hasMetrics: /概览|统计|指标|dashboard|数据看板|报表/i.test(request)
   });
   return {
     id: input.artboard.refId ?? createCompilerId("semantic-plan"),
@@ -670,21 +673,20 @@ function inferPrimaryRegion(tasks: SemanticUiTask[], request: string): SemanticU
 
 function inferInformationFields(entityLabel: string, request: string, nodes: StitchUiDraftNode[]) {
   const requested = nodes.map((node) => String(node.text ?? node.name ?? "")).filter(Boolean);
-  const fields = inferTableColumns(entityLabel).filter((field) => field !== "操作");
+  const fields = inferTableColumns(entityLabel, request).filter((field) => field !== "操作");
   return Array.from(new Set([...fields, ...requested.filter((item) => item.length <= 8).slice(0, 4)]));
 }
 
 function inferEntityStates(entityLabel: string, request: string) {
-  if (entityLabel === "订单") return ["待处理", "已完成", "退款中"];
-  if (entityLabel === "商品") return ["上架", "低库存", "下架"];
   if (/审核|认证/.test(request)) return ["待审核", "已通过", "已驳回"];
   return ["启用", "停用", "异常"];
 }
 
 function inferEntityActions(entityLabel: string, request: string) {
-  const actions = [inferPrimaryAction(request), "导出", "查看"];
-  if (entityLabel === "订单") actions.push("退款", "发货");
-  if (entityLabel === "商品") actions.push("上架", "调库存");
+  const actions = [inferPrimaryAction(request), "查看"];
+  if (/导出|报表|数据/.test(request)) actions.push("导出");
+  if (/审核|审批|认证/.test(request)) actions.push("审核");
+  if (/批量|管理/.test(request)) actions.push("批量处理");
   return Array.from(new Set(actions));
 }
 
@@ -1430,8 +1432,8 @@ function buildFieldDemoValue(field: string, entityLabel: string, index: number) 
   if (/金额|价格/.test(field)) return "¥128.50";
   if (/状态/.test(field)) return inferEntityStates(entityLabel, "")[index % 3] ?? "启用";
   if (/时间|日期/.test(field)) return "2026-05-08 10:24";
-  if (/客户|用户|姓名/.test(field)) return ["张三", "李四", "王五"][index % 3];
-  if (/订单/.test(field)) return "ORD20260508001";
+  if (/客户|用户|姓名|负责人/.test(field)) return ["负责人 A", "负责人 B", "负责人 C"][index % 3];
+  if (/编号|ID|Id|id/.test(field)) return `${entityLabel.toUpperCase()}-${String(index + 1).padStart(3, "0")}`;
   return `${entityLabel}${index + 1}`;
 }
 
@@ -1662,7 +1664,7 @@ function createWebAdminStitchSection(
         lineHeight: 30
       }));
     });
-    inferFilterFields(entity).forEach((field, index) => {
+    inferFilterFields(entity, request).forEach((field, index) => {
       const x = contentX + 24 + index * 250;
       nodes.push(createCompilerNode("text", {
         parentId: filterId,
@@ -1767,7 +1769,7 @@ function createWebAdminStitchSection(
       text: inferPrimaryAction(request),
       radius: 6
     }));
-    const columns = inferTableColumns(entity);
+    const columns = inferTableColumns(entity, request);
     const tableX = contentX + 24;
     const tableY = frame.y + 496;
     const tableWidth = contentWidth - 48;
@@ -2083,20 +2085,19 @@ function createMobileStitchSection(
 }
 
 function inferProductName(request: string) {
-  if (/电商|商品|订单/.test(request)) return "AIPM 电商";
-  if (/IoT|设备|告警/i.test(request)) return "AIPM IoT";
-  if (/用户|客户|会员/.test(request)) return "AIPM CRM";
-  return "AIPM Admin";
+  const entity = inferBusinessEntityForStitch(request);
+  return entity !== "业务" ? `${entity}管理系统` : "业务管理系统";
 }
 
 function inferPageTitle(request: string) {
-  if (/订单/.test(request)) return "订单列表";
-  if (/商品/.test(request)) return "商品管理";
-  if (/客户|用户|会员/.test(request)) return "客户管理";
+  const explicitTitle = extractRequestedPageTitle(request);
+  if (explicitTitle) return explicitTitle;
   if (/详情/.test(request)) return "详情页";
   if (/表单|新增|编辑/.test(request)) return "表单编辑";
   if (/登录|注册/.test(request)) return "登录注册";
-  return "业务工作台";
+  const entity = inferBusinessEntityForStitch(request);
+  if (/列表|记录|管理|查询|搜索|table|list/i.test(request)) return `${entity}列表`;
+  return `${entity}工作台`;
 }
 
 function inferBusinessEntityForStitch(request: string) {
@@ -2108,37 +2109,23 @@ function inferBusinessEntityForStitch(request: string) {
 }
 
 function inferAdminNavItems(request: string) {
-  const base = ["工作台", "订单管理", "商品管理", "客户管理", "营销中心", "数据报表", "系统设置"];
-  if (/用户|客户|会员/.test(request)) return ["工作台", "客户管理", "用户分群", "权益管理", "数据报表", "系统设置"];
-  if (/设备|IoT|告警/i.test(request)) return ["工作台", "设备管理", "告警中心", "数据趋势", "运维日志", "系统设置"];
-  return base;
+  const entity = inferBusinessEntityForStitch(request);
+  const items = ["工作台", `${entity}管理`];
+  if (/审核|审批|认证/.test(request)) items.push("审核中心");
+  if (/告警|监控|趋势|dashboard|数据|报表/i.test(request)) items.push("数据看板");
+  if (/设置|配置|权限|系统/.test(request)) items.push("系统设置");
+  return Array.from(new Set(items)).slice(0, 6);
 }
 
 function inferPrimaryAction(request: string) {
-  if (/订单/.test(request)) return "新建订单";
-  if (/商品/.test(request)) return "新增商品";
-  if (/客户|用户|会员/.test(request)) return "新增客户";
   if (/导出/.test(request)) return "导出数据";
-  return "新增";
+  if (/审核|审批|认证/.test(request)) return "开始审核";
+  if (/编辑|修改|设置/.test(request)) return "保存";
+  const entity = inferBusinessEntityForStitch(request);
+  return entity !== "业务" ? `新增${entity}` : "新增";
 }
 
 function inferStatsForEntity(entity: string) {
-  if (entity === "订单") {
-    return [
-      { label: "总订单", value: "12,450" },
-      { label: "待处理", value: "328" },
-      { label: "已完成", value: "11,890" },
-      { label: "退款中", value: "232" }
-    ];
-  }
-  if (entity === "商品") {
-    return [
-      { label: "在售商品", value: "1,248" },
-      { label: "低库存", value: "36" },
-      { label: "待上架", value: "82" },
-      { label: "已下架", value: "109" }
-    ];
-  }
   return [
     { label: `总${entity}`, value: "8,392" },
     { label: "新增", value: "128" },
@@ -2147,65 +2134,64 @@ function inferStatsForEntity(entity: string) {
   ];
 }
 
-function inferFilterFields(entity: string) {
-  if (entity === "订单") return ["订单号", "订单状态", "创建时间", "客户姓名"];
-  if (entity === "商品") return ["商品名称", "商品状态", "商品分类", "库存区间"];
-  if (entity === "客户") return ["客户名称", "客户等级", "注册时间", "手机号"];
+function inferFilterFields(entity: string, request = "") {
+  const requestedFields = extractFieldHintsFromText(request);
+  if (requestedFields.length > 0) return requestedFields.slice(0, 4);
   return [`${entity}名称`, "状态", "创建时间", "负责人"];
 }
 
-function inferTableColumns(entity: string) {
-  if (entity === "订单") return ["订单号", "客户", "金额", "状态", "创建时间", "操作"];
-  if (entity === "商品") return ["商品名称", "分类", "库存", "状态", "更新时间", "操作"];
-  if (entity === "客户") return ["客户名称", "等级", "手机号", "状态", "最近访问", "操作"];
-  return [`${entity}名称`, "负责人", "状态", "创建时间", "操作"];
+function inferTableColumns(entity: string, request = "") {
+  const requestedFields = extractFieldHintsFromText(request);
+  const fields = requestedFields.length > 0 ? requestedFields : [`${entity}名称`, "负责人", "状态", "创建时间"];
+  return Array.from(new Set([...fields.slice(0, 5), "操作"]));
 }
 
 function inferTableRows(entity: string) {
-  if (entity === "订单") {
-    return [
-      ["ORD20260508001", "张三", "¥128.50", "待处理", "2026-05-08 10:24", "查看"],
-      ["ORD20260508002", "李四", "¥85.00", "已完成", "2026-05-08 09:15", "查看"],
-      ["ORD20260508003", "王五", "¥452.20", "退款中", "2026-05-07 18:40", "查看"],
-      ["ORD20260508004", "赵六", "¥68.90", "已完成", "2026-05-07 15:20", "查看"],
-      ["ORD20260508005", "周九", "¥198.00", "待处理", "2026-05-07 11:08", "查看"]
-    ];
-  }
-  if (entity === "商品") {
-    return [
-      ["轻量运动鞋", "鞋服", "328", "上架", "2026-05-08", "编辑"],
-      ["智能水杯", "家居", "42", "低库存", "2026-05-08", "编辑"],
-      ["蓝牙耳机", "数码", "1,209", "上架", "2026-05-07", "编辑"],
-      ["旅行背包", "箱包", "0", "下架", "2026-05-07", "编辑"],
-      ["护眼台灯", "家居", "86", "上架", "2026-05-06", "编辑"]
-    ];
-  }
   return [
-    [`${entity} A`, "王经理", "启用", "2026-05-08", "查看"],
-    [`${entity} B`, "李经理", "启用", "2026-05-07", "查看"],
-    [`${entity} C`, "周经理", "停用", "2026-05-06", "查看"]
+    [`${entity} A`, "负责人 A", "启用", "2026-05-08", "查看"],
+    [`${entity} B`, "负责人 B", "启用", "2026-05-07", "查看"],
+    [`${entity} C`, "负责人 C", "停用", "2026-05-06", "查看"]
   ];
 }
 
 function inferMobileRows(entity: string) {
   return [
-    { title: `${entity}记录 001`, desc: "张三 / 2026-05-08 10:24", status: "待处理", meta: "金额 ¥128.50 · 支持查看详情" },
-    { title: `${entity}记录 002`, desc: "李四 / 2026-05-08 09:15", status: "已完成", meta: "金额 ¥85.00 · 已同步" },
-    { title: `${entity}记录 003`, desc: "王五 / 2026-05-07 18:40", status: "退款中", meta: "金额 ¥452.20 · 需跟进" }
+    { title: `${entity}记录 001`, desc: "负责人 A / 2026-05-08 10:24", status: "待处理", meta: "支持查看详情与后续操作" },
+    { title: `${entity}记录 002`, desc: "负责人 B / 2026-05-08 09:15", status: "已完成", meta: "支持查看详情与后续操作" },
+    { title: `${entity}记录 003`, desc: "负责人 C / 2026-05-07 18:40", status: "异常", meta: "支持查看详情与后续操作" }
   ];
 }
 
+function extractRequestedPageTitle(request: string) {
+  const quoted = /页面[：「“"]([^」”"\n]{2,24})[」”"]/.exec(request)?.[1]?.trim()
+    ?? /本次只生成[^「“"]*[「“"]([^」”"\n]{2,24})[」”"]/.exec(request)?.[1]?.trim();
+  if (quoted) return quoted.replace(/\s*画板$/, "");
+  const explicit = /([\u4e00-\u9fa5A-Za-z0-9_-]{2,24}(?:页面|页|列表|详情|表单|工作台|看板))/.exec(request)?.[1]?.trim();
+  return explicit?.replace(/\s*画板$/, "");
+}
+
+function extractFieldHintsFromText(text: string) {
+  const fields = new Set<string>();
+  const normalized = text.replace(/[，,、；;\n]/g, " ");
+  const explicit = normalized.match(/(?:字段|列|表头|筛选项|查询项)[:：]?\s*([\u4e00-\u9fa5A-Za-z0-9_\-\s/]+?)(?:。|$)/)?.[1];
+  (explicit ?? "").split(/[\s/]+/).map((item) => item.trim()).filter((item) => item.length >= 2 && item.length <= 8).forEach((item) => fields.add(item));
+  ["名称", "状态", "负责人", "创建时间", "更新时间", "类型", "分类", "编号", "手机号", "邮箱", "角色", "地区", "备注"].forEach((field) => {
+    if (normalized.includes(field)) fields.add(field);
+  });
+  return Array.from(fields).slice(0, 6);
+}
+
 function getStatusFill(status: string) {
-  if (/待|低库存|退款|异常/.test(status)) return "#fff7e6";
-  if (/已完成|启用|上架/.test(status)) return "#ecfdf3";
-  if (/停用|下架/.test(status)) return "#f2f4f7";
+  if (/待|异常|失败|风险|警告/.test(status)) return "#fff7e6";
+  if (/已|启用|通过|完成|成功/.test(status)) return "#ecfdf3";
+  if (/停用|关闭|禁用/.test(status)) return "#f2f4f7";
   return "#eff6ff";
 }
 
 function getStatusColor(status: string) {
-  if (/待|低库存|退款|异常/.test(status)) return "#b54708";
-  if (/已完成|启用|上架/.test(status)) return "#067647";
-  if (/停用|下架/.test(status)) return "#667085";
+  if (/待|异常|失败|风险|警告/.test(status)) return "#b54708";
+  if (/已|启用|通过|完成|成功/.test(status)) return "#067647";
+  if (/停用|关闭|禁用/.test(status)) return "#667085";
   return "#175cd3";
 }
 
@@ -2664,6 +2650,124 @@ function stackFunctionalSiblings(nodes: WorkspaceDesignNode[], profile: DesignCa
     nextNodes = nextNodes.map((node) => yById.has(node.id) ? { ...node, y: yById.get(node.id) ?? node.y } : node);
   });
   return reflowOverlappingNodes(nextNodes, gap);
+}
+
+function stabilizeArtboardModuleLayout(nodes: WorkspaceDesignNode[], profile: DesignCapabilityProfile) {
+  const frameGap = getCompilerSpacing(profile, "lg");
+  let nextNodes = [...nodes];
+  const frames = nextNodes
+    .filter((node) => node.type === "frame")
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  frames.forEach((frame) => {
+    const directChildren = nextNodes
+      .filter((node) => node.parentId === frame.id && node.visible !== false && shouldStabilizeAsArtboardModule(node, frame))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+    if (directChildren.length < 2) return;
+    const rows = groupNodesIntoLayoutRows(directChildren);
+    if (rows.length < 2) return;
+    const shifts = new Map<string, number>();
+    let cursorBottom = Math.max(frame.y + frameGap, rows[0].bounds.y);
+    rows.forEach((row, index) => {
+      const minY = index === 0 ? row.bounds.y : cursorBottom + frameGap;
+      const dy = Math.max(0, Math.ceil(minY - row.bounds.y));
+      if (dy > 0) row.nodes.forEach((node) => shifts.set(node.id, (shifts.get(node.id) ?? 0) + dy));
+      cursorBottom = row.bounds.y + dy + row.bounds.height;
+    });
+    if (shifts.size === 0) return;
+    nextNodes = translateNodesAndDescendants(nextNodes, shifts);
+  });
+  return nextNodes;
+}
+
+function groupNodesIntoLayoutRows(nodes: WorkspaceDesignNode[]) {
+  const rows: Array<{ nodes: WorkspaceDesignNode[]; bounds: LayoutBounds }> = [];
+  nodes.forEach((node) => {
+    const candidate = getNodeBounds(node);
+    const row = rows.find((item) => candidate.y < item.bounds.y + item.bounds.height && candidate.y + candidate.height > item.bounds.y);
+    if (row) {
+      row.nodes.push(node);
+      row.bounds = mergeLayoutBounds(row.bounds, candidate);
+      return;
+    }
+    rows.push({ nodes: [node], bounds: candidate });
+  });
+  return rows.sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x);
+}
+
+function translateNodesAndDescendants(nodes: WorkspaceDesignNode[], rootShifts: Map<string, number>) {
+  const childrenByParent = new Map<string, WorkspaceDesignNode[]>();
+  nodes.forEach((node) => {
+    if (!node.parentId) return;
+    const list = childrenByParent.get(node.parentId) ?? [];
+    list.push(node);
+    childrenByParent.set(node.parentId, list);
+  });
+  const shiftById = new Map<string, number>();
+  rootShifts.forEach((dy, id) => {
+    const visit = (nodeId: string) => {
+      shiftById.set(nodeId, Math.max(shiftById.get(nodeId) ?? 0, dy));
+      (childrenByParent.get(nodeId) ?? []).forEach((child) => visit(child.id));
+    };
+    visit(id);
+  });
+  return nodes.map((node) => {
+    const dy = shiftById.get(node.id) ?? 0;
+    return dy > 0 ? translateCompilerNode(node, 0, dy) : node;
+  });
+}
+
+function translateCompilerNode(node: WorkspaceDesignNode, dx: number, dy: number): WorkspaceDesignNode {
+  if (dx === 0 && dy === 0) return node;
+  return {
+    ...node,
+    x: Math.round(node.x + dx),
+    y: Math.round(node.y + dy),
+    clipBounds: node.clipBounds ? {
+      ...node.clipBounds,
+      x: Math.round(node.clipBounds.x + dx),
+      y: Math.round(node.clipBounds.y + dy)
+    } : undefined,
+    clipPath: node.clipPath ? {
+      ...node.clipPath,
+      x: Math.round(node.clipPath.x + dx),
+      y: Math.round(node.clipPath.y + dy)
+    } : undefined
+  };
+}
+
+function shouldStabilizeAsArtboardModule(node: WorkspaceDesignNode, frame: WorkspaceDesignNode) {
+  if (node.visible === false || node.type === "frame") return false;
+  if (node.width < 48 || node.height < 16) return false;
+  const label = `${node.name} ${node.text ?? ""}`;
+  if (/侧边|导航|菜单|顶部|工具栏|TopBar|Sidebar|Navigation/i.test(label)) return false;
+  if (node.height >= frame.height * 0.72) return false;
+  if (node.width >= frame.width * 0.86 && node.height <= 96) return false;
+  return node.type === "container"
+    || node.type === "card"
+    || node.type === "table"
+    || (node.type === "image" && node.width >= 160 && node.height >= 96);
+}
+
+function getNodeBounds(node: WorkspaceDesignNode): LayoutBounds {
+  return {
+    x: node.x,
+    y: node.y,
+    width: node.width,
+    height: node.height
+  };
+}
+
+function mergeLayoutBounds(first: LayoutBounds, second: LayoutBounds): LayoutBounds {
+  const x = Math.min(first.x, second.x);
+  const y = Math.min(first.y, second.y);
+  const right = Math.max(first.x + first.width, second.x + second.width);
+  const bottom = Math.max(first.y + first.height, second.y + second.height);
+  return {
+    x,
+    y,
+    width: right - x,
+    height: bottom - y
+  };
 }
 
 function reflowOverlappingNodes(nodes: WorkspaceDesignNode[], spacing: number) {

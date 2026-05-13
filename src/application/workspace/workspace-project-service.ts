@@ -1808,6 +1808,7 @@ export class WorkspaceProjectService {
       recentConversationMessages?: Array<{ role: string; eventType?: string; toolName?: string; content: string; createdAt: string }>;
     }
   ) {
+    const localComponentLibraries = await this.getLocalComponentLibrarySummary(project.id, file);
     return this.generateJsonWithRepair(llm, designAgentPlanSchema, {
       systemPrompt: [
         project.systemPrompt || "",
@@ -1820,7 +1821,7 @@ export class WorkspaceProjectService {
         "create_new_ui 不等于新建独立文件页面；必须使用 schema.generate_ui_from_requirements 在当前画布追加画板。",
         "create_new_ui 生成的画板必须和当前画布已有画板顶对齐，向右追加，默认水平间距 40px。",
         "只有用户明确说“修改当前页面/修改这个页面/修改选中节点/在画布指定地方修改/改这里”时，才允许使用 page.get_schema 和页面编辑工具。",
-        "create_new_ui 必须按 requirement.parse -> flow.generate -> asset.resolve -> schema.generate_ui_from_requirements -> ui.critic_review 的链路规划。",
+        "create_new_ui 必须按 requirement.parse -> flow.generate -> component_library.list/component.search -> asset.resolve -> schema.generate_ui_from_requirements -> ui.critic_review 的链路规划。",
         "create_new_ui 的计划必须覆盖用户需求中的主要功能点，禁止引入用户未提到的业务对象，例如订单、商品列表、搜索筛选区。",
         "你具备自我判断、自我推理和多轮执行意识：先读上下文，再定位目标，再修改，再校验。",
         "你的输出必须是可执行计划，不要假装已经执行。",
@@ -1847,7 +1848,7 @@ export class WorkspaceProjectService {
         taskProfile: options?.taskProfile,
         uiDesignPlan: options?.uiDesignPlan ?? null,
         recentConversationMessages: options?.recentConversationMessages?.slice(-24) ?? [],
-        localComponentLibraries: summarizeLocalComponentLibraries(file),
+        localComponentLibraries,
         selectedPageId: selectedPage?.id,
         selectedPage: selectedPage ? summarizeDesignPageForPrompt(selectedPage) : null,
         pages: file.pages.map((page) => ({ id: page.id, name: page.name, nodeCount: page.nodeCount ?? page.nodes.length }))
@@ -1867,6 +1868,7 @@ export class WorkspaceProjectService {
     onToken?: (delta: string) => void | Promise<void>,
     signal?: AbortSignal
   ) {
+    const localComponentLibraries = await this.getLocalComponentLibrarySummary(project.id);
     return this.generateJsonWithRepair(llm, uiDesignerPlanSchema, {
       systemPrompt: [
         project.systemPrompt || "",
@@ -1886,7 +1888,7 @@ export class WorkspaceProjectService {
       userPrompt: JSON.stringify({
         userRequest: message,
         qualityContext,
-        localComponentLibraries: summarizeLocalComponentLibraries(await this.repository.getDesignFile(project.id).catch(() => createInitialWorkspaceDesignFile(project.name))),
+        localComponentLibraries,
         recentConversationMessages: recentConversationMessages?.slice(-24) ?? [],
         currentPageSchemaSummary: selectedPage ? summarizeDesignPageForPrompt(selectedPage) : null,
         constraints: {
@@ -1917,7 +1919,7 @@ export class WorkspaceProjectService {
     const targetPlatform = platformOverride === "mobile_app" || /小程序|移动端|手机|app/i.test(message) ? "mobile_app" : "web";
     const schemaPromptQualityContext = qualityContext ? compactDesignQualityContextForSchema(qualityContext) : undefined;
     const capabilityProfile = getDesignCapabilityProfile(targetPlatform === "mobile_app" ? (/小程序|微信/.test(message) ? "wechat_mini_program" : "mobile_app") : "pc_web", message);
-    const designFileForComponents = await this.repository.getDesignFile(project.id).catch(() => createInitialWorkspaceDesignFile(project.name));
+    const localComponentLibraries = await this.getLocalComponentLibrarySummary(project.id);
     const schemaSystemPrompt = [
         project.systemPrompt || "",
         systemPrompt || "",
@@ -1931,8 +1933,9 @@ export class WorkspaceProjectService {
         schemaPromptQualityContext ? `本次质量上下文：${JSON.stringify(schemaPromptQualityContext)}` : "",
         `本次设计能力注册表：${getCapabilityPrompt(capabilityProfile)}`,
         "必须先选择组件库能力，再落 schema：PC 后台优先 Ant Design + Tailwind SaaS；小程序/移动端优先微信小程序组件范式 + Tailwind 卡片范式。后续新增组件库时按注册表扩展，不要写死页面模板。",
-        "如果 localComponentLibraries 非空，生成 schema 前必须先参考本地组件库摘要：优先复用名称/描述/keyTexts 匹配的本地组件结构、节点类型和文字层级；只有没有匹配组件时才退回通用组件范式。",
-        "本地组件库是用户确认过的设计资产，不是 Sketch 自动切碎的默认组件；不要忽略组件库名称、组件描述和组件 keyTexts。",
+        "如果 localComponentLibraries 非空，生成 schema 时必须把它当成风格参考和组件结构参考：复用其中的颜色、圆角、字号、控件高度、边框、阴影、表格密度、按钮/输入框尺寸和文字层级。",
+        "本地组件库是用户确认过的设计资产，不是 Sketch 自动切碎的默认组件；不要忽略组件库名称、组件描述、keyTexts、aliases、size 和 styleReference。",
+        "注意：生成 UI 稿时是参考本地组件库风格来生成 schema，不是创建组件库；除非用户明确要求创建组件库，否则不要调用 component_library.create。",
         "每个画板必须体现页面风格：背景层、内容面、主色、弱文本、边框、圆角、层级阴影/色块至少 3 种可识别视觉 token。",
         "每个画板必须包含 icon 或 demo 图片/插画资产；如没有真实图片，先使用 image 节点表达可替换 demo 图，不允许纯文字大白页。",
         "图片资产策略：优先使用 asset.resolve 返回的真实搜索图片或图像生成图片 URL；没有真实 URL 时才允许 generated-placeholder，占位也必须是 image 节点。",
@@ -1941,13 +1944,15 @@ export class WorkspaceProjectService {
         "所有页面必须满足 qualityRubric.minimums；低于最小节点数、文本层级、视觉资产、主操作、颜色层级会被审核拒绝。",
         "设计参考必须落实到 schema：Ant Design 后台用于 PC 管理台；微信小程序用于小程序/移动端；Tailwind/SaaS 卡片用于现代 Web；App 原生用于移动 App。",
         "制作或编辑 UI 稿时必须按页面逐个完成；如果 userRequest 明确限定单个页面，本次 artboards 只能返回 1 个画板。",
-        "行业约束必须落实到信息架构：电商要有商品/订单/交易状态；IoT 要有设备状态/告警/趋势；用户账号要有登录、实名、安全、地址、隐私提示。",
+        "行业约束必须来自用户原始需求或明确上下文：只有用户明确提到电商/商品/订单/交易时才生成对应对象；只提到列表/后台/管理时不得臆测订单、商品、客户等业务。",
         "交互类型要细分：登录注册、表单录入、列表卡片、详情查看、上传认证、地图选址、支付/收益、设置管理都要用对应组件结构。",
         "所有 node 坐标都必须是相对 artboard 左上角的局部坐标，不是全局画布坐标。",
         "坐标只表达区块大致顺序和归属：优先保证语义节点、父子关系、组件类型、文案层级正确；不要输出互相压住的绝对定位。Layout Compiler 会对齐、clamp 和 reflow。",
+        "顶层业务模块必须按从上到下的顺序输出：header/summary/filter/content/pagination/footer 的 y 坐标递增，模块之间至少预留 16-24px；不同业务模块禁止共用同一片 y 区间。",
+        "同一个模块内部可以左右排列，但不同模块不要靠绝对定位叠在一起；能作为整体的区块必须用 container/card 包起来，子节点通过 parentRef 归属到该区块。",
         "node.type 只能使用 frame/container/text/button/input/table/card/image。",
         "高保真原则：不要用一个大 card/table 承载整块信息；必须拆成可编辑的 container/text/button/input/image 等颗粒节点。",
-        "移动端原则：列表/记录/订单/消息/收益明细必须用多张卡片或行容器表达，禁止使用 table 节点；按钮、文字、金额、状态必须独立节点。",
+        "移动端原则：列表/记录/消息/收益明细必须用多张卡片或行容器表达，禁止使用 table 节点；按钮、文字、金额、状态必须独立节点。",
         "间距原则：移动端左右安全边距 16-24，卡片内边距 12-16，按钮高度 44-52；PC 内容区栅格和卡片间距 16-24。",
         "字体原则：移动端正文不小于 13，主标题 20-24；PC 正文不小于 13，标题层级清楚；同一行文字不能互相压住。",
         "列表原则：移动端列表必须是卡片/行容器 + 独立文本，不允许把多列内容塞进一行导致重叠；PC 才允许表格结构。",
@@ -1962,7 +1967,7 @@ export class WorkspaceProjectService {
         targetPlatform,
         qualityContext: schemaPromptQualityContext,
         capabilityProfile,
-        localComponentLibraries: summarizeLocalComponentLibraries(designFileForComponents),
+        localComponentLibraries,
         uiDesignPlan: uiDesignPlan ?? null,
         currentCanvasSummary: selectedPage ? summarizeDesignPageForSchemaPrompt(selectedPage) : null,
         schemaContract: {
@@ -2094,6 +2099,21 @@ export class WorkspaceProjectService {
         message: `工具 ${step.tool} 调用失败：${message}`
       };
     }
+  }
+
+  private async getLocalComponentLibrarySummary(projectId: string, fallbackFile?: WorkspaceDesignFile) {
+    const [componentLibraries, storedComponents] = await Promise.all([
+      this.repository.listDesignComponentLibraries(projectId).catch(() => []),
+      this.repository.listDesignComponents(projectId).catch(() => [])
+    ]);
+    if (componentLibraries.length > 0 || storedComponents.length > 0) {
+      return summarizeLocalComponentLibraries({
+        ...(fallbackFile ?? createInitialWorkspaceDesignFile("Project")),
+        componentLibraries,
+        importedComponents: storedComponents
+      });
+    }
+    return fallbackFile ? summarizeLocalComponentLibraries(fallbackFile) : [];
   }
 
   private async createDesignExecutionSnapshot(projectId: string, file: WorkspaceDesignFile) {
@@ -3976,7 +3996,10 @@ async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<
           sharedStyleMaps
         })
       ));
-      const normalizedNodes = normalizeDesignNodesToLocalCanvas(rawNodes);
+      const normalizedNodes = normalizeDesignNodesToLocalCanvas([
+        ...rawNodes,
+        ...collectMissingSketchGradientNodes(pageLike, rawNodes, { assetByRef })
+      ]);
 
       return {
         id: createDesignId("import-page"),
@@ -4214,7 +4237,7 @@ function convertSketchLayer(
     innerShadow: readSketchInnerShadow(layerObject),
     clipBounds: context.clipBounds,
     clipPath: context.clipPath,
-    ...(hasChildClippingMask ? {} : readSketchVectorMeta(layerObject, nodeWidth, nodeHeight, {
+    ...(hasChildClippingMask || shouldRenderSketchLayerAsPaintedBox(layerObject) ? {} : readSketchVectorMeta(layerObject, nodeWidth, nodeHeight, {
       scaleX: context.scaleX,
       scaleY: context.scaleY
     })),
@@ -4259,6 +4282,10 @@ function shouldSkipSketchLayer(layer: Record<string, unknown>) {
   const layerName = getStringProp(layer, "name").toLowerCase();
   const ignoredTokens = ["guide", "prototype", "flow", "selection"];
   return ignoredTokens.some((token) => layerClass.includes(token) || layerName.includes(token));
+}
+
+function shouldRenderSketchLayerAsPaintedBox(layer: Record<string, unknown>) {
+  return getStringProp(layer, "_class") === "rectangle" && hasSketchGradientFill(layer);
 }
 
 function convertSketchChildLayers(
@@ -4306,12 +4333,32 @@ function convertSketchChildLayers(
 
     if (childObject.hasClippingMask === true) {
       const clip = readSketchLayerClip(childObject, context);
+      const maskNodes = shouldRenderSketchClippingMaskLayer(childObject)
+        ? convertSketchLayer(child, {
+            depth: context.depth,
+            index,
+            zIndexRef: context.zIndexRef,
+            parentX: context.parentX,
+            parentY: context.parentY,
+            scaleX: context.scaleX,
+            scaleY: context.scaleY,
+            assetByRef: context.assetByRef,
+            symbolById: context.symbolById,
+            sharedStyleMaps: context.sharedStyleMaps,
+            clipBounds: context.clipBounds,
+            clipPath: context.clipPath,
+            activeClippingMask: context.activeClippingMask,
+            parentNodeId: context.parentNodeId,
+            inheritedShapeStyle: context.inheritedShapeStyle,
+            parentShapeGroupBounds
+          })
+        : [];
       // Sketch mask chains are sibling-order render scopes: a new mask replaces the
       // current sibling chain, while any inherited parent clip still constrains it.
       activeClipBounds = intersectDesignRects(context.clipBounds, clip.bounds);
       activeClipPath = clip.path ?? context.clipPath;
       activeClippingMask = readSketchClippingMaskSourceMeta(childObject);
-      return [];
+      return maskNodes;
     }
 
     return convertSketchLayer(child, {
@@ -4674,7 +4721,13 @@ function buildFallbackDesignToolPlan(message: string): DesignAgentPlan {
     return makeDesignToolPlan(message, wantsPlanOnly, "我会读取 workspace 内指定文件。", steps);
   }
 
-  if (isLocalComponentQueryIntent(message)) {
+  if (isComponentLibraryCreateIntent(message)) {
+    steps.push({ tool: "component_library.create", reason: "创建一个本地组件库，保存到 SQLite，供 Agent 和画布组件面板共同使用。", input: { name: inferComponentLibraryNameFromMessage(message) ?? "Agent 组件库", description: inferComponentLibraryDescriptionFromMessage(message) ?? "Agent 可调用的本地组件库。" } });
+  } else if (isLocalComponentCreationIntent(message)) {
+    steps.push({ tool: "page.get_schema", reason: "读取当前页面 schema，选择要沉淀为组件的节点。", input: {} });
+    steps.push({ tool: "component_library.create", reason: "如果没有合适组件库，先创建本地组件库。", input: { name: inferComponentLibraryNameFromMessage(message) ?? "Agent 组件库", description: "Agent 沉淀的本地 UI 组件资产。" } });
+    steps.push({ tool: "component.create_from_nodes", reason: "把匹配到的页面节点保存为本地组件，供后续 UI 生成复用。", input: { componentName: inferComponentNameFromMessage(message) ?? "本地组件", match: inferComponentNodeMatchFromMessage(message), includeDescendants: true } });
+  } else if (isLocalComponentQueryIntent(message)) {
     steps.push({ tool: "component_library.list", reason: "查询本地组件库和组件摘要。", input: {} });
   } else if (/页面列表|有哪些页面|查询页面|list.*page|pages/.test(text)) {
     steps.push({ tool: "page.list", reason: "查询页面列表。", input: {} });
@@ -4746,7 +4799,7 @@ function getDesignAgentRoleForTool(tool: DesignAgentToolCall["tool"]): DesignAge
   if (tool === "asset.resolve") {
     return "素材 Agent";
   }
-  if (tool === "component_library.list" || tool === "component.search" || tool === "component.insert") {
+  if (tool === "component_library.list" || tool === "component_library.create" || tool === "component.search" || tool === "component.insert" || tool === "component.create_from_nodes") {
     return "组件库 Agent";
   }
   if (tool === "page.analyze_structure" || tool === "page.get_schema" || tool === "page.list") {
@@ -4802,7 +4855,7 @@ function validateDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan
         "计划安全校验失败：当前任务是从需求生成新 UI，不是修改当前页面。",
         usedForbidden ? `不允许使用页面编辑工具：${usedForbidden.tool}` : "",
         missingTool ? `缺少必要工具：${missingTool}` : "",
-        "建议：按 requirement.parse -> flow.generate -> asset.resolve -> schema.generate_ui_from_requirements -> ui.critic_review 重新规划。"
+        "建议：按 requirement.parse -> flow.generate -> component_library.list/component.search -> asset.resolve -> schema.generate_ui_from_requirements -> ui.critic_review 重新规划。"
       ].filter(Boolean).join("\n"));
     }
     return;
@@ -4860,7 +4913,8 @@ function validateDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan
     "schema.delete_node",
     "schema.duplicate_node",
     "schema.generate_from_prompt",
-    "component.insert"
+    "component.insert",
+    "component.create_from_nodes"
   ]);
   const hasMutation = plan.steps.some((step) => schemaMutationTools.has(step.tool));
   const firstMutationIndex = plan.steps.findIndex((step) => schemaMutationTools.has(step.tool));
@@ -4887,13 +4941,38 @@ function isExplicitDesignPlanOnly(message: string) {
   return /只规划|先规划|不要执行|别执行|仅输出计划|规划模式|plan only/i.test(message);
 }
 
+function ensureCreateUiComponentLookupSteps(message: string, plan: DesignAgentPlan): DesignAgentPlan {
+  const hasLibraryList = plan.steps.some((step) => step.tool === "component_library.list");
+  const hasComponentSearch = plan.steps.some((step) => step.tool === "component.search");
+  if (hasLibraryList && hasComponentSearch) {
+    return plan;
+  }
+  const generateIndex = plan.steps.findIndex((step) => step.tool === "schema.generate_ui_from_requirements");
+  if (generateIndex < 0) {
+    return plan;
+  }
+  const lookupSteps: DesignAgentToolCall[] = [
+    hasLibraryList ? undefined : { tool: "component_library.list", reason: "读取本地组件库摘要，优先匹配表格、状态、输入框、按钮等可复用组件。", input: {} },
+    hasComponentSearch ? undefined : { tool: "component.search", reason: "按本次页面需求检索本地组件资产，作为生成 UI 稿的组件库基准。", input: { query: message, limit: 20 } }
+  ].filter((step): step is DesignAgentToolCall => Boolean(step));
+  return {
+    ...plan,
+    assumptions: [...plan.assumptions, "生成 UI 前先检索本地组件库，避免表格、状态、输入框、按钮等资产未命中"],
+    steps: [
+      ...plan.steps.slice(0, generateIndex),
+      ...lookupSteps,
+      ...plan.steps.slice(generateIndex)
+    ].slice(0, 8)
+  };
+}
+
 function normalizeDesignAgentPlanForIntent(message: string, plan: DesignAgentPlan): DesignAgentPlan {
   if (routeDesignAgentTask(message) === "create_new_ui") {
     const hasCreateUiFlow = plan.steps.some((step) => step.tool === "requirement.parse")
       && plan.steps.some((step) => step.tool === "flow.generate")
       && plan.steps.some((step) => step.tool === "schema.generate_ui_from_requirements");
     const hasPageEditTool = plan.steps.some((step) => ["page.get_schema", "page.analyze_structure", "schema.update_node", "layout.insert_above"].includes(step.tool));
-    if (hasCreateUiFlow && !hasPageEditTool) return plan;
+    if (hasCreateUiFlow && !hasPageEditTool) return ensureCreateUiComponentLookupSteps(message, plan);
     return {
       ...plan,
       title: plan.title || "根据需求生成 UI 稿",
@@ -4904,6 +4983,8 @@ function normalizeDesignAgentPlanForIntent(message: string, plan: DesignAgentPla
       steps: [
         { tool: "requirement.parse", reason: "解析自然语言需求，识别模块、功能点和实体。", input: { userRequest: message } },
         { tool: "flow.generate", reason: "根据功能点生成页面清单、用户流程和必要状态。", input: { userRequest: message } },
+        { tool: "component_library.list", reason: "读取本地组件库摘要，优先匹配表格、状态、输入框、按钮等可复用组件。", input: {} },
+        { tool: "component.search", reason: "按本次页面需求检索可复用的本地组件资产，给 Schema Agent 作为风格和结构基准。", input: { query: message, limit: 20 } },
         { tool: "asset.resolve", reason: "解析需要的图标、插画和素材占位。", input: { userRequest: message } },
         { tool: "schema.generate_ui_from_requirements", reason: "在当前画布右侧追加多页面可编辑 UI 画板，顶对齐并保持 40px 间距。", input: { userRequest: message, platform: /app|移动|手机|小程序/i.test(message) ? "mobile_app" : "web", gap: 40 } },
         { tool: "canvas.capture", reason: "生成 UI 后输出右侧新增画板的预览截图，交给产品确认。", input: { mode: "rightmost_artboards", limit: 6 } },
@@ -5013,6 +5094,36 @@ function isLocalComponentQueryIntent(message: string) {
   return /(本地组件|组件库|component).{0,20}(有哪些|列表|查询|查看|搜索|检索|list|search|find)|(有哪些|列表|查询|查看|搜索|检索|list|search|find).{0,20}(本地组件|组件库|component)/i.test(message);
 }
 
+function isComponentLibraryCreateIntent(message: string) {
+  return /(创建|新建|新增|生成).{0,12}(本地)?组件库(?!组件)|(component_library\.create)/i.test(message);
+}
+
+function isLocalComponentCreationIntent(message: string) {
+  return /(创建|新建|生成|保存|沉淀|提取|制作).{0,24}(本地组件|组件库组件|组件模板|组件资产|component)|(选区|当前页面|这些节点|这个区域).{0,24}(创建|保存|沉淀|提取).{0,12}(组件|component)/i.test(message);
+}
+
+function inferComponentLibraryNameFromMessage(message: string) {
+  return /组件库[「“"]?([^」”"\n，,。；;]{2,24})/.exec(message)?.[1]?.trim();
+}
+
+function inferComponentLibraryDescriptionFromMessage(message: string) {
+  return /(?:描述|说明)[:：]?\s*([^。\n]{2,80})/.exec(message)?.[1]?.trim();
+}
+
+function inferComponentNameFromMessage(message: string) {
+  return /(?:组件|模板)[「“"]?([^」”"\n，,。；;]{2,24})/.exec(message)?.[1]?.trim()
+    ?? /(查询区|搜索区|筛选区|表格区|操作栏|页头|卡片|表单块|详情区|状态栏|分页)/.exec(message)?.[1];
+}
+
+function inferComponentNodeMatchFromMessage(message: string) {
+  if (/表格|table/i.test(message)) return { type: "table" };
+  if (/查询区|搜索区|筛选区|filter|search/i.test(message)) return { name: "查询" };
+  if (/页头|标题区|header/i.test(message)) return { position: "top" };
+  if (/卡片|card/i.test(message)) return { type: "card" };
+  if (/表单|form/i.test(message)) return { type: "input" };
+  return {};
+}
+
 function isSchemaMutationTool(tool: DesignAgentToolCall["tool"]) {
   return [
     "schema.generate_ui_from_requirements",
@@ -5031,7 +5142,8 @@ function isSchemaMutationTool(tool: DesignAgentToolCall["tool"]) {
     "schema.delete_node",
     "schema.duplicate_node",
     "schema.generate_from_prompt",
-    "component.insert"
+    "component.insert",
+    "component.create_from_nodes"
   ].includes(tool);
 }
 
@@ -5719,19 +5831,30 @@ function summarizeDesignPageForSchemaPrompt(page: WorkspaceDesignPage) {
 
 function summarizeLocalComponentLibraries(file: WorkspaceDesignFile) {
   const localComponents = (file.importedComponents ?? []).filter((component) => component.sourceFileName === "本地组件集合");
-  return (file.componentLibraries ?? []).map((library) => {
+  const libraries = (file.componentLibraries ?? []).length > 0
+    ? file.componentLibraries ?? []
+    : localComponents.length > 0
+      ? [{ id: "__default_local_components__", name: "本地组件库", description: "项目本地组件资产", createdAt: "", updatedAt: "" }]
+      : [];
+  return libraries.map((library) => {
     const components = localComponents.filter((component) => component.libraryId === library.id);
+    const libraryComponents = components.length > 0 || library.id !== "__default_local_components__"
+      ? components
+      : localComponents;
     return {
       id: library.id,
       name: library.name,
       description: library.description ?? "",
-      componentCount: components.length,
-      components: components.slice(0, 30).map((component) => ({
+      componentCount: libraryComponents.length,
+      styleReference: inferLocalComponentStyleReference(libraryComponents),
+      components: libraryComponents.slice(0, 30).map((component) => ({
         id: component.id,
         name: component.name,
         description: component.description ?? "",
         nodeCount: component.nodeCount,
         nodeTypes: Array.from(new Set(component.nodes.map((node) => node.type))).slice(0, 12),
+        aliases: inferLocalComponentAliases(component),
+        size: summarizeNodeBounds(component.nodes),
         keyTexts: component.nodes
           .map((node) => node.text || node.name)
           .filter(Boolean)
@@ -5739,6 +5862,79 @@ function summarizeLocalComponentLibraries(file: WorkspaceDesignFile) {
       }))
     };
   });
+}
+
+function summarizeNodeBounds(nodes: WorkspaceDesignNode[]) {
+  if (nodes.length === 0) return { width: 1, height: 1 };
+  const minX = Math.min(...nodes.map((node) => node.x));
+  const minY = Math.min(...nodes.map((node) => node.y));
+  const maxX = Math.max(...nodes.map((node) => node.x + node.width));
+  const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+  return { width: Math.max(1, Math.round(maxX - minX)), height: Math.max(1, Math.round(maxY - minY)) };
+}
+
+function inferLocalComponentStyleReference(components: WorkspaceDesignComponent[]) {
+  const nodes = components.flatMap((component) => component.nodes).filter((node) => node.visible !== false);
+  return {
+    fills: topValues(nodes.map((node) => node.fill).filter(isUsefulStyleValue), 8),
+    strokes: topValues(nodes.map((node) => node.stroke).filter(isUsefulStyleValue), 6),
+    textColors: topValues(nodes.map((node) => node.textColor).filter(isUsefulStyleValue), 6),
+    fontSizes: topNumericValues(nodes.map((node) => node.fontSize), 6),
+    radii: topNumericValues(nodes.map((node) => node.radius), 6),
+    shadows: topValues(nodes.map((node) => node.shadow).filter(isUsefulStyleValue), 4),
+    controlHeights: topNumericValues(nodes.filter((node) => node.type === "button" || node.type === "input").map((node) => node.height), 6),
+    buttonHeights: topNumericValues(nodes.filter((node) => node.type === "button").map((node) => node.height), 4),
+    inputHeights: topNumericValues(nodes.filter((node) => node.type === "input").map((node) => node.height), 4),
+    tableSizes: nodes
+      .filter((node) => node.type === "table")
+      .slice(0, 4)
+      .map((node) => ({ width: Math.round(node.width), height: Math.round(node.height) })),
+    componentDensity: components.slice(0, 12).map((component) => ({
+      name: component.name,
+      nodeCount: component.nodeCount,
+      size: summarizeNodeBounds(component.nodes)
+    }))
+  };
+}
+
+function isUsefulStyleValue(value: string | undefined): value is string {
+  const text = value?.trim();
+  return Boolean(text && text !== "transparent" && text !== "none" && !/^rgba?\([^)]*,\s*0(?:\.0+)?\)$/i.test(text));
+}
+
+function topValues(values: string[], limit: number) {
+  const counts = new Map<string, number>();
+  values.forEach((value) => counts.set(value, (counts.get(value) ?? 0) + 1));
+  return Array.from(counts.entries())
+    .sort((first, second) => second[1] - first[1])
+    .slice(0, limit)
+    .map(([value, count]) => ({ value, count }));
+}
+
+function topNumericValues(values: Array<number | undefined>, limit: number) {
+  const counts = new Map<number, number>();
+  values
+    .filter((value): value is number => Number.isFinite(value))
+    .map((value) => Math.round(value))
+    .forEach((value) => counts.set(value, (counts.get(value) ?? 0) + 1));
+  return Array.from(counts.entries())
+    .sort((first, second) => second[1] - first[1])
+    .slice(0, limit)
+    .map(([value, count]) => ({ value, count }));
+}
+
+function inferLocalComponentAliases(component: WorkspaceDesignComponent) {
+  const aliases = new Set<string>();
+  const text = [component.name, component.description ?? "", ...component.nodes.flatMap((node) => [node.type, node.name, node.text ?? ""])].join(" ");
+  component.nodes.forEach((node) => {
+    if (node.type === "table") ["表格", "数据表", "列表", "table"].forEach((item) => aliases.add(item));
+    if (node.type === "input") ["输入框", "搜索框", "查询条件", "input"].forEach((item) => aliases.add(item));
+    if (node.type === "button") ["按钮", "操作按钮", "button"].forEach((item) => aliases.add(item));
+    if (/状态|标签|tag|上架|下架|启用|停用|审核/.test(`${node.name} ${node.text ?? ""}`)) ["状态", "状态标签", "tag", "status"].forEach((item) => aliases.add(item));
+  });
+  if (/查询|搜索|筛选/.test(text)) ["查询区", "搜索区", "筛选区"].forEach((item) => aliases.add(item));
+  if (/分页|上一页|下一页/.test(text)) ["分页", "pagination"].forEach((item) => aliases.add(item));
+  return Array.from(aliases).slice(0, 20);
 }
 
 function createInitialWorkspaceDesignFile(projectName: string): WorkspaceDesignFile {
@@ -5807,9 +6003,13 @@ function applySketchInheritedShapeStyle(
   if (!inheritedStyle || !isSketchShapePrimitive(layer)) {
     return layer;
   }
+  const ownStyle = safeObject(layer.style);
+  if (hasRenderableSketchStyle(ownStyle)) {
+    return layer;
+  }
   return {
     ...layer,
-    style: mergeSketchStyles(inheritedStyle, safeObject(layer.style))
+    style: mergeSketchStyles(inheritedStyle, ownStyle)
   };
 }
 
@@ -5907,6 +6107,81 @@ function normalizeDesignNodesToLocalCanvas(nodes: WorkspaceDesignNode[]) {
       y: node.clipPath.y - offsetY
     } : undefined
   }));
+}
+
+function collectMissingSketchGradientNodes(
+  pageLike: unknown,
+  existingNodes: WorkspaceDesignNode[],
+  context: {
+    assetByRef?: Map<string | undefined, WorkspaceDesignAsset>;
+  }
+) {
+  const existingSourceIds = new Set(existingNodes.map((node) => node.sourceLayerId).filter(Boolean));
+  const fallbackNodes: WorkspaceDesignNode[] = [];
+  const visit = (
+    layer: Record<string, unknown>,
+    state: { parentX: number; parentY: number; depth: number; parentZIndex: number }
+  ) => {
+    if (layer.isVisible === false || shouldSkipSketchLayer(layer)) {
+      return;
+    }
+    const layerId = getStringProp(layer, "do_objectID");
+    const layerClass = getStringProp(layer, "_class");
+    const frame = readSketchFrame(layer);
+    const nodeX = state.parentX + frame.x;
+    const nodeY = state.parentY + frame.y;
+    const nodeWidth = Math.max(1, Math.round(frame.width));
+    const nodeHeight = Math.max(1, Math.round(frame.height));
+    if (layerId && !existingSourceIds.has(layerId) && hasSketchGradientFill(layer)) {
+      const fill = readSketchFill(layer, "container", context.assetByRef);
+      if (fill.includes("gradient(")) {
+        const nodeType = mapSketchLayerType(layerClass, getStringProp(layer, "name"));
+        fallbackNodes.push(createDesignNode(nodeType, {
+          id: createDesignId("import-node"),
+          depth: state.depth,
+          name: getStringProp(layer, "name") || defaultDesignNodeName(nodeType),
+          x: Math.round(nodeX),
+          y: Math.round(nodeY),
+          width: nodeWidth,
+          height: nodeHeight,
+          fill,
+          stroke: readSketchStroke(layer),
+          strokeWidth: readSketchStrokeWidth(layer),
+          strokePosition: readSketchStrokePosition(layer),
+          radius: readSketchRadius(layer, nodeType),
+          visible: true,
+          locked: layer.isLocked === true,
+          sourceLayerId: layerId,
+          sourceLayerClass: layerClass,
+          sourceMeta: readSketchSourceMeta(layer, context.assetByRef),
+          opacity: readSketchOpacity(layer),
+          rotation: toNumber(layer.rotation, 0),
+          flippedHorizontal: layer.isFlippedHorizontal === true,
+          flippedVertical: layer.isFlippedVertical === true,
+          zIndex: state.parentZIndex + 0.5,
+          ...readSketchVectorMeta(layer, nodeWidth, nodeHeight)
+        }));
+      }
+    }
+    getSketchRenderableLayers(layer).map(safeObject).forEach((child, index) => {
+      visit(child, {
+        parentX: nodeX,
+        parentY: nodeY,
+        depth: state.depth + 1,
+        parentZIndex: state.parentZIndex + index + 1
+      });
+    });
+  };
+  getSketchRenderableLayers(pageLike).map(safeObject).forEach((layer, index) => {
+    visit(layer, { parentX: 0, parentY: 0, depth: 0, parentZIndex: index });
+  });
+  return fallbackNodes;
+}
+
+function hasSketchGradientFill(layer: Record<string, unknown>) {
+  return toArray(safeObject(layer.style).fills)
+    .map(safeObject)
+    .some((fill) => fill.isEnabled !== false && toNumber(fill.fillType, 0) === 1 && Object.keys(safeObject(fill.gradient)).length > 0);
 }
 
 function collectSketchSymbolMasters(layers: unknown[]): unknown[] {
@@ -6076,8 +6351,8 @@ function convertSketchSymbolInstance(
       depth: context.depth + 1,
       index,
       zIndexRef: context.zIndexRef,
-      parentX: context.nodeX - symbolFrame.x * scaleX,
-      parentY: context.nodeY - symbolFrame.y * scaleY,
+      parentX: context.nodeX,
+      parentY: context.nodeY,
       scaleX,
       scaleY,
       assetByRef: context.assetByRef,
@@ -6639,7 +6914,8 @@ function buildSketchSvgTree(
     return {
       type: "path",
       d: children.map((child) => child.type === "path" ? child.d : "").join(" "),
-      ...readSketchSvgStyleAttributes(layer)
+      ...readSketchSvgStyleAttributes(layer),
+      fillRule: isLikelySketchCompoundCutout(layer, children) ? "evenodd" : readSketchSvgStyleAttributes(layer).fillRule
     };
   }
 
@@ -6659,13 +6935,31 @@ function shouldCollapseSketchCompoundShapeGroup(layer: Record<string, unknown>, 
   if (!hasEnabledSketchFills(style)) {
     return false;
   }
+  const parentFill = readSketchFill(layer, "container");
   return children.length > 1 && children.every((child) => (
     child.type === "path"
-    && child.fill === undefined
+    && (child.fill === undefined || isSameSketchSvgPaint(child.fill, parentFill))
     && child.stroke === undefined
     && child.opacity === undefined
     && child.transform === undefined
   ));
+}
+
+function isLikelySketchCompoundCutout(layer: Record<string, unknown>, children: SketchSvgTreeNode[]) {
+  if (toNumber(safeObject(layer.style).windingRule, 0) === 1) {
+    return true;
+  }
+  if (children.some((child) => child.type === "path" && child.fillRule === "evenodd")) {
+    return true;
+  }
+  const layerName = getStringProp(layer, "name").toLowerCase();
+  return /circle|radio|checkbox|ring|oval|圆|环/.test(layerName)
+    && children.length > 1
+    && children.every((child) => child.type === "path");
+}
+
+function isSameSketchSvgPaint(first?: string, second?: string) {
+  return Boolean(first && second && first.trim().toLowerCase() === second.trim().toLowerCase());
 }
 
 function convertSketchShapeChildToSvgPath(
@@ -7048,6 +7342,22 @@ function hasRenderableSketchStyle(style: Record<string, unknown>) {
   return hasFill || hasBorder || hasShadow || hasInnerShadow;
 }
 
+function shouldRenderSketchClippingMaskLayer(layer: Record<string, unknown>) {
+  if (layer.isVisible === false) {
+    return false;
+  }
+  if (normalizeSketchImageRef(layer.image)) {
+    return true;
+  }
+  const style = safeObject(layer.style);
+  if (hasRenderableSketchStyle(style)) {
+    return true;
+  }
+  return toArray(style.fills)
+    .map(safeObject)
+    .some((fill) => fill.isEnabled !== false && normalizeSketchImageRef(fill.image));
+}
+
 function readSketchSvgPath(layer: Record<string, unknown>, width: number, height: number, offsetX = 0, offsetY = 0) {
   const layerClass = getStringProp(layer, "_class");
   if (layerClass === "line") {
@@ -7291,14 +7601,14 @@ function readSketchFill(
   if (nodeType === "text") {
     return "transparent";
   }
-  if (layerClass === "artboard" && layer.hasBackgroundColor === true) {
-    return colorToRgba(layer.backgroundColor);
-  }
   const style = safeObject(layer.style);
   const enabledFills = toArray(style.fills).map(safeObject).filter((fill) => fill.isEnabled !== false);
   const fillLayers = enabledFills.map((fill) => sketchFillToCss(fill, assetByRef)).filter(Boolean);
   if (fillLayers.length > 0) {
     return fillLayers.reverse().join(", ");
+  }
+  if (layerClass === "artboard" && layer.hasBackgroundColor === true) {
+    return colorToRgba(layer.backgroundColor);
   }
   if (nodeType === "button") {
     return "#246bfe";
