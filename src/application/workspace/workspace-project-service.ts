@@ -4619,6 +4619,7 @@ function convertSketchLayer(
   const localNodeY = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.y : context.parentY + frame.y * context.scaleY;
   const nodeWidth = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.width : Math.max(1, Math.round(frame.width * context.scaleX));
   const nodeHeight = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.height : Math.max(1, Math.round(frame.height * context.scaleY));
+  const hasInvalidClippingMask = layerObject.hasClippingMask === true && (frame.width <= 0 || frame.height <= 0);
   const parentTransform = context.transform ?? identitySketchTransform();
   const transformedCenter = applySketchTransform(parentTransform, localNodeX + nodeWidth / 2, localNodeY + nodeHeight / 2);
   const nodeX = Math.round(transformedCenter.x - nodeWidth / 2);
@@ -4669,6 +4670,7 @@ function convertSketchLayer(
     sourceLayerClass: layerClass,
     sourceMeta: {
       ...readSketchSourceMeta(layerObject, context.assetByRef, context.activeClippingMask),
+      hasClippingMask: hasInvalidClippingMask ? undefined : booleanOrUndefined(layerObject.hasClippingMask),
       layerOpacity,
       inheritedOpacity,
       effectiveOpacity,
@@ -4676,7 +4678,7 @@ function convertSketchLayer(
       inheritedRotation,
       effectiveRotation
     },
-    opacity: effectiveOpacity,
+    opacity: layerOpacity,
     rotation: effectiveRotation,
     blendMode: readSketchBlendMode(layerObject),
     blurRadius: readSketchBlurRadius(layerObject),
@@ -4885,6 +4887,9 @@ function convertSketchChildLayers(
             parentShapeGroupBounds
           })
         : [];
+      if (!clip) {
+        return maskNodes;
+      }
       // Sketch mask chains are sibling-order render scopes: a new mask replaces the
       // current sibling chain, while any inherited parent clip still constrains it.
       activeClipBounds = intersectDesignRects(context.clipBounds, clip.bounds);
@@ -4928,10 +4933,15 @@ function readSketchLayerClip(
 ): {
   bounds: NonNullable<WorkspaceDesignNode["clipBounds"]>;
   path?: WorkspaceDesignNode["clipPath"];
-} {
+} | undefined {
   const frame = readSketchFrame(layer);
-  const width = Math.max(1, Math.round(frame.width * context.scaleX));
-  const height = Math.max(1, Math.round(frame.height * context.scaleY));
+  const rawWidth = Math.round(frame.width * context.scaleX);
+  const rawHeight = Math.round(frame.height * context.scaleY);
+  if (rawWidth <= 0 || rawHeight <= 0) {
+    return undefined;
+  }
+  const width = Math.max(1, rawWidth);
+  const height = Math.max(1, rawHeight);
   const bounds = {
     x: Math.round(context.parentX + frame.x * context.scaleX),
     y: Math.round(context.parentY + frame.y * context.scaleY),
@@ -4942,11 +4952,15 @@ function readSketchLayerClip(
     scaleX: context.scaleX,
     scaleY: context.scaleY
   });
+  const rectanglePath = getStringProp(layer, "_class") === "rectangle"
+    ? rectSvgPath(0, 0, width, height, readSketchRadius(layer, "container"))
+    : "";
+  const clipPath = vector.svgPath || rectanglePath;
   return {
     bounds,
-    path: vector.svgPath ? {
+    path: clipPath ? {
       ...bounds,
-      svgPath: vector.svgPath,
+      svgPath: clipPath,
       fillRule: vector.svgFillRule
     } : undefined
   };
@@ -7701,9 +7715,9 @@ function collectMissingSketchGradientNodes(
     const nodeY = state.parentY + frame.y;
     const nodeWidth = Math.max(1, Math.round(frame.width));
     const nodeHeight = Math.max(1, Math.round(frame.height));
-    if (layerId && !existingSourceIds.has(layerId) && hasSketchGradientFill(layer)) {
+    if (layerId && !existingSourceIds.has(layerId) && hasRenderableSketchPaint(layer)) {
       const fill = readSketchFill(layer, "container", context.assetByRef);
-      if (fill.includes("gradient(")) {
+      if (!isTransparentSketchCssPaint(fill)) {
         const nodeType = mapSketchLayerType(layerClass, getStringProp(layer, "name"));
         fallbackNodes.push(createDesignNode(nodeType, {
           id: createDesignId("import-node"),
@@ -7747,6 +7761,22 @@ function collectMissingSketchGradientNodes(
     visit(layer, { parentX: 0, parentY: 0, depth: 0, parentZIndex: index });
   });
   return fallbackNodes;
+}
+
+function hasRenderableSketchPaint(layer: Record<string, unknown>) {
+  if (layer.isVisible === false) {
+    return false;
+  }
+  if (getStringProp(layer, "_class") === "artboard" && layer.hasBackgroundColor === true) {
+    return true;
+  }
+  return toArray(safeObject(layer.style).fills)
+    .map(safeObject)
+    .some((fill) => fill.isEnabled !== false && Boolean(getSketchPaintKind(fill)));
+}
+
+function isTransparentSketchCssPaint(value: string | undefined) {
+  return !value || value === "transparent" || /^rgba\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\)$/i.test(value.trim());
 }
 
 function hasSketchGradientFill(layer: Record<string, unknown>) {
@@ -8374,30 +8404,6 @@ function readSketchImageColorControls(layer: Record<string, unknown>): Workspace
   };
 }
 
-function sketchImageColorControlsToCssFilter(controls: WorkspaceDesignImageColorControls | undefined) {
-  if (!controls?.isEnabled) {
-    return undefined;
-  }
-  const filters: string[] = [];
-  if (Math.abs(controls.brightness) > 0.0001) {
-    filters.push(`brightness(${formatCssNumber(Math.max(0, 1 + controls.brightness))})`);
-  }
-  if (Math.abs(controls.contrast - 1) > 0.0001) {
-    filters.push(`contrast(${formatCssNumber(Math.max(0, controls.contrast))})`);
-  }
-  if (Math.abs(controls.saturation - 1) > 0.0001) {
-    filters.push(`saturate(${formatCssNumber(Math.max(0, controls.saturation))})`);
-  }
-  if (Math.abs(controls.hue) > 0.0001) {
-    filters.push(`hue-rotate(${formatCssNumber(controls.hue * 360)}deg)`);
-  }
-  return filters.length > 0 ? filters.join(" ") : undefined;
-}
-
-function formatCssNumber(value: number) {
-  return Number(value.toFixed(4)).toString();
-}
-
 function readSketchImageMeta(layer: Record<string, unknown>, assetByRef?: Map<string | undefined, WorkspaceDesignAsset>) {
   if (getStringProp(layer, "_class") !== "bitmap") {
     return {};
@@ -8407,7 +8413,6 @@ function readSketchImageMeta(layer: Record<string, unknown>, assetByRef?: Map<st
   const colorControls = readSketchImageColorControls(layer);
   return stripUndefinedObject({
     imageUrl: asset?.url,
-    imageFilter: sketchImageColorControlsToCssFilter(colorControls),
     imageColorControls: colorControls,
     sourceRef: ref || undefined
   });
@@ -8418,7 +8423,7 @@ function readSketchRotation(layer: Record<string, unknown>) {
   if (!Number.isFinite(rotation) || Math.abs(rotation) < 0.0001) {
     return 0;
   }
-  return Number(rotation.toFixed(4));
+  return Number((-rotation).toFixed(4));
 }
 
 function readSketchSourceMeta(
@@ -9088,14 +9093,18 @@ function isSketchVectorContainerLayer(layer: Record<string, unknown>): boolean {
 }
 
 function hasRenderableSketchStyle(style: Record<string, unknown>) {
-  const hasFill = toArray(style.fills).some((fill) => safeObject(fill).isEnabled !== false);
-  const hasBorder = toArray(style.borders).some((border) => safeObject(border).isEnabled !== false);
+  const hasFill = toArray(style.fills)
+    .map(safeObject)
+    .some((fill) => fill.isEnabled !== false && Boolean(getSketchPaintKind(fill)));
+  const hasBorder = toArray(style.borders)
+    .map(safeObject)
+    .some((border) => border.isEnabled !== false && Boolean(getSketchPaintKind(border)));
   const hasShadow = toArray(style.shadows).some((shadow) => safeObject(shadow).isEnabled !== false);
   const hasInnerShadow = toArray(style.innerShadows).some((shadow) => safeObject(shadow).isEnabled !== false);
   return hasFill || hasBorder || hasShadow || hasInnerShadow;
 }
 
-function shouldRenderSketchClippingMaskLayer(layer: Record<string, unknown>) {
+function shouldRenderSketchClippingMaskLayer(layer: Record<string, unknown>): boolean {
   if (layer.isVisible === false) {
     return false;
   }
@@ -9108,7 +9117,14 @@ function shouldRenderSketchClippingMaskLayer(layer: Record<string, unknown>) {
   }
   return toArray(style.fills)
     .map(safeObject)
-    .some((fill) => fill.isEnabled !== false && normalizeSketchImageRef(fill.image));
+    .some((fill) => fill.isEnabled !== false && normalizeSketchImageRef(fill.image))
+    || getSketchLayers(layer)
+      .map(safeObject)
+      .some((child) => child.isVisible !== false && !shouldSkipSketchLayer(child) && (
+        hasRenderableSketchPaint(child)
+        || hasRenderableSketchStyle(safeObject(child.style))
+        || shouldRenderSketchClippingMaskLayer(child)
+      ));
 }
 
 function readSketchSvgPath(layer: Record<string, unknown>, width: number, height: number, offsetX = 0, offsetY = 0) {

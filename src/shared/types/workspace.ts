@@ -157,7 +157,7 @@ export interface WorkspaceDesignNode {
   locked: boolean;
   /** Bitmap/image URL resolved into the workspace asset store. */
   imageUrl?: string;
-  /** Approximate CSS filter generated from Sketch bitmap colorControls. */
+  /** Deprecated legacy field. Color adjustments should use imageColorControls instead of precomputed CSS filters. */
   imageFilter?: string;
   /** Raw Sketch bitmap colorControls values for debugging and downstream renderers. */
   imageColorControls?: WorkspaceDesignImageColorControls;

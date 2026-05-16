@@ -2986,6 +2986,14 @@ export function AiDesignView() {
                     <PaintLayersView paints={selectedNode.borders} />
                     <NumberField label="圆角" value={selectedNode.radius} onChange={(value) => updateNode(selectedNode.id, { radius: value })} />
                   </InspectorSection>
+                  {isImageColorAdjustableNode(selectedNode) ? (
+                    <InspectorSection title="效果">
+                      <ImageColorControlsEditor
+                        value={selectedNode.imageColorControls}
+                        onChange={(imageColorControls) => updateNode(selectedNode.id, { imageColorControls })}
+                      />
+                    </InspectorSection>
+                  ) : null}
                   <InspectorSection title="文字">
                     <Textarea value={selectedNode.text ?? ""} onChange={(event) => updateNode(selectedNode.id, { text: event.target.value })} className="min-h-24 resize-none" />
                     <div className="mt-4 space-y-3">
@@ -3312,11 +3320,6 @@ function applyEffectiveCanvasOpacity(nodes: DesignNode[], allNodes: DesignNode[]
     const cached = opacityById.get(node.id);
     if (cached !== undefined) {
       return cached;
-    }
-    if (node.sourceMeta?.effectiveOpacity !== undefined) {
-      const opacity = Math.max(0, Math.min(1, node.opacity ?? node.sourceMeta.effectiveOpacity));
-      opacityById.set(node.id, opacity);
-      return opacity;
     }
     if (visiting.has(node.id)) {
       return node.opacity ?? 1;
@@ -4577,8 +4580,30 @@ function getNodeTextDecoration(node: DesignNode) {
 function getDesignNodeCssFilter(node: DesignNode) {
   return [
     node.blurRadius ? `blur(${node.blurRadius}px)` : "",
-    node.imageFilter ?? ""
+    isImageColorAdjustableNode(node) ? imageColorControlsToCssFilter(node.imageColorControls) : ""
   ].filter(Boolean).join(" ") || undefined;
+}
+
+function isImageColorAdjustableNode(node: DesignNode) {
+  return node.type === "image" || node.sourceLayerClass === "bitmap" || Boolean(node.imageUrl);
+}
+
+function imageColorControlsToCssFilter(controls: WorkspaceDesignImageColorControls | undefined) {
+  if (!controls?.isEnabled) {
+    return "";
+  }
+  const sketchHuePercent = sketchHueToUiPercent(controls.hue ?? 0);
+  const cssHueDegrees = sketchHuePercent * 1.8;
+  return [
+    `hue-rotate(${formatFilterNumber(cssHueDegrees)}deg)`,
+    `brightness(${formatFilterNumber(Math.max(0, 1 + controls.brightness))})`,
+    `contrast(${formatFilterNumber(Math.max(0, controls.contrast))})`,
+    `saturate(${formatFilterNumber(Math.max(0, controls.saturation))})`
+  ].join(" ");
+}
+
+function formatFilterNumber(value: number) {
+  return Number.isFinite(value) ? Number(value.toFixed(4)).toString() : "0";
 }
 
 function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
@@ -6466,6 +6491,153 @@ function TextStyleButton({ active, onClick, children }: { active: boolean; onCli
       {children}
     </button>
   );
+}
+
+const defaultImageColorControls: WorkspaceDesignImageColorControls = {
+  isEnabled: false,
+  hue: 0,
+  saturation: 1,
+  brightness: 0,
+  contrast: 1
+};
+const sketchHueUiPercentScale = 31.25;
+
+function ImageColorControlsEditor({
+  value,
+  onChange
+}: {
+  value?: WorkspaceDesignImageColorControls;
+  onChange: (value: WorkspaceDesignImageColorControls | undefined) => void;
+}) {
+  const controls = value ?? defaultImageColorControls;
+  const [expanded, setExpanded] = useState(controls.isEnabled);
+  const updateControls = (patch: Partial<WorkspaceDesignImageColorControls>) => {
+    onChange({
+      ...defaultImageColorControls,
+      ...controls,
+      ...patch
+    });
+  };
+  const setEnabled = (enabled: boolean) => {
+    const nextControls = {
+      ...defaultImageColorControls,
+      ...controls,
+      isEnabled: enabled
+    };
+    onChange(enabled ? nextControls : { ...nextControls, isEnabled: false });
+    if (enabled) {
+      setExpanded(true);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-pressed={controls.isEnabled}
+          onClick={() => setEnabled(!controls.isEnabled)}
+          className={`flex h-6 w-10 items-center rounded-full p-1 transition ${controls.isEnabled ? "bg-[#4b55ff]" : "bg-[#d7d7dc]"}`}
+        >
+          <span className={`size-4 rounded-full bg-white shadow-sm transition ${controls.isEnabled ? "translate-x-4" : ""}`} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className={`flex h-10 flex-1 items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${controls.isEnabled ? "bg-[#f4f4f5] text-[#171717]" : "bg-[#f4f4f5] text-[#8a8a90]"}`}
+        >
+          <span>颜色调整</span>
+          <ChevronDown className={`size-4 transition ${expanded ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      {expanded ? (
+        <div className="space-y-3 rounded-2xl border border-[#eeeeef] bg-white p-3">
+          <ImageAdjustmentField
+            label="色相"
+            value={sketchHueToUiPercent(controls.hue ?? 0)}
+            min={-100}
+            max={100}
+            disabled={!controls.isEnabled}
+            onChange={(nextValue) => updateControls({ hue: uiPercentToSketchHue(clampImageAdjustment(nextValue, -100, 100)) })}
+          />
+          <ImageAdjustmentField
+            label="饱和度"
+            value={Math.round(((controls.saturation ?? 1) - 1) * 100)}
+            min={-100}
+            max={100}
+            disabled={!controls.isEnabled}
+            onChange={(nextValue) => updateControls({ saturation: Math.max(0, 1 + clampImageAdjustment(nextValue, -100, 100) / 100) })}
+          />
+          <ImageAdjustmentField
+            label="亮度"
+            value={Math.round((controls.brightness ?? 0) * 100)}
+            min={-100}
+            max={100}
+            disabled={!controls.isEnabled}
+            onChange={(nextValue) => updateControls({ brightness: clampImageAdjustment(nextValue, -100, 100) / 100 })}
+          />
+          <ImageAdjustmentField
+            label="对比度"
+            value={Math.round(((controls.contrast ?? 1) - 1) * 100)}
+            min={-100}
+            max={100}
+            disabled={!controls.isEnabled}
+            onChange={(nextValue) => updateControls({ contrast: Math.max(0, 1 + clampImageAdjustment(nextValue, -100, 100) / 100) })}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ImageAdjustmentField({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onChange
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className={`grid grid-cols-[1fr_92px] items-center gap-3 text-xs ${disabled ? "opacity-45" : ""}`}>
+      <span className="rounded-xl bg-[#f4f4f5] px-3 py-2.5 text-sm font-semibold text-[#777]">{label}</span>
+      <div className="flex items-center rounded-xl bg-[#f4f4f5] px-2">
+        <Input
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(Number(event.target.value) || 0)}
+          className="h-10 border-0 bg-transparent px-0 text-right text-sm font-semibold shadow-none focus-visible:ring-0 disabled:cursor-not-allowed"
+        />
+        <span className="pl-1 text-sm font-semibold text-[#555]">%</span>
+      </div>
+    </label>
+  );
+}
+
+function clampImageAdjustment(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(min, Math.min(max, value));
+}
+
+function sketchHueToUiPercent(hue: number) {
+  return Math.round(clampImageAdjustment(hue * sketchHueUiPercentScale, -100, 100));
+}
+
+function uiPercentToSketchHue(percent: number) {
+  return clampImageAdjustment(percent, -100, 100) / sketchHueUiPercentScale;
 }
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
