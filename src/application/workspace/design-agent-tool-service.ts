@@ -17,11 +17,102 @@ import type {
   WorkspaceDesignFile,
   WorkspaceDesignNode,
   WorkspaceDesignNodeType,
-  WorkspaceDesignPage
+  WorkspaceDesignPage,
+  WorkspaceDesignPageTemplate,
+  WorkspaceDesignStyleProfile
 } from "../../shared/types/workspace.js";
 import { nowIso } from "../../shared/utils/time.js";
 
 const nodeTypeSchema = z.enum(["frame", "container", "text", "button", "input", "table", "card", "image"]);
+interface LayoutIntentDraftNode {
+  type: string;
+  name?: string;
+  title?: string;
+  text?: string;
+  label?: string;
+  variant?: string;
+  role?: string;
+  slot?: "nav" | "header" | "summary" | "filter" | "content" | "sidebar" | "detail" | "footer" | "actions";
+  layout?: "singleColumn" | "twoColumn" | "masterDetail" | "dashboard" | "form" | "table" | "cards";
+  density?: "compact" | "comfortable" | "spacious";
+  tone?: "default" | "muted" | "primary" | "warning" | "success" | "danger";
+  emphasis?: "low" | "medium" | "high";
+  priority?: "primary" | "secondary" | "tertiary";
+  align?: "start" | "center" | "end" | "between";
+  wrap?: boolean;
+  repeat?: number;
+  items?: Array<string | Record<string, string>>;
+  options?: Array<string | Record<string, string>>;
+  direction?: "vertical" | "horizontal";
+  gap?: "none" | "xs" | "sm" | "md" | "lg" | "xl";
+  padding?: "none" | "xs" | "sm" | "md" | "lg" | "xl";
+  width?: "fill" | "hug" | number;
+  height?: "fill" | "hug" | number;
+  columns?: string[];
+  rows?: string[][];
+  fields?: string[];
+  actions?: string[];
+  metrics?: Array<{ label: string; value: string }>;
+  children?: LayoutIntentDraftNode[];
+  props?: Record<string, unknown>;
+}
+
+type DesignReviewIssueCode =
+  | "text_overflow"
+  | "overlap"
+  | "missing_region"
+  | "out_of_artboard"
+  | "wrong_page_mode"
+  | "content_missing";
+
+type DesignReviewIssue = {
+  code: DesignReviewIssueCode;
+  level: "blocking" | "warning";
+  message: string;
+  suggestedFix?: Record<string, unknown>;
+  targetNodeIds?: string[];
+  region?: string;
+};
+
+function looseEnum<const T extends readonly [string, ...string[]]>(values: T) {
+  return z.preprocess((value) => {
+    if (typeof value !== "string") return undefined;
+    return (values as readonly string[]).includes(value) ? value : undefined;
+  }, z.enum(values).optional());
+}
+
+const layoutIntentNodeSchema: z.ZodType<LayoutIntentDraftNode, z.ZodTypeDef, unknown> = z.lazy(() => z.object({
+  type: z.string(),
+  name: z.string().optional(),
+  title: z.string().optional(),
+  text: z.string().optional(),
+  label: z.string().optional(),
+  variant: z.string().optional(),
+  role: z.string().optional(),
+  slot: looseEnum(["nav", "header", "summary", "filter", "content", "sidebar", "detail", "footer", "actions"]),
+  layout: looseEnum(["singleColumn", "twoColumn", "masterDetail", "dashboard", "form", "table", "cards"]),
+  density: looseEnum(["compact", "comfortable", "spacious"]),
+  tone: looseEnum(["default", "muted", "primary", "warning", "success", "danger"]),
+  emphasis: looseEnum(["low", "medium", "high"]),
+  priority: looseEnum(["primary", "secondary", "tertiary"]),
+  align: looseEnum(["start", "center", "end", "between"]),
+  wrap: z.boolean().optional(),
+  repeat: z.number().int().min(1).max(24).optional(),
+  items: z.array(z.union([z.string(), z.record(z.string())])).optional(),
+  options: z.array(z.union([z.string(), z.record(z.string())])).optional(),
+  direction: looseEnum(["vertical", "horizontal"]),
+  gap: looseEnum(["none", "xs", "sm", "md", "lg", "xl"]),
+  padding: looseEnum(["none", "xs", "sm", "md", "lg", "xl"]),
+  width: z.union([z.literal("fill"), z.literal("hug"), z.number()]).optional(),
+  height: z.union([z.literal("fill"), z.literal("hug"), z.number()]).optional(),
+  columns: z.array(z.string()).optional(),
+  rows: z.array(z.array(z.string())).optional(),
+  fields: z.array(z.string()).optional(),
+  actions: z.array(z.string()).optional(),
+  metrics: z.array(z.object({ label: z.string(), value: z.string() })).optional(),
+  children: z.array(layoutIntentNodeSchema).optional(),
+  props: z.record(z.unknown()).optional()
+}).passthrough());
 const designNodePatchSchema = z.object({
   id: z.string().optional(),
   parentId: z.string().optional(),
@@ -71,7 +162,7 @@ export const uiSchemaDraftNodeSchema = z.object({
   locked: z.boolean().optional()
 }).passthrough();
 
-export const uiSchemaDraftSchema = z.object({
+export const uiSchemaDraftSchema = z.preprocess((value) => normalizeUiSchemaDraftInput(value), z.object({
   schemaVersion: z.literal("aipm.design.schema.v1").default("aipm.design.schema.v1"),
   intent: z.string().default(""),
   platform: z.enum(["web", "mobile_app"]).default("web"),
@@ -82,11 +173,1093 @@ export const uiSchemaDraftSchema = z.object({
     width: z.number(),
     height: z.number(),
     layout: z.string().default(""),
+    pageMode: looseEnum(["collection", "detail", "form", "dashboard", "auth", "settings", "flow", "landing", "unknown"]).default("unknown"),
+    businessEntity: z.string().default(""),
+    layoutPattern: looseEnum(["pcTable", "pcDetail", "pcForm", "pcDashboard", "mobileList", "mobileDetail", "mobileForm", "settingsSplit", "authCentered", "flowSteps", "custom"]).default("custom"),
+    requiredRegions: z.array(z.string()).default([]),
+    forbiddenRegions: z.array(z.string()).default([]),
+    componentFamilies: z.array(z.string()).default([]),
+    layoutIntent: layoutIntentNodeSchema.optional(),
     nodes: z.array(uiSchemaDraftNodeSchema).default([])
   })).min(1).max(12)
-});
+}));
 
 export type UiSchemaDraft = z.infer<typeof uiSchemaDraftSchema>;
+
+interface PageTemplateContract {
+  templateId: string;
+  templateName: string;
+  score: number;
+  reasons: string[];
+  platformPolicy: "full" | "style-only";
+  dimensions?: { width: number; height: number };
+  pageMode?: PageInteractionMode;
+  requiredRegions: string[];
+  forbiddenRegions: string[];
+  regionOrder: string[];
+  styleTokens: {
+    colors: {
+      background?: string;
+      surface?: string;
+      primary?: string;
+      text?: string;
+      mutedText?: string;
+      border?: string;
+    };
+    radius: {
+      card?: number;
+      control?: number;
+      button?: number;
+    };
+    spacing: number[];
+    typography: {
+      title?: number;
+      body?: number;
+      caption?: number;
+    };
+  };
+  componentStyle: WorkspaceDesignStyleProfile["components"];
+}
+
+function normalizeUiSchemaDraftInput(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return {
+      schemaVersion: "aipm.design.schema.v1",
+      intent: "",
+      platform: "web",
+      designRationale: [],
+      artboards: value
+        .filter(isRecordLikeForSchema)
+        .slice(0, 12)
+        .map((artboard, index) => normalizeUiSchemaArtboardInput(artboard, {}, index))
+    };
+  }
+  if (!value || typeof value !== "object") return value;
+  const draft = value as Record<string, unknown>;
+  const wrapperKeys = ["schemaDraft", "uiSchemaDraft", "draft", "result", "data", "output", "schema", "design", "ui", "payload", "response", "page", "screen", "section", "block", "region", "component", "tree", "layoutTree", "intentTree"];
+  for (const key of wrapperKeys) {
+    const wrapped = draft[key];
+    if (isRecordLikeForSchema(wrapped) && wrapped !== draft) {
+      const normalized: unknown = normalizeUiSchemaDraftInput(wrapped);
+      if (isRecordLikeForSchema(normalized) && Array.isArray(normalized.artboards)) return normalized;
+    }
+  }
+  if (Array.isArray(draft.artboards)) return {
+    ...draft,
+    artboards: draft.artboards.map((artboard, index) => normalizeUiSchemaArtboardInput(artboard, draft, index))
+  };
+  if (Array.isArray(draft.pageSpecs)) {
+    return {
+      schemaVersion: "aipm.design.schema.v1",
+      intent: readStringField(draft, ["intent", "title", "name"], ""),
+      platform: normalizeSchemaPlatform(draft.platform),
+      designRationale: Array.isArray(draft.designRationale) ? draft.designRationale : [],
+      artboards: draft.pageSpecs
+        .filter(isRecordLikeForSchema)
+        .slice(0, 12)
+        .map((pageSpec, index) => normalizePageSpecToArtboardInput(pageSpec, draft, index))
+    };
+  }
+  const pageCandidates = [
+    draft.artboard,
+    draft.screen,
+    draft.section,
+    draft.block,
+    draft.region,
+    draft.component,
+    draft.tree,
+    draft.layoutIntent,
+    draft.intentTree
+  ].filter(isRecordLikeForSchema);
+  const collectionCandidates = [
+    draft.pages,
+    draft.screens,
+    draft.layouts,
+    draft.views,
+    draft.routes,
+    draft.frames,
+    draft.canvases,
+    draft.artboardList,
+    draft.screenList
+  ].find(Array.isArray) as unknown[] | undefined;
+  if (collectionCandidates?.length) {
+    return {
+      schemaVersion: "aipm.design.schema.v1",
+      intent: readStringField(draft, ["intent", "title", "name"], ""),
+      platform: normalizeSchemaPlatform(draft.platform),
+      designRationale: Array.isArray(draft.designRationale) ? draft.designRationale : [],
+      artboards: collectionCandidates
+        .filter(isRecordLikeForSchema)
+        .slice(0, 12)
+        .map((page, index) => normalizeUiSchemaArtboardInput(page, draft, index))
+    };
+  }
+  if (pageCandidates.length > 0) {
+    const page = pageCandidates[0];
+    return {
+      schemaVersion: "aipm.design.schema.v1",
+      intent: readStringField(draft, ["intent", "title", "name"], readStringField(page, ["intent", "title", "name"], "")),
+      platform: normalizeSchemaPlatform(draft.platform ?? page.platform),
+      designRationale: Array.isArray(draft.designRationale) ? draft.designRationale : [],
+      artboards: [normalizeUiSchemaArtboardInput(page, draft, 0)]
+    };
+  }
+  const blockChildren = readIntentChildrenFromLooseDraft(draft);
+  if (blockChildren.length > 0 || looksLikeLooseUiDraft(draft)) {
+    return normalizeLooseDraftToSchemaDraft(draft, blockChildren);
+  }
+  const platform = draft.platform === "mobile_app" ? "mobile_app" : "web";
+  const width = platform === "mobile_app" ? 375 : 1440;
+  const height = platform === "mobile_app" ? 812 : 1024;
+  const layoutIntent = isRecordLikeForSchema(draft.layoutIntent)
+    ? draft.layoutIntent
+    : typeof draft.type === "string"
+      ? draft
+      : undefined;
+  const layoutChildren = Array.isArray(draft.children) ? draft.children.map((child, index) => normalizePageSpecBlockToIntent(child, index)) : [];
+  const nodes = Array.isArray(draft.nodes) ? draft.nodes : [];
+  if (!layoutIntent && layoutChildren.length > 0) {
+    return {
+      schemaVersion: "aipm.design.schema.v1",
+      intent: typeof draft.intent === "string" ? draft.intent : typeof draft.title === "string" ? draft.title : "",
+      platform,
+      designRationale: Array.isArray(draft.designRationale) ? draft.designRationale : [],
+      artboards: [{
+        refId: typeof draft.refId === "string" ? draft.refId : "page-root",
+        name: typeof draft.name === "string" ? draft.name : typeof draft.title === "string" ? draft.title : "生成区块",
+        width: typeof draft.width === "number" ? draft.width : width,
+        height: typeof draft.height === "number" ? draft.height : height,
+        layout: typeof draft.layout === "string" ? draft.layout : "",
+        ...readPageContractFields(draft),
+        layoutIntent: {
+          type: typeof draft.type === "string" ? draft.type : "Section",
+          name: typeof draft.name === "string" ? draft.name : typeof draft.title === "string" ? draft.title : "生成区块",
+          title: typeof draft.title === "string" ? draft.title : undefined,
+          children: layoutChildren
+        },
+        nodes
+      }]
+    };
+  }
+  if (!layoutIntent && nodes.length === 0) return value;
+  return {
+    schemaVersion: "aipm.design.schema.v1",
+    intent: typeof draft.intent === "string" ? draft.intent : typeof draft.title === "string" ? draft.title : "",
+    platform,
+    designRationale: Array.isArray(draft.designRationale) ? draft.designRationale : [],
+    artboards: [{
+      refId: typeof draft.refId === "string" ? draft.refId : "page-root",
+      name: typeof draft.name === "string" ? draft.name : typeof draft.title === "string" ? draft.title : "生成页面",
+      width: typeof draft.width === "number" ? draft.width : width,
+      height: typeof draft.height === "number" ? draft.height : height,
+      layout: typeof draft.layout === "string" ? draft.layout : "",
+      ...readPageContractFields(draft),
+      layoutIntent,
+      nodes
+    }]
+  };
+}
+
+function readIntentChildrenFromLooseDraft(draft: Record<string, unknown>) {
+  const candidates = [
+    draft.keyBlocks,
+    draft.blocks,
+    draft.sections,
+    draft.regions,
+    draft.components,
+    draft.children,
+    draft.items,
+    draft.content
+  ];
+  const source = candidates.find(Array.isArray) as unknown[] | undefined;
+  if (!source) return [];
+  return source
+    .slice(0, 48)
+    .map((item, index) => normalizePageSpecBlockToIntent(item, index));
+}
+
+function looksLikeLooseUiDraft(draft: Record<string, unknown>) {
+  return typeof draft.type === "string"
+    || typeof draft.name === "string"
+    || typeof draft.title === "string"
+    || typeof draft.intent === "string"
+    || typeof draft.description === "string";
+}
+
+function normalizeLooseDraftToSchemaDraft(draft: Record<string, unknown>, children: LayoutIntentDraftNode[]) {
+  const platform = normalizeSchemaPlatform(draft.platform);
+  const width = platform === "mobile_app" ? 375 : 1440;
+  const height = platform === "mobile_app" ? 812 : 1024;
+  const title = readStringField(draft, ["name", "title", "pageName", "intent"], "生成页面");
+  const rootType = typeof draft.type === "string" ? draft.type : "Page";
+  const normalizedChildren = children.length > 0
+    ? children
+    : [{ type: "Section", title, children: [{ type: "Text", text: title, variant: "title" }] }];
+  const layoutIntent = rootType.toLowerCase() === "page" || rootType.toLowerCase() === "screen" || rootType.toLowerCase() === "artboard"
+    ? { ...draft, type: "Page", title, children: normalizedChildren }
+    : { type: "Page", title, children: [{ ...draft, type: rootType, title, children: normalizedChildren }] };
+  return {
+    schemaVersion: "aipm.design.schema.v1",
+    intent: readStringField(draft, ["intent", "description", "title", "name"], title),
+    platform,
+    designRationale: Array.isArray(draft.designRationale) ? draft.designRationale : ["Schema normalizer: loose draft converted to artboards"],
+    artboards: [{
+      refId: readStringField(draft, ["refId", "id"], "page-root"),
+      name: title,
+      width: typeof draft.width === "number" ? draft.width : width,
+      height: typeof draft.height === "number" ? draft.height : height,
+      layout: readStringField(draft, ["layout"], ""),
+      ...readPageContractFields(draft),
+      layoutIntent,
+      nodes: Array.isArray(draft.nodes) ? draft.nodes : []
+    }]
+  };
+}
+
+function normalizePageSpecToArtboardInput(value: Record<string, unknown>, root: Record<string, unknown>, index: number) {
+  const platform = normalizeSchemaPlatform(value.platform ?? root.platform);
+  const width = platform === "mobile_app" ? 375 : 1440;
+  const height = platform === "mobile_app" ? 812 : 1024;
+  const name = readStringField(value, ["name", "title", "pageName"], `生成页面 ${index + 1}`);
+  const keyBlocks = Array.isArray(value.keyBlocks) ? value.keyBlocks : [];
+  const children = keyBlocks.length > 0
+    ? keyBlocks.map((block, blockIndex) => normalizePageSpecBlockToIntent(block, blockIndex))
+    : [{ type: "Section", title: name, children: [{ type: "Text", text: name, variant: "title" }] }];
+  return {
+    refId: readStringField(value, ["refId", "id"], `page-${index + 1}`),
+    name,
+    width: typeof value.width === "number" ? value.width : width,
+    height: typeof value.height === "number" ? value.height : height,
+    layout: readStringField(value, ["layout"], ""),
+    ...readPageContractFields(value),
+    layoutIntent: {
+      type: "Page",
+      title: name,
+      layout: readStringField(value, ["layout"], "").includes("dashboard") ? "dashboard" : undefined,
+      children
+    },
+    nodes: []
+  };
+}
+
+function normalizePageSpecBlockToIntent(block: unknown, index: number): LayoutIntentDraftNode {
+  if (typeof block === "string") {
+    return {
+      type: inferIntentTypeFromLabel(block),
+      title: block,
+      children: [{ type: "Text", text: block }]
+    };
+  }
+  if (!isRecordLikeForSchema(block)) {
+    return { type: "Section", title: `区块 ${index + 1}`, children: [{ type: "Text", text: `区块 ${index + 1}` }] };
+  }
+  const title = readStringField(block, ["name", "title", "label"], `区块 ${index + 1}`);
+  const children = Array.isArray(block.children)
+    ? block.children.filter(isRecordLikeForSchema).map((child, childIndex) => normalizePageSpecBlockToIntent(child, childIndex))
+    : [{ type: "Text", text: title }];
+  return {
+    type: readStringField(block, ["type"], inferIntentTypeFromLabel(title)),
+    name: title,
+    title,
+    children
+  };
+}
+
+function inferIntentTypeFromLabel(label: string) {
+  if (/筛选|查询|搜索|filter|search/i.test(label)) return "FilterBar";
+  if (/指标|统计|摘要|summary|metric/i.test(label)) return "MetricGroup";
+  if (/表格|列表|记录|table|list/i.test(label)) return "Table";
+  if (/表单|字段|输入|上传|form/i.test(label)) return "Form";
+  if (/详情|资料|信息|明细|detail|info/i.test(label)) return "DescriptionList";
+  if (/操作|按钮|actions?/i.test(label)) return "ActionBar";
+  return "Section";
+}
+
+function normalizeUiSchemaArtboardInput(value: unknown, root: Record<string, unknown>, index: number) {
+  const artboard = isRecordLikeForSchema(value) ? value : {};
+  const platform = normalizeSchemaPlatform(artboard.platform ?? root.platform);
+  const width = platform === "mobile_app" ? 375 : 1440;
+  const height = platform === "mobile_app" ? 812 : 1024;
+  const layoutIntent = isRecordLikeForSchema(artboard.layoutIntent)
+    ? artboard.layoutIntent
+    : isRecordLikeForSchema(artboard.intentTree)
+      ? artboard.intentTree
+      : typeof artboard.type === "string"
+        ? artboard
+        : undefined;
+  return {
+    refId: readStringField(artboard, ["refId", "id"], `page-${index + 1}`),
+    name: readStringField(artboard, ["name", "title"], readStringField(root, ["name", "title"], `生成页面 ${index + 1}`)),
+    width: typeof artboard.width === "number" ? artboard.width : width,
+    height: typeof artboard.height === "number" ? artboard.height : height,
+    layout: readStringField(artboard, ["layout"], ""),
+    ...readPageContractFields(artboard),
+    layoutIntent,
+    nodes: Array.isArray(artboard.nodes) ? artboard.nodes : []
+  };
+}
+
+function normalizeSchemaPlatform(value: unknown): "web" | "mobile_app" {
+  return value === "mobile_app" ? "mobile_app" : "web";
+}
+
+function readStringField(record: Record<string, unknown>, keys: string[], fallback: string) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return fallback;
+}
+
+function readPageContractFields(record: Record<string, unknown>) {
+  return {
+    pageMode: typeof record.pageMode === "string" ? record.pageMode : undefined,
+    businessEntity: typeof record.businessEntity === "string" ? record.businessEntity : undefined,
+    layoutPattern: typeof record.layoutPattern === "string" ? record.layoutPattern : undefined,
+    requiredRegions: normalizeStringArrayLike(record.requiredRegions),
+    forbiddenRegions: normalizeStringArrayLike(record.forbiddenRegions),
+    componentFamilies: normalizeStringArrayLike(record.componentFamilies)
+  };
+}
+
+function normalizeStringArrayLike(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+  return values
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (typeof item === "number" || typeof item === "boolean") return String(item);
+      if (!item || typeof item !== "object" || Array.isArray(item)) return "";
+      const record = item as Record<string, unknown>;
+      return [record.name, record.title, record.label, record.type, record.component]
+        .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+        .join(" / ");
+    })
+    .filter(Boolean);
+}
+
+function isRecordLikeForSchema(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateAndNormalizeUiSchemaDraft(draft: UiSchemaDraft, userRequest: string): {
+  draft: UiSchemaDraft;
+  issues: string[];
+  blockingIssues: string[];
+  contractIssues: Array<{ artboardName: string; kind: "missing_required_region" | "forbidden_region_present"; region: string }>;
+} {
+  const issues: string[] = [];
+  const blockingIssues: string[] = [];
+  const contractIssues: Array<{ artboardName: string; kind: "missing_required_region" | "forbidden_region_present"; region: string }> = [];
+  const platform = draft.platform;
+  const isMobile = platform === "mobile_app" || /小程序|移动端|手机|app/i.test(userRequest);
+  const artboards = draft.artboards.map((artboard, index) => {
+    const isShellDraft = isUiShellDraft(draft, artboard);
+    if (!artboard.layoutIntent) {
+      if (isShellDraft) {
+        issues.push(`画板「${artboard.name || index + 1}」是增量生成外框，允许空内容先落盘`);
+        return artboard;
+      }
+      if (artboard.nodes.length < 4) {
+        blockingIssues.push(`画板「${artboard.name || index + 1}」缺少 layoutIntent，且 legacy nodes 过少`);
+      } else {
+        issues.push(`画板「${artboard.name || index + 1}」仍使用 legacy nodes，无法享受 Layout Engine 约束`);
+      }
+      return artboard;
+    }
+    const normalizedIntent = normalizeLayoutIntentForValidation(artboard.layoutIntent, {
+      isMobile,
+      issues,
+      path: artboard.name || `artboard-${index + 1}`
+    });
+    const declaredMode = artboard.pageMode && artboard.pageMode !== "unknown" && artboard.pageMode !== "landing"
+      ? artboard.pageMode
+      : undefined;
+    const forbiddenRegions = declaredMode
+      ? artboard.forbiddenRegions.length > 0
+        ? artboard.forbiddenRegions
+        : getDefaultForbiddenRegionsForPageMode(declaredMode)
+      : [];
+    const pruneResult = pruneForbiddenLayoutIntentRegions(normalizedIntent, forbiddenRegions);
+    if (pruneResult.removedRegions.length > 0) {
+      issues.push(`画板「${artboard.name}」已按页面契约移除禁用区域：${Array.from(new Set(pruneResult.removedRegions)).join("、")}`);
+    }
+    const sanitizedIntent = pruneResult.root;
+    const stats = collectLayoutIntentStats(sanitizedIntent);
+    if (stats.nodeCount < 4) {
+      blockingIssues.push(`画板「${artboard.name}」layoutIntent 节点过少，不能由 Compiler 凭空补业务内容`);
+    }
+    if (!stats.hasContent) {
+      blockingIssues.push(`画板「${artboard.name}」缺少内容组件，必须重新生成详情/表单/列表等明确语义结构`);
+    }
+    if (declaredMode) {
+      const pageContractIssues = validatePageContract(artboard, sanitizedIntent, stats);
+      contractIssues.push(...pageContractIssues);
+      blockingIssues.push(...pageContractIssues.map(formatPageContractIssue));
+    } else {
+      const inferredMode = inferRequestedInteractionMode(`${draft.intent} ${artboard.name} ${artboard.layout} ${userRequest}`);
+      if (inferredMode === "unknown") {
+        issues.push(`画板「${artboard.name}」缺少 pageMode 契约；Validator 仅执行基础结构检查`);
+      } else {
+        issues.push(`画板「${artboard.name}」缺少 pageMode 契约，已按 ${inferredMode} 做弱提示；建议由 UI 设计计划显式输出契约`);
+        issues.push(...validateMinimumStructureForPageMode(inferredMode, stats, artboard.name));
+      }
+    }
+    if (isMobile && stats.tableCount > 0) {
+      issues.push(`移动端画板「${artboard.name}」包含 Table，已转换为 CardList/Grid`);
+    }
+    return {
+      ...artboard,
+      layoutIntent: sanitizedIntent
+    };
+  });
+  return {
+    draft: {
+      ...draft,
+      designRationale: issues.length > 0
+        ? [...draft.designRationale, `Layout Intent Validator: ${issues.join("；")}`]
+        : draft.designRationale,
+      artboards
+    },
+    issues,
+    blockingIssues,
+    contractIssues
+  };
+}
+
+function isUiShellDraft(draft: UiSchemaDraft, artboard: UiSchemaDraft["artboards"][number]) {
+  const text = `${draft.intent} ${artboard.layout} ${draft.designRationale.join(" ")}`;
+  return artboard.nodes.length === 0
+    && !artboard.layoutIntent
+    && /页面外框|shell|incremental canvas|空画板外框|先创建空画板/i.test(text);
+}
+
+function normalizeLayoutIntentForValidation(
+  node: LayoutIntentDraftNode,
+  context: { isMobile: boolean; issues: string[]; path: string }
+): LayoutIntentDraftNode {
+  const raw = node as LayoutIntentDraftNode & Record<string, unknown>;
+  const { x, y, left, top, right, bottom, position, ...cleanRaw } = raw;
+  if ([x, y, left, top, right, bottom, position].some((value) => value !== undefined)) {
+    context.issues.push(`${context.path}/${node.type} 包含绝对定位字段，已移除`);
+  }
+  const normalizedType = context.isMobile && /table|datatable/i.test(node.type) ? "Grid" : node.type;
+  const children = node.children?.map((child, index) => normalizeLayoutIntentForValidation(child, {
+    ...context,
+    path: `${context.path}/${node.type}[${index}]`
+  }));
+  return {
+    ...cleanRaw,
+    type: normalizedType,
+    children
+  };
+}
+
+function collectLayoutIntentStats(root: LayoutIntentDraftNode) {
+  const stats = {
+    nodeCount: 0,
+    hasContent: false,
+    hasFilter: false,
+    hasForm: false,
+    hasToolbar: false,
+    hasAction: false,
+    hasDetailContent: false,
+    hasMetric: false,
+    hasFeedback: false,
+    hasNavigation: false,
+    hasSteps: false,
+    fieldCount: 0,
+    hasCollectionContent: false,
+    hasCollectionControl: false,
+    tableCount: 0,
+    collectionTypes: [] as string[]
+  };
+  const visit = (node: LayoutIntentDraftNode) => {
+    const type = normalizeIntentTypeForValidation(node.type);
+    const label = `${node.name ?? ""}${node.title ?? ""}${node.label ?? ""}${node.text ?? ""}`;
+    stats.nodeCount += 1;
+    const isCollectionContentType = isCollectionIntentContentType(type);
+    const isCollectionControlType = isCollectionIntentControlType(type);
+    if (isCollectionContentType || /card|content|form|panel|detail|section|descriptionlist/i.test(type) || /内容|列表|表格|卡片|表单|详情|信息|资料/.test(label)) {
+      stats.hasContent = true;
+    }
+    if (/filter|search/i.test(type) || /筛选|查询|搜索/.test(label)) {
+      stats.hasFilter = true;
+    }
+    if (/toolbar|navbar|breadcrumb|tabs|tabbar|sidenav|nav/i.test(type) || /导航|面包屑|顶部|标签页/.test(label)) {
+      stats.hasToolbar = true;
+      stats.hasNavigation = true;
+    }
+    if (/actionbar|button|buttongroup|moremenu/i.test(type) || /操作|按钮|保存|提交|确认|取消|返回/.test(label)) {
+      stats.hasAction = true;
+    }
+    if (/form|field|input|select|textarea|upload/i.test(type) || /表单|字段|输入|上传/.test(label)) {
+      stats.hasForm = true;
+      stats.fieldCount += Array.isArray(node.fields) ? node.fields.length : /form/i.test(type) ? 0 : 1;
+    }
+    if (/descriptionlist|detail|panel|status|timeline|imagegallery/i.test(type) || /详情|资料|信息|明细|状态|时间线/.test(label)) {
+      stats.hasDetailContent = true;
+    }
+    if (/metric|chart|dashboard|summary|card|grid/i.test(type) || /指标|统计|趋势|图表|看板|摘要/.test(label)) {
+      stats.hasMetric = true;
+    }
+    if (/empty|alert|toast|modal|drawer|loading|feedback/i.test(type) || /空状态|暂无|提示|弹窗|抽屉|加载|反馈/.test(label)) {
+      stats.hasFeedback = true;
+    }
+    if (/steps|stepper|timeline/i.test(type) || /步骤|流程|时间线|进度/.test(label)) {
+      stats.hasSteps = true;
+    }
+    if (isCollectionContentType || /列表|表格|记录/.test(label)) {
+      stats.hasCollectionContent = true;
+    }
+    if (isCollectionControlType || /筛选|查询|搜索|分页|列表|表格/.test(label)) {
+      stats.hasCollectionControl = true;
+      stats.collectionTypes.push(node.type);
+    }
+    if (/table|datatable/i.test(type)) {
+      stats.tableCount += 1;
+    }
+    node.children?.forEach(visit);
+  };
+  visit(root);
+  return stats;
+}
+
+function isCollectionIntentContentType(type: string) {
+  return new Set(["table", "datatable", "list", "cardlist", "grid", "listitem"]).has(type);
+}
+
+function isCollectionIntentControlType(type: string) {
+  return new Set(["filterbar", "filter", "searchbar", "search", "pagination", "pager", "table", "datatable", "list", "cardlist", "grid"]).has(type);
+}
+
+type PageInteractionMode = "detail" | "form" | "collection" | "dashboard" | "auth" | "settings" | "flow" | "unknown";
+
+function inferRequestedInteractionMode(text: string): PageInteractionMode {
+  if (/登录|注册|验证码|找回密码|重置密码|auth|login|register|password/i.test(text)) return "auth";
+  if (/设置|配置|权限|偏好|通知|账号安全|settings|preferences|permission/i.test(text)) return "settings";
+  if (/详情|查看|资料|明细|profile|detail|inspect|read\s*only/i.test(text)) return "detail";
+  if (/(流程|步骤|审核流|审批流|流转|进度跟踪|step|flow|checkout|wizard)/i.test(text)) return "flow";
+  if (/新增|新建|编辑|修改|创建|录入|提交|保存|表单|上传|认证|form|create|edit|submit/i.test(text)) return "form";
+  if (/列表|表格|管理|查询|搜索|筛选|记录|台账|table|list|collection|index/i.test(text)) return "collection";
+  if (/看板|仪表盘|统计|趋势|报表|dashboard|analytics|chart/i.test(text)) return "dashboard";
+  return "unknown";
+}
+
+function validateMinimumStructureForPageMode(
+  mode: PageInteractionMode,
+  stats: ReturnType<typeof collectLayoutIntentStats>,
+  artboardName: string
+) {
+  const issues: string[] = [];
+  if (mode === "collection") {
+    if (!stats.hasToolbar && !stats.hasAction) issues.push(`画板「${artboardName}」是列表/管理类页面，但缺少 Toolbar/操作区`);
+    if (!stats.hasCollectionContent) issues.push(`画板「${artboardName}」是列表/管理类页面，但缺少 Table/CardList/List/Grid`);
+  }
+  if (mode === "detail") {
+    if (!stats.hasToolbar && !stats.hasAction) issues.push(`画板「${artboardName}」是详情页，但缺少标题/返回/操作区`);
+    if (!stats.hasDetailContent && !stats.hasForm) issues.push(`画板「${artboardName}」是详情页，但缺少 DescriptionList/Panel/Form 详情内容`);
+  }
+  if (mode === "form") {
+    if (!stats.hasForm) issues.push(`画板「${artboardName}」是表单页，但缺少 Form/Input/Select/Upload 等字段结构`);
+    if (stats.fieldCount < 2) issues.push(`画板「${artboardName}」是表单页，但字段数量不足，至少需要 2 个字段`);
+    if (!stats.hasAction) issues.push(`画板「${artboardName}」是表单页，但缺少 ActionBar/保存提交按钮`);
+  }
+  if (mode === "dashboard") {
+    if (!stats.hasMetric) issues.push(`画板「${artboardName}」是看板页，但缺少 MetricGroup/Chart/Card/Grid 指标内容`);
+    if (!stats.hasContent) issues.push(`画板「${artboardName}」是看板页，但缺少核心内容区`);
+  }
+  if (mode === "auth") {
+    if (!stats.hasForm || stats.fieldCount < 2) issues.push(`画板「${artboardName}」是登录/注册页，但缺少账号/密码/验证码等表单字段`);
+    if (!stats.hasAction) issues.push(`画板「${artboardName}」是登录/注册页，但缺少主按钮`);
+    if (stats.hasCollectionContent) issues.push(`画板「${artboardName}」是登录/注册页，但混入了列表/表格结构`);
+  }
+  if (mode === "settings") {
+    if (!stats.hasNavigation && !stats.hasContent) issues.push(`画板「${artboardName}」是设置页，但缺少分组导航或设置分区`);
+    if (!stats.hasForm && !stats.hasAction) issues.push(`画板「${artboardName}」是设置页，但缺少配置项、开关或操作控件`);
+  }
+  if (mode === "flow") {
+    if (!stats.hasSteps) issues.push(`画板「${artboardName}」是流程页，但缺少 Steps/Timeline 流程结构`);
+    if (!stats.hasAction) issues.push(`画板「${artboardName}」是流程页，但缺少下一步/提交/返回等 ActionBar`);
+  }
+  return issues;
+}
+
+function validatePageContract(
+  artboard: UiSchemaDraft["artboards"][number],
+  root: LayoutIntentDraftNode,
+  stats: ReturnType<typeof collectLayoutIntentStats>
+) {
+  const issues: Array<{ artboardName: string; kind: "missing_required_region" | "forbidden_region_present"; region: string }> = [];
+  const mode = artboard.pageMode;
+  const rawRequiredRegions = artboard.requiredRegions.length > 0
+    ? artboard.requiredRegions
+    : getDefaultRequiredRegionsForPageMode(mode);
+  const rawForbiddenRegions = artboard.forbiddenRegions.length > 0
+    ? artboard.forbiddenRegions
+    : getDefaultForbiddenRegionsForPageMode(mode);
+  const forbiddenRegionNames = new Set(rawForbiddenRegions.map(normalizeIntentRegionName).filter(Boolean));
+  const requiredRegions = rawRequiredRegions.filter((region) => !forbiddenRegionNames.has(normalizeIntentRegionName(region)));
+  const forbiddenRegions = rawForbiddenRegions;
+
+  requiredRegions.forEach((region) => {
+    if (!layoutIntentHasRegion(root, region, stats)) {
+      issues.push({ artboardName: artboard.name, kind: "missing_required_region", region });
+    }
+  });
+  forbiddenRegions.forEach((region) => {
+    if (layoutIntentHasRegion(root, region, stats)) {
+      issues.push({ artboardName: artboard.name, kind: "forbidden_region_present", region });
+    }
+  });
+  return issues;
+}
+
+function pruneForbiddenLayoutIntentRegions(root: LayoutIntentDraftNode, forbiddenRegions: string[]) {
+  const forbidden = new Set(forbiddenRegions.map(normalizeIntentRegionName).filter(Boolean));
+  const removedRegions: string[] = [];
+  if (forbidden.size === 0) return { root, removedRegions };
+  const shouldRemove = (node: LayoutIntentDraftNode) => {
+    const type = normalizeIntentTypeForValidation(node.type);
+    const slot = typeof node.slot === "string" ? normalizeIntentRegionName(node.slot) : "";
+    const label = normalizeIntentRegionName(`${node.name ?? ""} ${node.title ?? ""} ${node.label ?? ""}`);
+    for (const region of forbidden) {
+      if (typeMatchesRegion(type, region) || slot === region || label === region) {
+        removedRegions.push(region);
+        return true;
+      }
+    }
+    return false;
+  };
+  const prune = (node: LayoutIntentDraftNode): LayoutIntentDraftNode => ({
+    ...node,
+    children: node.children
+      ?.filter((child) => !shouldRemove(child))
+      .map(prune)
+  });
+  return { root: prune(root), removedRegions };
+}
+
+function formatPageContractIssue(issue: { artboardName: string; kind: "missing_required_region" | "forbidden_region_present"; region: string }) {
+  return issue.kind === "missing_required_region"
+    ? `画板「${issue.artboardName}」契约要求 ${issue.region}，但 layoutIntent 未包含对应区域`
+    : `画板「${issue.artboardName}」契约禁止 ${issue.region}，但 layoutIntent 包含该区域`;
+}
+
+function getDefaultRequiredRegionsForPageMode(mode: string) {
+  switch (mode) {
+    case "collection":
+      return ["Header", "Content"];
+    case "detail":
+      return ["Header", "DescriptionList"];
+    case "form":
+      return ["Form", "ActionBar"];
+    case "dashboard":
+      return ["MetricGroup", "Content"];
+    case "auth":
+      return ["Form", "ActionBar"];
+    case "settings":
+      return ["Content"];
+    case "flow":
+      return ["Steps", "ActionBar"];
+    default:
+      return ["Content"];
+  }
+}
+
+function getDefaultForbiddenRegionsForPageMode(mode: string) {
+  switch (mode) {
+    case "collection":
+      return ["DescriptionList", "DetailPanel"];
+    case "detail":
+      return ["FilterBar", "Table", "Pagination"];
+    case "form":
+    case "auth":
+      return ["Table", "Pagination"];
+    default:
+      return [];
+  }
+}
+
+function matchPageTemplateContract(
+  file: WorkspaceDesignFile,
+  userRequest: string,
+  platform: "web" | "mobile_app",
+  artboard?: UiSchemaDraft["artboards"][number]
+): PageTemplateContract | undefined {
+  const templates = file.pageTemplates ?? [];
+  if (templates.length === 0) return undefined;
+  const targetMode = normalizePageModeForTemplateMatch(artboard?.pageMode) || inferRequestedInteractionMode(`${userRequest} ${artboard?.name ?? ""}`);
+  const targetEntity = normalizeTemplateMatchText(`${artboard?.businessEntity ?? ""} ${userRequest}`);
+  const requestTokens = new Set(tokenizeTemplateMatchText(`${userRequest} ${artboard?.name ?? ""} ${artboard?.businessEntity ?? ""}`));
+  const targetPlatform = platform === "mobile_app" ? "mobile" : "web";
+  const ranked = templates.map((template) => {
+    const contract = buildPageTemplateContract(template, userRequest, platform, targetMode);
+    const templateText = normalizeTemplateMatchText([
+      template.name,
+      template.description ?? "",
+      template.nodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" ")
+    ].join(" "));
+    const templateTokens = new Set(tokenizeTemplateMatchText(templateText));
+    const overlap = Array.from(requestTokens).filter((token) => templateTokens.has(token)).length;
+    let score = 0;
+    const reasons: string[] = [];
+    if (template.styleProfile.platform === targetPlatform) {
+      score += 35;
+      reasons.push("平台匹配");
+    } else if (template.styleProfile.platform === "unknown") {
+      score += 8;
+      reasons.push("模板平台未知，仅弱匹配");
+    } else {
+      score -= 12;
+      reasons.push("平台不一致，仅继承风格 token");
+    }
+    if (contract.pageMode && targetMode !== "unknown" && contract.pageMode === targetMode) {
+      score += 30;
+      reasons.push(`页面模式匹配 ${targetMode}`);
+    } else if (targetMode !== "unknown" && contract.regionOrder.some((region) => templateRegionMatchesPageMode(region, targetMode))) {
+      score += 16;
+      reasons.push("模板结构接近页面模式");
+    }
+    if (overlap > 0) {
+      score += Math.min(24, overlap * 4);
+      reasons.push(`关键词命中 ${overlap} 个`);
+    }
+    if (targetEntity && templateText.includes(targetEntity.slice(0, 4))) {
+      score += 10;
+      reasons.push("业务实体接近");
+    }
+    const area = template.width * template.height;
+    if (platform === "mobile_app" && template.width <= 520) {
+      score += 8;
+      reasons.push("移动端尺寸匹配");
+    }
+    if (platform === "web" && area >= 800 * 600) {
+      score += 8;
+      reasons.push("Web 尺寸匹配");
+    }
+    return {
+      contract: { ...contract, score, reasons },
+      score
+    };
+  }).sort((first, second) => second.score - first.score);
+  const best = ranked[0]?.contract;
+  return best && best.score > 0 ? best : undefined;
+}
+
+function buildPageTemplateContract(
+  template: WorkspaceDesignPageTemplate,
+  userRequest: string,
+  platform: "web" | "mobile_app",
+  targetMode: PageInteractionMode
+): PageTemplateContract {
+  const structure = summarizeTemplateStructureForContract(template.nodes);
+  const inferredMode = targetMode !== "unknown" ? targetMode : structure.pageMode;
+  const platformPolicy = template.styleProfile.platform === "unknown" || template.styleProfile.platform === (platform === "mobile_app" ? "mobile" : "web")
+    ? "full"
+    : "style-only";
+  const style = template.styleProfile;
+  const requiredRegions = mergeRegionLists(
+    getDefaultRequiredRegionsForPageMode(inferredMode),
+    structure.regionOrder.filter((region) => shouldInheritTemplateRegionForPageMode(region, inferredMode))
+  );
+  const forbiddenRegions = mergeRegionLists(getDefaultForbiddenRegionsForPageMode(inferredMode), inferredMode === "detail" ? ["Table", "FilterBar", "Pagination"] : []);
+  const spacing = [
+    style.spacing.itemGap,
+    style.spacing.pageMargin,
+    style.spacing.sectionGap,
+    style.spacing.sectionGap ? style.spacing.sectionGap + Math.max(4, Math.round((style.spacing.itemGap ?? 8) / 2)) : undefined
+  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
+  return {
+    templateId: template.id,
+    templateName: template.name,
+    score: 0,
+    reasons: [],
+    platformPolicy,
+    dimensions: platformPolicy === "full" ? { width: Math.round(template.width), height: Math.round(template.height) } : undefined,
+    pageMode: inferredMode === "unknown" ? undefined : inferredMode,
+    requiredRegions,
+    forbiddenRegions,
+    regionOrder: structure.regionOrder,
+    styleTokens: {
+      colors: {
+        background: style.colors.background,
+        surface: style.colors.surface,
+        primary: style.colors.primary,
+        text: style.colors.text,
+        mutedText: style.colors.mutedText,
+        border: style.colors.border
+      },
+      radius: {
+        card: style.radius.card,
+        control: style.radius.input,
+        button: style.radius.button
+      },
+      spacing: spacing.length > 0 ? Array.from(new Set(spacing.map((value) => Math.round(value)))).sort((a, b) => a - b) : [],
+      typography: {
+        title: style.typography.title,
+        body: style.typography.body,
+        caption: style.typography.caption
+      }
+    },
+    componentStyle: style.components
+  };
+}
+
+function summarizeTemplateStructureForContract(nodes: WorkspaceDesignNode[]) {
+  const regions = Array.from(new Set(nodes.flatMap((node) => {
+    const label = `${node.type} ${node.name} ${node.text ?? ""}`;
+    return [
+      /nav|header|顶部|导航|标题栏/i.test(label) ? "Header" : "",
+      /summary|metric|统计|指标|摘要|状态/i.test(label) ? "Summary" : "",
+      /filter|search|query|筛选|搜索|查询/i.test(label) ? "FilterBar" : "",
+      /form|field|input|表单|字段|输入|上传/i.test(label) || node.type === "input" ? "Form" : "",
+      /detail|description|详情|信息|资料|明细/i.test(label) ? "DescriptionList" : "",
+      /table|表格|数据/i.test(label) || node.type === "table" ? "Table" : "",
+      /list|列表|卡片列表|记录/i.test(label) ? "CardList" : "",
+      /action|button|操作|按钮|保存|提交|确认|取消|返回/i.test(label) || node.type === "button" ? "ActionBar" : "",
+      /timeline|steps|流程|步骤|进度|物流/i.test(label) ? "Steps" : "",
+      /footer|底部|页脚|分页/i.test(label) ? "Pagination" : ""
+    ].filter(Boolean);
+  })));
+  const counts = nodes.reduce<Record<string, number>>((result, node) => {
+    result[node.type] = (result[node.type] ?? 0) + 1;
+    return result;
+  }, {});
+  const pageMode: PageInteractionMode = regions.includes("Table") || regions.includes("CardList")
+    ? "collection"
+    : regions.includes("Form")
+      ? "form"
+      : regions.includes("DescriptionList")
+        ? "detail"
+        : regions.includes("Steps")
+          ? "flow"
+          : counts.table > 0
+            ? "collection"
+            : "unknown";
+  return { regionOrder: regions, pageMode };
+}
+
+function applyPageTemplateContractToDraft(draft: UiSchemaDraft, contract: PageTemplateContract | undefined): UiSchemaDraft {
+  if (!contract) return draft;
+  return {
+    ...draft,
+    designRationale: [
+      ...draft.designRationale,
+      `Template Matcher: matched ${contract.templateName} (${contract.score}); contract=${contract.platformPolicy}; reasons=${contract.reasons.join("、")}`
+    ],
+    artboards: draft.artboards.map((artboard) => {
+      const inferredPageMode = inferRequestedInteractionMode(`${draft.intent} ${artboard.name} ${artboard.layoutIntent?.name ?? ""} ${artboard.layoutIntent?.title ?? ""}`);
+      const explicitPageMode = normalizePageModeForTemplateMatch(artboard.pageMode);
+      const pageMode = (explicitPageMode && explicitPageMode !== "unknown" ? explicitPageMode : undefined)
+        || (inferredPageMode !== "unknown" ? inferredPageMode : undefined)
+        || contract.pageMode
+        || "unknown";
+      const explicitRequiredRegions = artboard.requiredRegions.length > 0;
+      const requiredRegions = explicitRequiredRegions
+        ? sanitizeRequiredRegionsForPageMode(artboard.requiredRegions, pageMode)
+        : sanitizeRequiredRegionsForPageMode(mergeRegionLists(getDefaultRequiredRegionsForPageMode(pageMode), contract.requiredRegions), pageMode);
+      return {
+        ...artboard,
+        width: contract.platformPolicy === "full" && contract.dimensions ? contract.dimensions.width : artboard.width,
+        height: contract.platformPolicy === "full" && contract.dimensions ? contract.dimensions.height : artboard.height,
+        pageMode,
+        requiredRegions,
+        forbiddenRegions: sanitizeForbiddenRegionsForPageMode(mergeRegionLists(artboard.forbiddenRegions, contract.forbiddenRegions), pageMode),
+        layoutPattern: artboard.layoutPattern === "custom" && contract.pageMode ? defaultLayoutPatternForMode(contract.pageMode, draft.platform) : artboard.layoutPattern,
+        styleTokens: {
+          ...(artboard as typeof artboard & { styleTokens?: Record<string, unknown> }).styleTokens,
+          pageTemplateContract: {
+            templateId: contract.templateId,
+            templateName: contract.templateName,
+            platformPolicy: contract.platformPolicy,
+            colors: contract.styleTokens.colors,
+            radius: contract.styleTokens.radius,
+            spacing: contract.styleTokens.spacing,
+            typography: contract.styleTokens.typography,
+            regionOrder: contract.regionOrder
+          }
+        }
+      };
+    })
+  };
+}
+
+function sanitizeRequiredRegionsForPageMode(regions: string[], pageMode: string) {
+  const forbidden = new Set(getDefaultForbiddenRegionsForPageMode(pageMode).map(normalizeIntentRegionName));
+  return mergeRegionLists(regions).filter((region) => !forbidden.has(normalizeIntentRegionName(region)));
+}
+
+function sanitizeForbiddenRegionsForPageMode(regions: string[], pageMode: string) {
+  const required = new Set(getDefaultRequiredRegionsForPageMode(pageMode).map(normalizeIntentRegionName));
+  return mergeRegionLists(regions).filter((region) => !required.has(normalizeIntentRegionName(region)));
+}
+
+function applyPageTemplateContractToProfile(profile: DesignCapabilityProfile, contract: PageTemplateContract | undefined): DesignCapabilityProfile {
+  if (!contract || profile.libraries.length === 0) return profile;
+  const [primary, ...rest] = profile.libraries;
+  const tokens = primary.tokens;
+  const colors = contract.styleTokens.colors;
+  const radius = contract.styleTokens.radius;
+  const typography = contract.styleTokens.typography;
+  return {
+    ...profile,
+    libraries: [{
+      ...primary,
+      id: `${primary.id}-template-${contract.templateId}`,
+      name: `${primary.name} + ${contract.templateName}`,
+      tokens: {
+        colors: {
+          background: colors.background ?? tokens.colors.background,
+          surface: colors.surface ?? tokens.colors.surface,
+          primary: colors.primary ?? tokens.colors.primary,
+          text: colors.text ?? tokens.colors.text,
+          mutedText: colors.mutedText ?? tokens.colors.mutedText,
+          border: colors.border ?? tokens.colors.border
+        },
+        radius: {
+          card: radius.card ?? tokens.radius.card,
+          control: radius.control ?? tokens.radius.control,
+          button: radius.button ?? tokens.radius.button
+        },
+        spacing: contract.styleTokens.spacing.length > 0 ? contract.styleTokens.spacing : tokens.spacing,
+        typography: {
+          title: typography.title ?? tokens.typography.title,
+          body: typography.body ?? tokens.typography.body,
+          caption: typography.caption ?? tokens.typography.caption
+        }
+      }
+    }, ...rest]
+  };
+}
+
+function normalizePageModeForTemplateMatch(value: unknown): PageInteractionMode | undefined {
+  const text = typeof value === "string" ? value : "";
+  return ["collection", "detail", "form", "dashboard", "auth", "settings", "flow"].includes(text)
+    ? text as PageInteractionMode
+    : undefined;
+}
+
+function defaultLayoutPatternForMode(mode: PageInteractionMode, platform: "web" | "mobile_app") {
+  if (mode === "collection") return platform === "mobile_app" ? "mobileList" : "pcTable";
+  if (mode === "detail") return platform === "mobile_app" ? "mobileDetail" : "pcDetail";
+  if (mode === "form") return platform === "mobile_app" ? "mobileForm" : "pcForm";
+  if (mode === "dashboard") return "pcDashboard";
+  if (mode === "auth") return "authCentered";
+  if (mode === "settings") return "settingsSplit";
+  if (mode === "flow") return "flowSteps";
+  return "custom";
+}
+
+function templateRegionMatchesPageMode(region: string, mode: PageInteractionMode) {
+  if (mode === "collection") return ["Table", "CardList", "FilterBar", "Pagination"].includes(region);
+  if (mode === "detail") return ["DescriptionList", "Summary"].includes(region);
+  if (mode === "form") return ["Form", "ActionBar"].includes(region);
+  if (mode === "flow") return ["Steps"].includes(region);
+  if (mode === "dashboard") return ["Summary"].includes(region);
+  return false;
+}
+
+function shouldInheritTemplateRegionForPageMode(region: string, mode: PageInteractionMode) {
+  if (mode === "detail") return !["Table", "CardList", "FilterBar", "Pagination"].includes(region);
+  if (mode === "form" || mode === "auth") return !["Table", "CardList", "Pagination"].includes(region);
+  if (mode === "collection") return !["DescriptionList", "DetailPanel"].includes(region);
+  return !["Table", "Pagination"].includes(region);
+}
+
+function mergeRegionLists(...lists: string[][]) {
+  return Array.from(new Set(lists.flat().map((region) => region.trim()).filter(Boolean)));
+}
+
+function normalizeTemplateMatchText(value: string) {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function tokenizeTemplateMatchText(value: string) {
+  const normalized = value.toLowerCase();
+  const parts = normalized.split(/[\s,，、;；/|:：()[\]{}"'`]+/).filter(Boolean);
+  const chinese = normalized.match(/[\u4e00-\u9fff]{2,8}/g) ?? [];
+  return Array.from(new Set([...parts, ...chinese].map((part) => part.trim()).filter((part) => part.length >= 2))).slice(0, 80);
+}
+
+function layoutIntentHasRegion(
+  root: LayoutIntentDraftNode,
+  region: string,
+  stats: ReturnType<typeof collectLayoutIntentStats>
+) {
+  const normalized = normalizeIntentRegionName(region);
+  if (!normalized) return false;
+  if (normalized === "content") return stats.hasContent;
+  if (normalized === "header") return stats.hasToolbar || layoutIntentTreeHasRegion(root, normalized);
+  if (normalized === "summary") return stats.hasMetric || layoutIntentTreeHasRegion(root, normalized);
+  if (normalized === "filter") return stats.hasFilter;
+  if (normalized === "table") return stats.tableCount > 0 || layoutIntentTreeHasRegion(root, normalized);
+  if (normalized === "collection") return stats.hasCollectionContent;
+  if (normalized === "detail") return stats.hasDetailContent;
+  if (normalized === "form") return stats.hasForm;
+  if (normalized === "action") return stats.hasAction;
+  if (normalized === "pagination") return layoutIntentTreeHasRegion(root, normalized);
+  if (normalized === "steps") return stats.hasSteps;
+  if (normalized === "navigation") return stats.hasNavigation;
+  if (normalized === "feedback") return stats.hasFeedback;
+  return layoutIntentTreeHasRegion(root, normalized);
+}
+
+function layoutIntentTreeHasRegion(root: LayoutIntentDraftNode, region: string): boolean {
+  const visit = (node: LayoutIntentDraftNode): boolean => {
+    const type = normalizeIntentTypeForValidation(node.type);
+    const slot = typeof node.slot === "string" ? normalizeIntentRegionName(node.slot) : "";
+    const label = normalizeIntentRegionName(`${node.name ?? ""} ${node.title ?? ""} ${node.label ?? ""}`);
+    if (typeMatchesRegion(type, region) || slot === region || label === region) return true;
+    return Boolean(node.children?.some(visit));
+  };
+  return visit(root);
+}
+
+function normalizeIntentRegionName(value: string) {
+  const text = value.replace(/[\s_-]+/g, "").toLowerCase();
+  if (!text) return "";
+  if (/^(header|pageheader|toolbar|topbar|navbar|nav|标题栏|页头|顶部|导航)$/.test(text)) return "header";
+  if (/^(summary|metric|metricgroup|overview|摘要|概览|统计|指标)$/.test(text)) return "summary";
+  if (/^(filter|filterbar|search|searchbar|query|筛选|搜索|查询)$/.test(text)) return "filter";
+  if (/^(table|datatable|dataTable|表格|数据表)$/.test(text)) return "table";
+  if (/^(list|cardlist|grid|collection|列表|卡片列表|集合)$/.test(text)) return "collection";
+  if (/^(descriptionlist|detail|detailpanel|panel|详情|明细|资料|信息)$/.test(text)) return "detail";
+  if (/^(form|field|input|表单|字段|录入)$/.test(text)) return "form";
+  if (/^(action|actions|actionbar|button|buttongroup|footer|操作|按钮|底部操作)$/.test(text)) return "action";
+  if (/^(pagination|pager|分页)$/.test(text)) return "pagination";
+  if (/^(steps|stepper|timeline|flow|流程|步骤|时间线|进度)$/.test(text)) return "steps";
+  if (/^(sidebar|sidenav|tabs|tabbar|breadcrumb|navigation|导航|侧边栏|标签页|面包屑)$/.test(text)) return "navigation";
+  if (/^(empty|emptystate|alert|toast|modal|drawer|loading|feedback|空状态|提示|弹窗|抽屉|加载)$/.test(text)) return "feedback";
+  if (/^(content|section|card|main|body|内容|主体|区块)$/.test(text)) return "content";
+  return text;
+}
+
+function typeMatchesRegion(type: string, region: string) {
+  if (region === "header") return ["toolbar", "pageheader", "topbar", "navbar"].includes(type);
+  if (region === "summary") return ["metricgroup", "metric", "summary"].includes(type);
+  if (region === "filter") return ["filterbar", "filter", "searchbar", "search"].includes(type);
+  if (region === "table") return ["table", "datatable"].includes(type);
+  if (region === "collection") return ["list", "cardlist", "grid", "listitem"].includes(type);
+  if (region === "detail") return ["descriptionlist", "detail", "detailpanel", "panel"].includes(type);
+  if (region === "form") return ["form", "input", "select", "upload", "radiogroup", "checkboxgroup"].includes(type);
+  if (region === "action") return ["actionbar", "button", "buttongroup"].includes(type);
+  if (region === "pagination") return ["pagination", "pager"].includes(type);
+  if (region === "steps") return ["steps", "stepper", "timeline"].includes(type);
+  if (region === "navigation") return ["sidebar", "sidenav", "tabs", "tabbar", "breadcrumb"].includes(type);
+  if (region === "feedback") return ["emptystate", "empty", "alert", "toast", "modal", "drawer", "loading"].includes(type);
+  if (region === "content") return ["page", "section", "stack", "grid", "card", "panel", "content"].includes(type);
+  return type === region;
+}
+
+function normalizeIntentTypeForValidation(type: string) {
+  return type.replace(/[\s_-]+/g, "").toLowerCase();
+}
+
+function summarizeSchemaDraftParseFailure(value: unknown, issues: z.ZodIssue[]) {
+  const keys = isRecordLikeForSchema(value) ? Object.keys(value).slice(0, 12).join(",") : typeof value;
+  const issueText = issues.slice(0, 3).map((issue) => `${issue.path.join(".") || "root"} ${issue.message}`).join("；");
+  return `topLevel=${keys || "empty"}；${issueText || "unknown schema parse error"}`;
+}
 
 export const designAgentToolNameSchema = z.enum([
   "requirement.parse",
@@ -103,6 +1276,7 @@ export const designAgentToolNameSchema = z.enum([
   "product.review_requirements",
   "layout.insert_above",
   "layout.plan_insert",
+  "layout.apply_intent_patch",
   "layout.reflow",
   "layout.update_spacing",
   "schema.validate",
@@ -119,6 +1293,7 @@ export const designAgentToolNameSchema = z.enum([
   "schema.generate_from_prompt",
   "component_library.list",
   "component_library.create",
+  "page_template.list",
   "component.search",
   "component.insert",
   "component.create_from_nodes",
@@ -143,6 +1318,15 @@ export const designAgentToolCallSchema = z.object({
   tool: designAgentToolNameSchema,
   reason: z.string().default(""),
   input: z.record(z.unknown()).default({})
+}).transform((call) => {
+  if (call.tool !== "schema.generate_ui_from_requirements") return call;
+  const input = { ...call.input };
+  const loose = call as typeof call & Record<string, unknown>;
+  if (input.schemaDraft === undefined) {
+    const candidate = loose.schemaDraft ?? loose.uiSchemaDraft ?? loose.draft ?? loose.schema;
+    if (candidate !== undefined) input.schemaDraft = candidate;
+  }
+  return { ...call, input };
 });
 
 export const designAgentPlanSchema = z.object({
@@ -195,8 +1379,8 @@ export const designAgentToolDescriptions: Array<{
   },
   {
     name: "schema.generate_ui_from_requirements",
-    description: "根据需求解析、页面清单和流程，在当前画布已有画板右侧追加多张可编辑 UI 画板；传 targetFrameId 时改为把 schemaDraft 的节点增量追加到已有画板内。",
-    inputSchema: { userRequest: "string", parsedRequirement: "optional object", flowPlan: "optional object", platform: "optional mobile_app | web", pageId: "optional string", gap: "optional number", targetFrameId: "optional string", schemaDraft: "optional aipm.design.schema.v1" }
+    description: "根据需求解析、页面清单和流程，在当前画布已有画板右侧追加多张可编辑 UI 画板；优先传 layoutIntent，由本地 Layout Compiler 计算坐标和间距；传 targetFrameId 时改为把 schemaDraft 的节点增量追加到已有画板内。",
+    inputSchema: { userRequest: "string", parsedRequirement: "optional object", flowPlan: "optional object", platform: "optional mobile_app | web", pageId: "optional string", gap: "optional number", targetFrameId: "optional string", schemaDraft: "optional aipm.design.schema.v1 with artboard.layoutIntent" }
   },
   {
     name: "page.list",
@@ -249,9 +1433,14 @@ export const designAgentToolDescriptions: Array<{
     inputSchema: { pageId: "optional string", userRequest: "string", insertKind: "optional string" }
   },
   {
+    name: "layout.apply_intent_patch",
+    description: "按语义意图修改已有画板或区块，支持 reflow、set_gap、move_section、add_table_column、add_form_field、fix_vertical_text、expand_parent、convert_table_to_card_list、normalize_action_bar、remove_irrelevant_section、change_layout、add_required_region、remove_forbidden_region、change_page_contract。change_page_contract 会按新 pageMode 自动移除禁用区域并补齐最低 required region，避免直接坐标微调。",
+    inputSchema: { pageId: "optional string", targetNodeId: "optional string", semantic: "optional header | filter_bar | table | form | content | footer | action_bar", operation: "reflow | set_gap | move_section | add_table_column | add_form_field | fix_vertical_text | expand_parent | convert_table_to_card_list | normalize_action_bar | remove_irrelevant_section | change_layout | add_required_region | remove_forbidden_region | change_page_contract", spacing: "optional number", direction: "optional up | down", amount: "optional number", label: "optional string", field: "optional string", column: "optional string", region: "optional string", regions: "optional string[]", pageMode: "optional string", businessEntity: "optional string", layoutPattern: "optional string", layout: "optional single_column | two_column | stack", reason: "optional string" }
+  },
+  {
     name: "layout.reflow",
-    description: "对页面做基础重排，检测明显重叠并下移后续节点。用于插入内容后的布局补偿。",
-    inputSchema: { pageId: "optional string", spacing: "optional number" }
+    description: "对页面或指定画板做语义重排，按画板内 section/card/table/form 等模块纵向 stack，解决遮挡、重叠和间距不足。",
+    inputSchema: { pageId: "optional string", targetNodeId: "optional string", semantic: "optional string", spacing: "optional number" }
   },
   {
     name: "layout.update_spacing",
@@ -327,6 +1516,11 @@ export const designAgentToolDescriptions: Array<{
     name: "component_library.create",
     description: "创建本地组件库，保存到 SQLite。用于项目还没有合适组件库，或需要沉淀一套新的业务/风格组件库时。",
     inputSchema: { name: "string", description: "optional string" }
+  },
+  {
+    name: "page_template.list",
+    description: "读取用户从整页/框选区域创建的页面模板摘要，包括 StyleProfile、尺寸、结构区块和关键文本。传 userRequest 时会返回后端 Template Matcher 选中的模板和 Template Contract；模板不是本地组件库，不能直接当组件插入。",
+    inputSchema: { userRequest: "optional string", platform: "optional mobile_app | web" }
   },
   {
     name: "component.search",
@@ -456,6 +1650,8 @@ export class DesignAgentToolService {
         return this.insertAbove(context.projectId, normalized.input, context.selectedPageId);
       case "layout.plan_insert":
         return this.planInsert(context.projectId, normalized.input, context.selectedPageId);
+      case "layout.apply_intent_patch":
+        return this.applyIntentPatch(context.projectId, normalized.input, context.selectedPageId);
       case "layout.reflow":
         return this.reflowLayout(context.projectId, normalized.input, context.selectedPageId);
       case "layout.update_spacing":
@@ -488,6 +1684,8 @@ export class DesignAgentToolService {
         return this.listComponentLibraries(context.projectId);
       case "component_library.create":
         return this.createComponentLibrary(context.projectId, normalized.input);
+      case "page_template.list":
+        return this.listPageTemplates(context.projectId, normalized.input);
       case "component.search":
         return this.searchComponents(context.projectId, normalized.input);
       case "component.insert":
@@ -610,15 +1808,37 @@ export class DesignAgentToolService {
     if (!parsedDraft.success) {
       return {
         ok: false,
-        message: "缺少有效的 schemaDraft。当前主链路不再使用关键词模板兜底，必须先由 Agent 生成符合 aipm.design.schema.v1 的 UI Schema Draft。",
+        message: `缺少有效的 schemaDraft：${summarizeSchemaDraftParseFailure(input.schemaDraft, parsedDraft.error.issues)}。当前主链路不再使用关键词模板兜底，必须先由 Agent 生成符合 aipm.design.schema.v1 的 UI Schema Draft。`,
         file,
         page,
         selectedPageId: page.id,
         data: { issues: parsedDraft.error.issues }
       };
     }
-    const schemaDraft = parsedDraft.data;
-    const capabilityProfile = getDesignCapabilityProfile(toDesignPlatform(schemaDraft.platform, String(input.userRequest ?? "")), String(input.userRequest ?? ""));
+    const userRequest = String(input.userRequest ?? "");
+    const initialSchemaDraft = parsedDraft.data;
+    const templateContract = matchPageTemplateContract(file, userRequest, initialSchemaDraft.platform, initialSchemaDraft.artboards[0]);
+    const contractedDraft = applyPageTemplateContractToDraft(initialSchemaDraft, templateContract);
+    const intentValidation = validateAndNormalizeUiSchemaDraft(contractedDraft, userRequest);
+    if (intentValidation.blockingIssues.length > 0) {
+      return {
+        ok: false,
+        message: `Layout Intent 校验失败：${intentValidation.blockingIssues.join("；")}。请重新生成 layoutIntent，禁止退回手写坐标 schema。`,
+        file,
+        page,
+        selectedPageId: page.id,
+        data: {
+          issues: intentValidation.issues,
+          blockingIssues: intentValidation.blockingIssues,
+          contractIssues: intentValidation.contractIssues
+        }
+      };
+    }
+    const schemaDraft = intentValidation.draft;
+    const capabilityProfile = applyPageTemplateContractToProfile(
+      getDesignCapabilityProfile(toDesignPlatform(schemaDraft.platform, userRequest), userRequest),
+      templateContract
+    );
     const targetFrameId = typeof input.targetFrameId === "string" ? input.targetFrameId : "";
     if (targetFrameId) {
       const targetFrame = page.nodes.find((node) => node.id === targetFrameId && node.type === "frame");
@@ -631,23 +1851,28 @@ export class DesignAgentToolService {
           selectedPageId: page.id
         };
       }
-      const resolvedImageAssets = await this.imageAssets.resolveAssets(inferAssetRequests(String(input.userRequest ?? "")), {
-        userRequest: String(input.userRequest ?? "")
+      const resolvedImageAssets = await this.imageAssets.resolveAssets(inferAssetRequests(userRequest), {
+        userRequest
       });
-      const generatedNodes = enhanceGeneratedUiNodes(
+      const generatedNodes = applyGeneratedUiConstraints(userRequest, enhanceGeneratedUiNodes(
         [targetFrame, ...createUiNodesFromSchemaDraftIntoFrame(schemaDraft, targetFrame, capabilityProfile)],
         capabilityProfile,
         resolvedImageAssets
-      ).filter((node) => node.id !== targetFrame.id);
-      const irrelevantContent = detectIrrelevantGeneratedBusinessContent(String(input.userRequest ?? ""), generatedNodes);
-      if (irrelevantContent.length > 0) {
+      )).filter((node) => node.id !== targetFrame.id);
+      const irrelevantContent = detectIrrelevantGeneratedBusinessContent(userRequest, generatedNodes);
+      const entityMismatch = detectBusinessEntityMismatch(userRequest, generatedNodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" "));
+      if (irrelevantContent.length > 0 || entityMismatch.missingEntities.length > 0) {
         return {
           ok: false,
-          message: `生成内容包含用户未要求的业务对象：${irrelevantContent.join("、")}。已拦截落盘，请重新生成并严格按原始需求，不要套订单/商品等默认模板。`,
+          message: [
+            irrelevantContent.length > 0 ? `生成内容包含用户未要求的业务对象：${irrelevantContent.join("、")}` : "",
+            entityMismatch.missingEntities.length > 0 ? `生成内容缺少用户要求的业务对象：${entityMismatch.missingEntities.join("、")}` : "",
+            "已拦截落盘，请重新生成并严格按原始需求，不要套订单/商品等默认模板。"
+          ].filter(Boolean).join("。"),
           file,
           page,
           selectedPageId: page.id,
-          data: { irrelevantContent }
+          data: { irrelevantContent, entityMismatch }
         };
       }
       const nextPage: WorkspaceDesignPage = {
@@ -673,26 +1898,43 @@ export class DesignAgentToolService {
             schemaVersion: schemaDraft.schemaVersion,
             intent: schemaDraft.intent,
             platform: schemaDraft.platform,
-            artboards: schemaDraft.artboards.map((artboard) => ({ refId: artboard.refId, name: artboard.name, nodeCount: artboard.nodes.length }))
+            layoutIntentIssues: intentValidation.issues,
+            pageTemplateContract: templateContract ? {
+              templateId: templateContract.templateId,
+              templateName: templateContract.templateName,
+              score: templateContract.score,
+              platformPolicy: templateContract.platformPolicy,
+              requiredRegions: templateContract.requiredRegions,
+              forbiddenRegions: templateContract.forbiddenRegions
+            } : null,
+            artboards: schemaDraft.artboards.map((artboard) => ({ refId: artboard.refId, name: artboard.name, nodeCount: artboard.nodes.length, hasLayoutIntent: Boolean(artboard.layoutIntent) }))
           }
         }
       };
     }
     const firstArtboard = schemaDraft.artboards[0];
     const placement = getCanvasAppendPlacement(page, { width: firstArtboard.width, height: firstArtboard.height }, gap);
-    const resolvedImageAssets = await this.imageAssets.resolveAssets(inferAssetRequests(String(input.userRequest ?? "")), {
-      userRequest: String(input.userRequest ?? "")
+    const resolvedImageAssets = await this.imageAssets.resolveAssets(inferAssetRequests(userRequest), {
+      userRequest
     });
-    const generatedNodes = enhanceGeneratedUiNodes(createUiNodesFromSchemaDraft(schemaDraft, placement, capabilityProfile), capabilityProfile, resolvedImageAssets);
-    const irrelevantContent = detectIrrelevantGeneratedBusinessContent(String(input.userRequest ?? ""), generatedNodes);
-    if (irrelevantContent.length > 0) {
+    const generatedNodes = applyGeneratedUiConstraints(
+      userRequest,
+      enhanceGeneratedUiNodes(createUiNodesFromSchemaDraft(schemaDraft, placement, capabilityProfile), capabilityProfile, resolvedImageAssets)
+    );
+    const irrelevantContent = detectIrrelevantGeneratedBusinessContent(userRequest, generatedNodes);
+    const entityMismatch = detectBusinessEntityMismatch(userRequest, generatedNodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" "));
+    if (irrelevantContent.length > 0 || entityMismatch.missingEntities.length > 0) {
       return {
         ok: false,
-        message: `生成内容包含用户未要求的业务对象：${irrelevantContent.join("、")}。已拦截落盘，请重新生成并严格按原始需求，不要套订单/商品等默认模板。`,
+        message: [
+          irrelevantContent.length > 0 ? `生成内容包含用户未要求的业务对象：${irrelevantContent.join("、")}` : "",
+          entityMismatch.missingEntities.length > 0 ? `生成内容缺少用户要求的业务对象：${entityMismatch.missingEntities.join("、")}` : "",
+          "已拦截落盘，请重新生成并严格按原始需求，不要套订单/商品等默认模板。"
+        ].filter(Boolean).join("。"),
         file,
         page,
         selectedPageId: page.id,
-        data: { irrelevantContent }
+        data: { irrelevantContent, entityMismatch }
       };
     }
     const generatedFrameIds = generatedNodes.filter((node) => node.type === "frame" && !node.parentId).map((node) => node.id);
@@ -718,7 +1960,16 @@ export class DesignAgentToolService {
           schemaVersion: schemaDraft.schemaVersion,
           intent: schemaDraft.intent,
           platform: schemaDraft.platform,
-          artboards: schemaDraft.artboards.map((artboard) => ({ refId: artboard.refId, name: artboard.name, nodeCount: artboard.nodes.length }))
+          layoutIntentIssues: intentValidation.issues,
+          pageTemplateContract: templateContract ? {
+            templateId: templateContract.templateId,
+            templateName: templateContract.templateName,
+            score: templateContract.score,
+            platformPolicy: templateContract.platformPolicy,
+            requiredRegions: templateContract.requiredRegions,
+            forbiddenRegions: templateContract.forbiddenRegions
+          } : null,
+          artboards: schemaDraft.artboards.map((artboard) => ({ refId: artboard.refId, name: artboard.name, nodeCount: artboard.nodes.length, hasLayoutIntent: Boolean(artboard.layoutIntent) }))
         }
       }
     };
@@ -752,8 +2003,17 @@ export class DesignAgentToolService {
     });
     const generatedText = scopedNodesByPage.map(({ page, nodes }) => `${page.name} ${nodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" ")}`).join(" ");
     const coverage = Object.fromEntries(requiredTopics.map((topic) => [topic, generatedText.includes(topic) ? "covered" : "missing"]));
-    const irrelevantContent = ["订单", "商品列表", "搜索筛选区"].filter((topic) => !userRequest.includes(topic) && generatedText.includes(topic));
-    const missing = Object.entries(coverage).filter(([, status]) => status === "missing").map(([topic]) => topic);
+    const generatedNodes = scopedNodesByPage.flatMap(({ nodes }) => nodes);
+    const entityMismatch = detectBusinessEntityMismatch(userRequest, generatedText);
+    const irrelevantContent = Array.from(new Set([
+      ...detectIrrelevantGeneratedBusinessContent(userRequest, generatedNodes),
+      ...detectIrrelevantInteractionPatterns(userRequest, generatedNodes),
+      ...entityMismatch.unexpectedEntities
+    ]));
+    const missing = Array.from(new Set([
+      ...Object.entries(coverage).filter(([, status]) => status === "missing").map(([topic]) => topic),
+      ...entityMismatch.missingEntities
+    ]));
     return {
       ok: missing.length === 0 && irrelevantContent.length === 0,
       message: missing.length === 0 && irrelevantContent.length === 0
@@ -776,6 +2036,7 @@ export class DesignAgentToolService {
         requirementCoverage: coverage,
         missingTopics: missing,
         irrelevantContent,
+        entityMismatch,
         decision: missing.length === 0 && irrelevantContent.length === 0 ? "passed" : "needs_fix"
       }
     };
@@ -1003,17 +2264,148 @@ export class DesignAgentToolService {
     const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
     if (!page) return { ok: false, message: "当前没有可重排的页面。", file };
     const spacing = numberOr(input.spacing, 16);
-    const nextNodes = reflowOverlappingNodes(page.nodes, spacing);
+    const scope = resolveIntentPatchScope(page, input);
+    const nextNodes = compileLayoutTreeToSceneGraph(
+      reflowSemanticSections(page.nodes, spacing, scope?.id),
+      getCapabilityProfileForPageNodes(page.nodes, String(input.userRequest ?? ""))
+    );
     const movedCount = nextNodes.filter((node, index) => node.y !== page.nodes[index]?.y).length;
     const nextPage = { ...page, nodes: nextNodes, nodeCount: nextNodes.length, schemaLoaded: true };
     const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
     return {
       ok: true,
-      message: movedCount > 0 ? `已完成布局重排，调整 ${movedCount} 个节点。` : "布局重排完成，未发现需要移动的明显重叠节点。",
+      message: movedCount > 0 ? `已完成语义布局重排，调整 ${movedCount} 个节点。` : "布局重排完成，未发现需要移动的明显重叠节点。",
       file: nextFile,
       page: nextPage,
       selectedPageId: nextPage.id,
-      data: { movedCount }
+      data: { movedCount, scope: scope ? summarizeNode(scope) : undefined }
+    };
+  }
+
+  private async applyIntentPatch(projectId: string, input: Record<string, unknown>, selectedPageId?: string): Promise<DesignAgentToolResult> {
+    const { file, page } = await this.getFileAndPage(projectId, input.pageId as string | undefined ?? selectedPageId);
+    if (!page) return { ok: false, message: "当前没有可应用 intent patch 的页面。", file };
+    const operation = String(input.operation ?? "reflow");
+    const spacing = numberOr(input.spacing, 16);
+    const scope = resolveIntentPatchScope(page, input);
+    let nextNodes = page.nodes;
+    const changes: string[] = [];
+
+    if (operation === "reflow") {
+      nextNodes = reflowSemanticSections(nextNodes, spacing, scope?.id);
+      changes.push(`reflow spacing=${spacing}`);
+    } else if (operation === "set_gap") {
+      if (!scope) return { ok: false, message: "set_gap 需要 targetNodeId 或可识别 semantic 区域。", file, page, selectedPageId: page.id };
+      nextNodes = applySemanticGap(nextNodes, scope.id, spacing);
+      changes.push(`set_gap ${scope.name}=${spacing}`);
+    } else if (operation === "move_section") {
+      if (!scope) return { ok: false, message: "move_section 需要 targetNodeId 或 semantic。", file, page, selectedPageId: page.id };
+      const amount = numberOr(input.amount, spacing);
+      const dy = String(input.direction ?? "down") === "up" ? -amount : amount;
+      nextNodes = translateSectionWithDescendants(nextNodes, scope.id, 0, dy);
+      nextNodes = reflowSemanticSections(nextNodes, spacing, findContainingFrameId(nextNodes, scope));
+      changes.push(`move_section ${scope.name} ${dy}px`);
+    } else if (operation === "add_table_column") {
+      const label = String(input.column ?? input.label ?? input.field ?? "").trim();
+      if (!label) return { ok: false, message: "add_table_column 缺少 column/label。", file, page, selectedPageId: page.id };
+      const table = scope && isTableLikeNode(scope) ? scope : findPrimaryTableNode(page, input);
+      if (!table) return { ok: false, message: "没有找到可追加列的表格区域。", file, page, selectedPageId: page.id };
+      nextNodes = addColumnToTableRegion(nextNodes, table, label);
+      nextNodes = reflowSemanticSections(nextNodes, spacing, findContainingFrameId(nextNodes, table));
+      changes.push(`add_table_column ${label}`);
+    } else if (operation === "add_form_field") {
+      const label = String(input.field ?? input.label ?? input.column ?? "").trim();
+      if (!label) return { ok: false, message: "add_form_field 缺少 field/label。", file, page, selectedPageId: page.id };
+      const form = scope ?? findFormLikeNode(page, input);
+      if (!form) return { ok: false, message: "没有找到可追加字段的表单/内容区。", file, page, selectedPageId: page.id };
+      nextNodes = addFieldToFormRegion(nextNodes, form, label, spacing);
+      nextNodes = reflowSemanticSections(nextNodes, spacing, findContainingFrameId(nextNodes, form));
+      changes.push(`add_form_field ${label}`);
+    } else if (operation === "fix_vertical_text") {
+      nextNodes = fixVerticalTextNodes(nextNodes, spacing, scope?.id);
+      changes.push("fix_vertical_text");
+    } else if (operation === "expand_parent") {
+      nextNodes = expandOverflowingParents(nextNodes, spacing, scope?.id);
+      changes.push("expand_parent");
+    } else if (operation === "convert_table_to_card_list") {
+      nextNodes = convertTablesToCardLists(nextNodes, spacing, scope?.id);
+      changes.push("convert_table_to_card_list");
+    } else if (operation === "normalize_action_bar") {
+      nextNodes = normalizeActionBars(nextNodes, spacing, scope?.id);
+      changes.push("normalize_action_bar");
+    } else if (operation === "remove_irrelevant_section") {
+      const beforeCount = nextNodes.length;
+      nextNodes = removeIrrelevantSections(nextNodes, input, String(input.userRequest ?? ""), scope?.id);
+      changes.push(`remove_irrelevant_section removed=${beforeCount - nextNodes.length}`);
+    } else if (operation === "change_layout") {
+      nextNodes = changeLayoutByScope(nextNodes, input, spacing, scope?.id);
+      changes.push(`change_layout ${String(input.layout ?? "stack")}`);
+    } else if (operation === "add_required_region") {
+      const regions = readPatchRegions(input);
+      if (regions.length === 0) return { ok: false, message: "add_required_region 缺少 region/regions。", file, page, selectedPageId: page.id };
+      const patchResult = addRequiredRegionsToPage(nextNodes, regions, spacing, scope?.id, input);
+      if (patchResult.createdCount === 0) {
+        if (patchResult.alreadySatisfiedCount > 0 && patchResult.skippedRegions.length === 0) {
+          return {
+            ok: true,
+            message: `add_required_region 已检查 ${regions.join("、")}，当前画板已包含对应区域，无需重复补齐。`,
+            file,
+            page,
+            selectedPageId: page.id,
+            data: { operation, changes: [`add_required_region already_satisfied ${regions.join(",")}`], movedCount: 0, skippedRegions: [] }
+          };
+        }
+        return {
+          ok: false,
+          message: `add_required_region 未能安全补齐 ${regions.join("、")}。缺少明确业务实体/页面上下文时不会再生成“文本/按钮”占位。`,
+          file,
+          page,
+          selectedPageId: page.id,
+          data: { skippedRegions: patchResult.skippedRegions }
+        };
+      }
+      nextNodes = patchResult.nodes;
+      changes.push(`add_required_region ${regions.join(",")}`);
+    } else if (operation === "remove_forbidden_region") {
+      const regions = readPatchRegions(input);
+      if (regions.length === 0) return { ok: false, message: "remove_forbidden_region 缺少 region/regions。", file, page, selectedPageId: page.id };
+      const beforeCount = nextNodes.length;
+      nextNodes = removeRegionsFromPage(nextNodes, regions, spacing, scope?.id);
+      changes.push(`remove_forbidden_region ${regions.join(",")} removed=${beforeCount - nextNodes.length}`);
+    } else if (operation === "change_page_contract") {
+      const pageMode = String(input.pageMode ?? "").trim();
+      const contractNote = [
+        pageMode ? `pageMode=${pageMode}` : "",
+        input.businessEntity ? `businessEntity=${String(input.businessEntity)}` : "",
+        input.layoutPattern ? `layoutPattern=${String(input.layoutPattern)}` : ""
+      ].filter(Boolean).join("；");
+      if (pageMode) {
+        const forbiddenRegions = getDefaultForbiddenRegionsForPageMode(pageMode);
+        const requiredRegions = getDefaultRequiredRegionsForPageMode(pageMode);
+        if (forbiddenRegions.length > 0) {
+          nextNodes = removeRegionsFromPage(nextNodes, forbiddenRegions, spacing, scope?.id);
+        }
+        if (requiredRegions.length > 0) {
+          const patchResult = addRequiredRegionsToPage(nextNodes, requiredRegions, spacing, scope?.id, input);
+          nextNodes = patchResult.nodes;
+        }
+      }
+      changes.push(`change_page_contract ${contractNote || "noted"}`);
+    } else {
+      return { ok: false, message: `不支持的 intent patch operation：${operation}`, file, page, selectedPageId: page.id };
+    }
+
+    nextNodes = compileLayoutTreeToSceneGraph(nextNodes, getCapabilityProfileForPageNodes(page.nodes, String(input.userRequest ?? "")));
+    const movedCount = nextNodes.filter((node, index) => node.x !== page.nodes[index]?.x || node.y !== page.nodes[index]?.y || node.width !== page.nodes[index]?.width || node.height !== page.nodes[index]?.height || node.text !== page.nodes[index]?.text).length;
+    const nextPage = { ...page, nodes: nextNodes, nodeCount: nextNodes.length, schemaLoaded: true };
+    const nextFile = await this.savePages(projectId, file, file.pages.map((item) => item.id === page.id ? nextPage : item));
+    return {
+      ok: true,
+      message: `已应用 Intent Patch：${changes.join("；")}。影响 ${movedCount} 个节点。`,
+      file: nextFile,
+      page: nextPage,
+      selectedPageId: nextPage.id,
+      data: { operation, changes, movedCount, scope: scope ? summarizeNode(scope) : undefined }
     };
   }
 
@@ -1357,6 +2749,27 @@ export class DesignAgentToolService {
     };
   }
 
+  private async listPageTemplates(projectId: string, input: Record<string, unknown> = {}): Promise<DesignAgentToolResult> {
+    const file = await this.getFile(projectId);
+    const templates = summarizePageTemplatesForTool(file);
+    const userRequest = String(input.userRequest ?? "");
+    const platform = input.platform === "mobile_app" || /小程序|移动端|手机|app/i.test(userRequest) ? "mobile_app" : "web";
+    const contract = userRequest ? matchPageTemplateContract(file, userRequest, platform) : undefined;
+    return {
+      ok: true,
+      message: templates.length > 0
+        ? contract
+          ? `已读取 ${templates.length} 个页面模板，Template Matcher 命中「${contract.templateName}」，会作为 StyleProfile 和结构契约。`
+          : `已读取 ${templates.length} 个页面模板，可作为 StyleProfile 和整页结构参考。`
+        : "当前项目还没有页面模板。可以在画布中右击整页画板创建模板。",
+      file,
+      data: {
+        templates,
+        matchedTemplateContract: contract ?? null
+      }
+    };
+  }
+
   private async searchComponents(projectId: string, input: Record<string, unknown>): Promise<DesignAgentToolResult> {
     const file = await this.getFile(projectId);
     const componentLibraries = await this.repository.listDesignComponentLibraries(projectId).catch(() => []);
@@ -1575,21 +2988,25 @@ export class DesignAgentToolService {
     const generatedFrameIds = Array.isArray(input.generatedFrameIds) ? input.generatedFrameIds.map(String).filter(Boolean) : [];
     const structure = analyzePageSemantics(page, request);
     const capabilityProfile = getDesignCapabilityProfile(/小程序|微信/.test(request) ? "wechat_mini_program" : /移动端|手机|app/i.test(request) ? "mobile_app" : "pc_web", request);
-    const issues: Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> = [];
+    const issues: DesignReviewIssue[] = [];
     const hasSearchIntent = /(列表|表格|table|list).*(搜索|筛选|查询|filter|search|query)|(搜索|筛选|查询|filter|search|query).*(列表|表格|table|list)/i.test(request);
     const filterRegion = structure.mainRegions.find((region) => region.type === "filter_bar");
     const tableRegion = structure.mainRegions.find((region) => region.type === "table");
     if (hasSearchIntent && !filterRegion) {
       issues.push({
+        code: "missing_region",
         level: "blocking",
         message: "用户要求添加搜索条件，但页面没有识别到搜索/筛选区域。",
+        region: "FilterBar",
         suggestedFix: { tool: "layout.insert_above", input: { insertKind: "filter_bar" } }
       });
     }
     if (filterRegion && tableRegion && filterRegion.bbox.y >= tableRegion.bbox.y) {
       issues.push({
+        code: "wrong_page_mode",
         level: "blocking",
         message: "搜索区没有位于表格上方。",
+        region: "FilterBar",
         suggestedFix: { tool: "layout.insert_above", input: { targetNodeId: tableRegion.nodeId, insertKind: "filter_bar" } }
       });
     }
@@ -1597,8 +3014,10 @@ export class DesignAgentToolService {
     const overlaps = detectMeaningfulOverlaps(scopedNodes);
     if (overlaps.length > 0) {
       issues.push({
+        code: "overlap",
         level: "blocking",
         message: `检测到 ${overlaps.length} 处文字或交互控件可能互相遮挡。容器/卡片/背景与内部内容的正常层叠不会计入。`,
+        targetNodeIds: overlaps.flat(),
         suggestedFix: { tool: "layout.reflow", input: { spacing: 16 } }
       });
     }
@@ -1615,7 +3034,8 @@ export class DesignAgentToolService {
       selectedPageId: page.id,
       data: {
         passed: blockingCount === 0,
-        issues,
+	        issues,
+	        issueSummary: summarizeDesignReviewIssues(issues),
         structure,
         reviewScope: {
           generatedFrameIds,
@@ -1705,6 +3125,48 @@ function summarizeComponentLibrariesForAgent(componentLibraries: WorkspaceDesign
       components: libraryComponents.slice(0, 30).map((component) => summarizeComponentForAgent(component, library))
     };
   });
+}
+
+function summarizePageTemplatesForTool(file: WorkspaceDesignFile) {
+  return (file.pageTemplates ?? []).slice(0, 12).map((template) => ({
+    id: template.id,
+    name: template.name,
+    description: template.description ?? "",
+    sourcePageId: template.sourcePageId,
+    sourceFrameId: template.sourceFrameId,
+    nodeCount: template.nodeCount,
+    size: { width: Math.round(template.width), height: Math.round(template.height) },
+    platform: template.styleProfile.platform,
+    styleProfile: template.styleProfile,
+    structureSummary: {
+      nodeTypeStats: template.nodes.reduce<Record<string, number>>((result, node) => {
+        result[node.type] = (result[node.type] ?? 0) + 1;
+        return result;
+      }, {}),
+      semanticRegions: Array.from(new Set(template.nodes.flatMap((node) => {
+        const label = `${node.type} ${node.name} ${node.text ?? ""}`;
+        return [
+          /nav|header|顶部|导航|标题栏/i.test(label) ? "Header/NavBar" : "",
+          /summary|metric|统计|指标|摘要|状态/i.test(label) ? "Summary/Metric" : "",
+          /filter|search|query|筛选|搜索|查询/i.test(label) ? "FilterBar" : "",
+          /form|field|input|表单|字段|输入|上传/i.test(label) || node.type === "input" ? "Form" : "",
+          /detail|description|详情|信息|资料|明细/i.test(label) ? "DescriptionList" : "",
+          /table|列表|表格|数据/i.test(label) || node.type === "table" ? "Table/List" : "",
+          /action|button|操作|按钮|保存|提交|确认|取消|返回/i.test(label) || node.type === "button" ? "ActionBar/Button" : ""
+        ].filter(Boolean);
+      }))).slice(0, 16),
+      keySections: template.nodes
+        .filter((node) => !node.parentId || node.type === "frame" || node.type === "container" || node.type === "card" || node.type === "table")
+        .sort((first, second) => first.y - second.y || first.x - second.x)
+        .slice(0, 12)
+        .map((node) => ({ type: node.type, name: node.name, text: node.text ?? "", width: Math.round(node.width), height: Math.round(node.height) }))
+    },
+    keyTexts: template.nodes
+      .map((node) => node.text || node.name)
+      .filter(Boolean)
+      .filter((text, index, array) => array.indexOf(text) === index)
+      .slice(0, 24)
+  }));
 }
 
 function summarizeComponentForAgent(component: WorkspaceDesignComponent, library?: WorkspaceDesignComponentLibrary, score?: number) {
@@ -1921,16 +3383,237 @@ function instantiateComponentNodes(component: WorkspaceDesignComponent, targetX:
 }
 
 function detectIrrelevantGeneratedBusinessContent(userRequest: string, nodes: WorkspaceDesignNode[]) {
+  const primaryUserRequest = getPrimaryUserRequestText(userRequest);
+  const request = primaryUserRequest.toLowerCase();
+  const generatedText = nodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" ");
+  const entityMismatch = detectBusinessEntityMismatch(primaryUserRequest, generatedText);
+  return Array.from(new Set([
+    ...getGeneratedBusinessContentRules(primaryUserRequest)
+    .filter((rule) => !rule.allowed && rule.pattern.test(generatedText) && !request.includes(rule.label.toLowerCase()))
+      .map((rule) => rule.label),
+    ...entityMismatch.unexpectedEntities
+  ]));
+}
+
+function detectBusinessEntityMismatch(userRequest: string, generatedText: string) {
+  const primaryUserRequest = getPrimaryUserRequestText(userRequest);
+  const requestedEntities = inferBusinessEntitiesFromText(primaryUserRequest);
+  if (requestedEntities.length === 0) {
+    return { requestedEntities, generatedEntities: inferBusinessEntitiesFromText(generatedText), identityEntities: inferBusinessIdentityEntitiesFromText(generatedText), missingEntities: [] as string[], unexpectedEntities: [] as string[] };
+  }
+  const generatedEntities = inferBusinessEntitiesFromText(generatedText);
+  const identityEntities = inferBusinessIdentityEntitiesFromText(generatedText);
+  const missingEntities = requestedEntities.filter((entity) => !generatedEntities.includes(entity));
+  const unexpectedEntities = identityEntities.filter((entity) => !requestedEntities.includes(entity));
+  return { requestedEntities, generatedEntities, identityEntities, missingEntities, unexpectedEntities };
+}
+
+function detectIrrelevantInteractionPatterns(userRequest: string, nodes: WorkspaceDesignNode[]) {
   const request = userRequest.toLowerCase();
   const generatedText = nodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" ");
+  const wantsDetail = /详情|查看|资料|detail|inspect/i.test(userRequest);
+  const wantsCollection = /列表|表格|数据表|记录|查询|筛选|搜索|table|list|filter|search/i.test(userRequest);
   const rules = [
-    { label: "订单", allowed: /订单|交易|支付|退款|发货|电商|商城/.test(userRequest), pattern: /订单|退款|发货|ORD\d*/i },
-    { label: "商品", allowed: /商品|产品|SKU|库存|电商|商城/.test(userRequest), pattern: /商品|SKU|库存|上架|下架|低库存/i },
-    { label: "客户", allowed: /客户|会员|CRM|用户/.test(userRequest), pattern: /客户管理|客户列表|客户等级|会员等级/i }
+    {
+      label: "列表/表格结构",
+      allowed: wantsCollection && !wantsDetail,
+      pattern: /列表|表格|数据行|表头|分页|Table|DataTable/i
+    },
+    {
+      label: "查询/筛选结构",
+      allowed: /查询|筛选|搜索|filter|search/i.test(userRequest) && !wantsDetail,
+      pattern: /筛选|查询|搜索|FilterBar|SearchBar/i
+    }
   ];
   return rules
     .filter((rule) => !rule.allowed && rule.pattern.test(generatedText) && !request.includes(rule.label.toLowerCase()))
     .map((rule) => rule.label);
+}
+
+function sanitizeGeneratedBusinessContent(userRequest: string, nodes: WorkspaceDesignNode[]) {
+  const disallowedRules = getGeneratedBusinessContentRules(userRequest).filter((rule) => !rule.allowed);
+  if (disallowedRules.length === 0) return nodes;
+  const removeIds = new Set<string>();
+  nodes.forEach((node) => {
+    const text = `${node.name} ${node.text ?? ""}`;
+    if (disallowedRules.some((rule) => rule.pattern.test(text))) {
+      removeIds.add(node.id);
+    }
+  });
+  if (removeIds.size === 0) return nodes;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    nodes.forEach((node) => {
+      if (node.parentId && removeIds.has(node.parentId) && !removeIds.has(node.id)) {
+        removeIds.add(node.id);
+        changed = true;
+      }
+    });
+  }
+  return nodes.filter((node) => !removeIds.has(node.id));
+}
+
+function applyGeneratedUiConstraints(userRequest: string, nodes: WorkspaceDesignNode[]) {
+  const sanitized = sanitizeGeneratedBusinessContent(userRequest, removeDetailPageListArtifacts(userRequest, removeGeneratedPreviewPlaceholders(nodes)));
+  const normalized = sanitized.map((node) => normalizeGeneratedNodeConstraints(node, userRequest));
+  const clamped = clampGeneratedNodesToContainers(normalized);
+  return expandFramesToFitChildren(clamped.map((node) => node.type === "text" ? expandTextNodeForReadability(node) : node), 16);
+}
+
+function removeDetailPageListArtifacts(userRequest: string, nodes: WorkspaceDesignNode[]) {
+  if (!/详情|查看|资料|detail|inspect/i.test(userRequest)) return nodes;
+  const removeIds = new Set<string>();
+  nodes.forEach((node) => {
+    const text = `${node.name} ${node.text ?? ""}`;
+    if (node.type === "table" || /商品列表|列表卡片|列表标题|数据行|表头|分页|筛选|查询|FilterBar|Table/i.test(text)) {
+      removeIds.add(node.id);
+    }
+  });
+  if (removeIds.size === 0) return nodes;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    nodes.forEach((node) => {
+      if (node.parentId && removeIds.has(node.parentId) && !removeIds.has(node.id)) {
+        removeIds.add(node.id);
+        changed = true;
+      }
+    });
+  }
+  return nodes.filter((node) => !removeIds.has(node.id));
+}
+
+function removeGeneratedPreviewPlaceholders(nodes: WorkspaceDesignNode[]) {
+  const removeIds = new Set<string>();
+  nodes.forEach((node) => {
+    const text = `${node.name} ${node.text ?? ""}`;
+    const isLargeGeneratedPreview = node.type === "image"
+      && node.width >= 180
+      && node.height >= 100
+      && (/Demo 图片|页面缩略图|预览图|generated-placeholder/i.test(text) || /生成.*画板|画板$/.test(text));
+    if (isLargeGeneratedPreview) removeIds.add(node.id);
+  });
+  return nodes.filter((node) => !removeIds.has(node.id) && !(node.parentId && removeIds.has(node.parentId)));
+}
+
+function normalizeGeneratedNodeConstraints(node: WorkspaceDesignNode, userRequest: string): WorkspaceDesignNode {
+  if (node.type === "button") {
+    const isMobile = /小程序|移动端|手机|app/i.test(userRequest);
+    const height = Math.max(node.height, isMobile ? 44 : 40);
+    return normalizePatchedNode({
+      ...node,
+      height,
+      textAlign: "center",
+      textVerticalAlign: "middle",
+      lineHeight: height,
+      fontSize: Math.max(13, node.fontSize || 14),
+      fontWeight: node.fontWeight || 600,
+      fill: node.fill && node.fill !== "transparent" ? node.fill : "#246bfe",
+      textColor: node.textColor || "#ffffff",
+      radius: node.radius || (isMobile ? 16 : 8)
+    });
+  }
+  if (node.type === "input") {
+    const isMobile = /小程序|移动端|手机|app/i.test(userRequest);
+    const height = Math.max(node.height, isMobile ? 44 : 36);
+    return normalizePatchedNode({
+      ...node,
+      height,
+      textVerticalAlign: "middle",
+      lineHeight: height,
+      fontSize: Math.max(13, node.fontSize || 14),
+      radius: node.radius || (isMobile ? 12 : 6),
+      fill: node.fill && node.fill !== "transparent" ? node.fill : "#ffffff",
+      stroke: node.stroke && node.stroke !== "transparent" ? node.stroke : "#d0d5dd"
+    });
+  }
+  if (node.type === "text") {
+    return expandTextNodeForReadability(normalizePatchedNode({
+      ...node,
+      fontSize: Math.max(11, node.fontSize || 14),
+      fill: "transparent",
+      stroke: "transparent",
+      strokeWidth: 0
+    }));
+  }
+  return normalizePatchedNode(node);
+}
+
+function clampGeneratedNodesToContainers(nodes: WorkspaceDesignNode[]) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  return nodes.map((node) => {
+    if (node.type === "frame") return node;
+    const parent = node.parentId ? byId.get(node.parentId) : undefined;
+    const frame = parent && (parent.type === "frame" || parent.type === "container" || parent.type === "card")
+      ? parent
+      : nodes.find((candidate) => candidate.type === "frame" && isNodeInsideTarget(node, candidate));
+    if (!frame) return node;
+    const padding = frame.type === "frame" ? 8 : 4;
+    const maxWidth = Math.max(1, frame.width - padding * 2);
+    const maxHeight = Math.max(1, frame.height - padding * 2);
+    const width = Math.min(node.width, maxWidth);
+    const height = Math.min(node.height, maxHeight);
+    return {
+      ...node,
+      width,
+      height,
+      x: clampNumber(node.x, frame.x + padding, frame.x + frame.width - width - padding),
+      y: clampNumber(node.y, frame.y + padding, frame.y + frame.height - height - padding)
+    };
+  });
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  if (max < min) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function getGeneratedBusinessContentRules(userRequest: string) {
+  const primaryUserRequest = getPrimaryUserRequestText(userRequest);
+  const requestedEntities = inferBusinessEntitiesFromText(primaryUserRequest);
+  const allows = (entity: string, fallback: RegExp) => requestedEntities.includes(entity) || fallback.test(primaryUserRequest);
+  return [
+    { label: "订单", allowed: allows("订单", /交易|支付|退款|发货|电商|商城/), pattern: /订单(详情页|列表页|管理页|页面|画板)|订单管理|订单列表/i },
+    { label: "商品", allowed: allows("商品", /电商|商城/), pattern: /商品(详情页|列表页|管理页|页面|画板)|商品管理|商品列表/i },
+    { label: "客户", allowed: allows("客户", /CRM|会员|用户/), pattern: /客户(详情页|列表页|管理页|页面|画板)|客户管理|客户列表/i },
+    { label: "用户", allowed: allows("用户", /账号|会员|客户/), pattern: /用户(详情页|列表页|管理页|页面|画板)|用户管理|用户列表/i }
+  ];
+}
+
+function getPrimaryUserRequestText(text: string) {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return text.trim();
+  const stopIndex = lines.findIndex((line, index) => index > 0 && /上一次|本轮|失败|重试|修复|Validator|schemaDraft|Layout Intent|Critic|审核|契约|要求：|必须以|不要去修改|不要退回/i.test(line));
+  return (stopIndex > 0 ? lines.slice(0, stopIndex) : [lines[0]]).join("\n").trim() || text.trim();
+}
+
+function inferBusinessEntitiesFromText(text: string) {
+  const entityPatterns: Array<{ entity: string; pattern: RegExp }> = [
+    { entity: "订单", pattern: /订单|order|交易单|退款单|发货单|支付单/i },
+    { entity: "商品", pattern: /商品|产品|product|sku|库存|上架|下架/i },
+    { entity: "客户", pattern: /客户|会员|customer|crm/i },
+    { entity: "用户", pattern: /用户(列表|详情|管理|页面|画板|账号|资料|中心|权限)|账号|user/i },
+    { entity: "服务人员", pattern: /服务人员|家政员|护工|保姆/i },
+    { entity: "设备", pattern: /设备|device|iot/i },
+    { entity: "任务", pattern: /任务|task/i },
+    { entity: "项目", pattern: /项目|project/i }
+  ];
+  return entityPatterns.filter((item) => item.pattern.test(text)).map((item) => item.entity);
+}
+
+function inferBusinessIdentityEntitiesFromText(text: string) {
+  const identityPatterns: Array<{ entity: string; pattern: RegExp }> = [
+    { entity: "订单", pattern: /订单(详情页|列表页|管理页|页面|画板|标题)|订单管理|订单列表/i },
+    { entity: "商品", pattern: /商品(详情页|列表页|管理页|页面|画板|标题)|商品管理|商品列表/i },
+    { entity: "客户", pattern: /客户(详情页|列表页|管理页|页面|画板|标题)|客户管理|客户列表/i },
+    { entity: "用户", pattern: /用户(详情页|列表页|管理页|页面|画板|标题)|用户管理|用户列表/i },
+    { entity: "服务人员", pattern: /服务人员(详情页|列表页|管理页|页面|画板|标题)|服务人员管理|服务人员列表/i },
+    { entity: "设备", pattern: /设备(详情页|列表页|管理页|页面|画板|标题)|设备管理|设备列表/i },
+    { entity: "任务", pattern: /任务(详情页|列表页|管理页|页面|画板|标题)|任务管理|任务列表/i },
+    { entity: "项目", pattern: /项目(详情页|列表页|管理页|页面|画板|标题)|项目管理|项目列表/i }
+  ];
+  return identityPatterns.filter((item) => item.pattern.test(text)).map((item) => item.entity);
 }
 
 function translateDesignNode(node: WorkspaceDesignNode, dx: number, dy: number): WorkspaceDesignNode {
@@ -2132,18 +3815,35 @@ function createUiNodesFromFlowPlan(
 
 function createUiNodesFromSchemaDraft(schemaDraft: UiSchemaDraft, placement: { startX: number; topY: number; gap: number }, capabilityProfile?: DesignCapabilityProfile) {
   const profile = capabilityProfile ?? getDesignCapabilityProfile(schemaDraft.platform === "mobile_app" ? "mobile_app" : "pc_web");
-  return compileStitchUiDraftToSceneGraph(schemaDraft, profile, {
+  const result = compileStitchUiDraftToSceneGraph(schemaDraft, profile, {
     placement,
     userRequest: schemaDraft.intent
-  }).nodes;
+  });
+  assertCompilerCoverageDiagnostics(result.diagnostics);
+  return result.nodes;
 }
 
 function createUiNodesFromSchemaDraftIntoFrame(schemaDraft: UiSchemaDraft, targetFrame: WorkspaceDesignNode, capabilityProfile?: DesignCapabilityProfile) {
   const profile = capabilityProfile ?? getDesignCapabilityProfile(schemaDraft.platform === "mobile_app" ? "mobile_app" : "pc_web");
-  return compileStitchUiDraftToSceneGraph(schemaDraft, profile, {
+  const result = compileStitchUiDraftToSceneGraph(schemaDraft, profile, {
     targetFrame,
     userRequest: schemaDraft.intent
-  }).nodes;
+  });
+  assertCompilerCoverageDiagnostics(result.diagnostics);
+  return result.nodes;
+}
+
+function assertCompilerCoverageDiagnostics(diagnostics: string[]) {
+  const coverageDiagnostics = diagnostics.filter((item) => item.startsWith("compiler-coverage:"));
+  if (coverageDiagnostics.length === 0) return;
+  throw new Error(`Compiler Coverage 诊断失败：layoutIntent 中的信息没有被渲染器完整承接。${coverageDiagnostics.slice(0, 5).join("；")}`);
+}
+
+function getCapabilityProfileForPageNodes(nodes: WorkspaceDesignNode[], userRequest = "") {
+  const frames = nodes.filter((node) => node.type === "frame");
+  const narrowFrame = frames.find((frame) => frame.width <= 480);
+  const platform = narrowFrame || /小程序|移动端|手机|app/i.test(userRequest) ? "mobile_app" : "pc_web";
+  return getDesignCapabilityProfile(platform, userRequest);
 }
 
 function createSemanticPageNodes(
@@ -2277,14 +3977,30 @@ function normalizeDraftNodeForRendering(draftNode: z.infer<typeof uiSchemaDraftN
 
 function enhanceGeneratedUiNodes(nodes: WorkspaceDesignNode[], profile: DesignCapabilityProfile, resolvedAssets: ResolvedDesignImageAsset[] = []) {
   let nextNodes = compileLayoutTreeToSceneGraph(nodes, profile);
+  nextNodes = replaceGeneratedImagesWithPlaceholders(nextNodes, resolvedAssets);
   nextNodes = addMissingVisualAssets(nextNodes, profile, resolvedAssets);
   nextNodes = compileLayoutTreeToSceneGraph(nextNodes, profile);
   return nextNodes;
 }
 
+function replaceGeneratedImagesWithPlaceholders(nodes: WorkspaceDesignNode[], resolvedAssets: ResolvedDesignImageAsset[] = []) {
+  let imageIndex = 0;
+  const placeholderAssets = resolvedAssets.filter((asset) => asset.imageUrl);
+  return nodes.map((node) => {
+    if (node.type !== "image" && !node.imageUrl) return node;
+    const asset = placeholderAssets[imageIndex % Math.max(1, placeholderAssets.length)];
+    imageIndex += 1;
+    return {
+      ...node,
+      imageUrl: asset?.imageUrl ?? buildLocalImagePlaceholderDataUrl(node.name || node.text || "图片占位"),
+      fill: node.fill && node.fill !== "transparent" ? node.fill : "#f3f6fb",
+      stroke: node.stroke && node.stroke !== "transparent" ? node.stroke : "#dbe4f0"
+    };
+  });
+}
+
 function addMissingVisualAssets(nodes: WorkspaceDesignNode[], profile: DesignCapabilityProfile, resolvedAssets: ResolvedDesignImageAsset[] = []) {
   const nextNodes = [...nodes];
-  let assetCursor = 0;
   const artboards = nextNodes.filter((node) => node.type === "frame" && !node.parentId);
   artboards.forEach((frame, index) => {
     const children = nextNodes.filter((node) => node.parentId === frame.id || isNodeInsideTarget(node, frame)).filter((node) => node.id !== frame.id);
@@ -2311,24 +4027,6 @@ function addMissingVisualAssets(nodes: WorkspaceDesignNode[], profile: DesignCap
         foreground: "#ffffff"
       })
     }));
-    if (!isMobile && !children.some((node) => /主图|demo|插画|图片/i.test(node.name))) {
-      const visualAssets = resolvedAssets.filter((asset) => asset.type === "image" || asset.type === "illustration");
-      const visualAsset = visualAssets[assetCursor % Math.max(visualAssets.length, 1)];
-      if (visualAssets.length > 0) assetCursor += 1;
-      nextNodes.push(createDesignNode("image", {
-        parentId: frame.id,
-        name: visualAsset?.source === "openai-image" ? "生成图片" : visualAsset?.source === "unsplash" || visualAsset?.source === "pexels" ? "真实图片" : "Demo 图片",
-        x: frame.x + frame.width - 352,
-        y: frame.y + 96,
-        width: 288,
-        height: 180,
-        fill: "#eef4ff",
-        stroke: "#c7d7fe",
-        radius: 18,
-        imageUrl: visualAsset?.imageUrl ?? buildDemoImageDataUrl(frame.name),
-        sourceRef: visualAsset?.license
-      }));
-    }
   });
   return nextNodes;
 }
@@ -2351,8 +4049,9 @@ function buildLocalSvgDataUrl(input: { label: string; background: string; foregr
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-function buildDemoImageDataUrl(label: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="576" height="360" viewBox="0 0 576 360"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#dbeafe"/><stop offset="1" stop-color="#f8fafc"/></linearGradient></defs><rect width="576" height="360" rx="32" fill="url(#g)"/><circle cx="104" cy="96" r="36" fill="#2563eb" opacity=".9"/><rect x="172" y="78" width="268" height="28" rx="14" fill="#0f172a" opacity=".86"/><rect x="84" y="172" width="408" height="24" rx="12" fill="#64748b" opacity=".36"/><rect x="84" y="222" width="288" height="24" rx="12" fill="#64748b" opacity=".26"/><text x="84" y="306" font-size="28" font-weight="700" font-family="Arial, sans-serif" fill="#1e3a8a">${escapeSvgText(label).slice(0, 16)}</text></svg>`;
+function buildLocalImagePlaceholderDataUrl(label: string) {
+  const safeLabel = escapeSvgText(label).slice(0, 14);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="320" viewBox="0 0 512 320"><rect width="512" height="320" rx="28" fill="#f3f6fb"/><rect x="36" y="36" width="440" height="248" rx="20" fill="none" stroke="#2563eb" stroke-opacity="0.18" stroke-width="2" stroke-dasharray="10 10"/><circle cx="176" cy="132" r="34" fill="#2563eb" fill-opacity="0.16"/><rect x="226" y="108" width="126" height="14" rx="7" fill="#64748b" fill-opacity="0.32"/><rect x="226" y="136" width="172" height="12" rx="6" fill="#64748b" fill-opacity="0.22"/><rect x="116" y="198" width="280" height="12" rx="6" fill="#64748b" fill-opacity="0.2"/><text x="256" y="258" text-anchor="middle" font-size="17" font-weight="700" font-family="Arial, sans-serif" fill="#64748b">IMAGE PLACEHOLDER</text><text x="256" y="282" text-anchor="middle" font-size="14" font-family="Arial, sans-serif" fill="#64748b" fill-opacity="0.78">${safeLabel}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
@@ -2501,7 +4200,10 @@ function toDesignPlatform(platform: string, userRequest = ""): DesignPlatform {
 }
 
 function inferRequiredTopics(userRequest: string) {
-  return ["手机号", "验证码", "微信", "支付宝", "绑定", "个人信息", "实名认证", "地址", "地图"].filter((topic) => userRequest.includes(topic));
+  return Array.from(new Set([
+    ...inferBusinessEntitiesFromText(userRequest),
+    ...["手机号", "验证码", "微信", "支付宝", "绑定", "个人信息", "实名认证", "地址", "地图"].filter((topic) => userRequest.includes(topic))
+  ]));
 }
 
 function formatRequirementParseMessage(parsed: ReturnType<typeof parseUiRequirement>) {
@@ -2858,12 +4560,12 @@ function buildUiAnalysis(page: WorkspaceDesignPage, kind: "layout" | "spacing" |
   };
 }
 
-function reviewArtboardLayout(page: WorkspaceDesignPage, userRequest = "", generatedFrameIds: string[] = [], capabilityProfile?: DesignCapabilityProfile): Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> {
+function reviewArtboardLayout(page: WorkspaceDesignPage, userRequest = "", generatedFrameIds: string[] = [], capabilityProfile?: DesignCapabilityProfile): DesignReviewIssue[] {
   const targetFrameIds = new Set(generatedFrameIds);
   const artboards = getTopLevelArtboards(page)
     .filter((node) => node.id !== "page-preview-frame")
     .filter((node) => targetFrameIds.size === 0 || targetFrameIds.has(node.id));
-  const issues: Array<{ level: "blocking" | "warning"; message: string; suggestedFix?: Record<string, unknown> }> = [];
+  const issues: DesignReviewIssue[] = [];
   const isMobileRequest = /小程序|移动端|手机|app/i.test(userRequest);
   const profile = capabilityProfile ?? getDesignCapabilityProfile(isMobileRequest ? "mobile_app" : "pc_web", userRequest);
   const minimums = profile.rubric.minimums;
@@ -2873,40 +4575,49 @@ function reviewArtboardLayout(page: WorkspaceDesignPage, userRequest = "", gener
     const textNodes = visibleChildren.filter((node) => node.type === "text");
     const visualAssets = visibleChildren.filter((node) => node.type === "image" || /icon|图标|图片|插画|主图|demo/i.test(node.name));
     const fills = new Set(visibleChildren.map((node) => node.fill).filter((fill) => fill && fill !== "transparent"));
-    if (visibleChildren.length < minimums.minNodesPerArtboard) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」只有 ${visibleChildren.length} 个可见节点，低于基础质量门槛 ${minimums.minNodesPerArtboard}，页面会显得粗糙。`
-      });
-    }
-    if (textNodes.length < minimums.minTextNodesPerArtboard) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」文本层级不足，只有 ${textNodes.length} 个文本节点，无法形成清晰信息架构。`
-      });
-    }
-    if (visualAssets.length < minimums.minVisualAssetsPerArtboard) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」缺少 icon、demo 图片或插画资产，页面内容过于简陋。`
-      });
-    }
-    if (fills.size < minimums.minDistinctFillsPerArtboard) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」颜色/层级过少，仅 ${fills.size} 种有效填充，缺少可识别页面风格。`
-      });
-    }
-    if (isMobileRequest && frame.width > 480) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」看起来是 PC 尺寸（${frame.width}x${frame.height}），但用户要求移动端/小程序，需要重新按 375x812 单列规范生成。`
-      });
-    }
-    if (isMobileRequest && children.some((node) => node.type === "table")) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」包含 table 节点，但移动端/小程序应使用卡片列表或行容器，避免文字挤压。`
+	    if (visibleChildren.length < minimums.minNodesPerArtboard) {
+	      issues.push({
+	        code: "content_missing",
+	        level: "blocking",
+	        message: `画板「${frame.name}」只有 ${visibleChildren.length} 个可见节点，低于基础质量门槛 ${minimums.minNodesPerArtboard}，页面会显得粗糙。`,
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "add_required_region", regions: inferRequiredRegionsForReview(userRequest), spacing: 16, userRequest, pageMode: inferPageModeFromReviewRequest(userRequest), businessEntity: inferBusinessEntitiesFromText(userRequest)[0] ?? "" } }
+	      });
+	    }
+	    if (textNodes.length < minimums.minTextNodesPerArtboard) {
+	      issues.push({
+	        code: "content_missing",
+	        level: "blocking",
+	        message: `画板「${frame.name}」文本层级不足，只有 ${textNodes.length} 个文本节点，无法形成清晰信息架构。`,
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "add_required_region", regions: inferRequiredRegionsForReview(userRequest), spacing: 16, userRequest, pageMode: inferPageModeFromReviewRequest(userRequest), businessEntity: inferBusinessEntitiesFromText(userRequest)[0] ?? "" } }
+	      });
+	    }
+	    if (visualAssets.length < minimums.minVisualAssetsPerArtboard) {
+	      issues.push({
+	        code: "content_missing",
+	        level: "blocking",
+	        message: `画板「${frame.name}」缺少 icon、demo 图片或插画资产，页面内容过于简陋。`
+	      });
+	    }
+	    if (fills.size < minimums.minDistinctFillsPerArtboard) {
+	      issues.push({
+	        code: "content_missing",
+	        level: "blocking",
+	        message: `画板「${frame.name}」颜色/层级过少，仅 ${fills.size} 种有效填充，缺少可识别页面风格。`
+	      });
+	    }
+	    if (isMobileRequest && frame.width > 480) {
+	      issues.push({
+	        code: "wrong_page_mode",
+	        level: "blocking",
+	        message: `画板「${frame.name}」看起来是 PC 尺寸（${frame.width}x${frame.height}），但用户要求移动端/小程序，需要重新按 375x812 单列规范生成。`
+	      });
+	    }
+	    if (isMobileRequest && children.some((node) => node.type === "table")) {
+	      issues.push({
+	        code: "wrong_page_mode",
+	        level: "blocking",
+	        message: `画板「${frame.name}」包含 table 节点，但移动端/小程序应使用卡片列表或行容器，避免文字挤压。`,
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "convert_table_to_card_list", spacing: 16 } }
       });
     }
     const clipped = children.filter((node) => (
@@ -2915,44 +4626,120 @@ function reviewArtboardLayout(page: WorkspaceDesignPage, userRequest = "", gener
       node.x + node.width > frame.x + frame.width ||
       node.y + node.height > frame.y + frame.height
     ));
-    if (clipped.length > 0) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」存在 ${clipped.length} 个元素超出画板边界，可能被剪切显示不全。`,
-        suggestedFix: { tool: "layout.reflow", input: { pageId: page.id, spacing: 16 } }
-      });
-    }
+	    if (clipped.length > 0) {
+	      issues.push({
+	        code: "out_of_artboard",
+	        level: "blocking",
+	        message: `画板「${frame.name}」存在 ${clipped.length} 个元素超出画板边界，可能被剪切显示不全。`,
+	        targetNodeIds: clipped.map((node) => node.id),
+	        suggestedFix: { tool: "layout.reflow", input: { pageId: page.id, spacing: 16 } }
+	      });
+	    }
     const meaningfulChildren = children.filter((node) => node.visible !== false && node.type !== "text");
-    if (meaningfulChildren.length === 0) {
-      issues.push({
-        level: "warning",
-        message: `画板「${frame.name}」缺少可交互或内容组件，需要补充输入、按钮、卡片、列表或状态区。`
-      });
-    }
+	    if (meaningfulChildren.length === 0) {
+	      issues.push({
+	        code: "content_missing",
+	        level: "warning",
+	        message: `画板「${frame.name}」缺少可交互或内容组件，需要补充输入、按钮、卡片、列表或状态区。`
+	      });
+	    }
     const primaryActions = children.filter((node) => node.type === "button");
-    if (primaryActions.length === 0) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」没有明确主操作按钮，用户可能不知道下一步做什么。`
-      });
-    }
+	    if (primaryActions.length === 0) {
+	      issues.push({
+	        code: "missing_region",
+	        level: "blocking",
+	        message: `画板「${frame.name}」没有明确主操作按钮，用户可能不知道下一步做什么。`,
+	        region: "ActionBar",
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "add_required_region", region: "ActionBar", spacing: 16, userRequest, pageMode: inferPageModeFromReviewRequest(userRequest), businessEntity: inferBusinessEntitiesFromText(userRequest)[0] ?? "" } }
+	      });
+	    }
     const badButtons = primaryActions.filter((node) => !isButtonTextCentered(node));
-    if (badButtons.length > 0) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」存在 ${badButtons.length} 个按钮文字没有居中或按钮高度不足。`
-      });
+	    if (badButtons.length > 0) {
+	      issues.push({
+	        code: "text_overflow",
+	        level: "blocking",
+	        message: `画板「${frame.name}」存在 ${badButtons.length} 个按钮文字没有居中或按钮高度不足。`,
+	        targetNodeIds: badButtons.map((node) => node.id),
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "normalize_action_bar", spacing: 16 } }
+	      });
     }
     const textOverflows = children.filter((node) => node.type === "text" && mayTextOverflow(node));
-    if (textOverflows.length > 0) {
-      issues.push({
-        level: "blocking",
-        message: `画板「${frame.name}」存在 ${textOverflows.length} 个文本节点高度/宽度不足，可能出现遮挡、换行挤压或显示不全。`,
-        suggestedFix: { tool: "layout.reflow", input: { pageId: page.id, spacing: 16 } }
-      });
+	    if (textOverflows.length > 0) {
+	      issues.push({
+	        code: "text_overflow",
+	        level: "blocking",
+	        message: `画板「${frame.name}」存在 ${textOverflows.length} 个文本节点高度/宽度不足，可能出现遮挡、换行挤压或显示不全。`,
+	        targetNodeIds: textOverflows.map((node) => node.id),
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "expand_parent", spacing: 20 } }
+	      });
+    }
+    const verticalTextNodes = children.filter((node) => node.type === "text" && isLikelyVerticalText(node));
+	    if (verticalTextNodes.length > 0) {
+	      issues.push({
+	        code: "text_overflow",
+	        level: "blocking",
+	        message: `画板「${frame.name}」存在 ${verticalTextNodes.length} 个疑似竖排文本节点，说明文本宽度过窄或被挤到右侧。`,
+	        targetNodeIds: verticalTextNodes.map((node) => node.id),
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "fix_vertical_text", spacing: 20 } }
+	      });
+    }
+    const childOverflows = children.filter((node) => nodeOverflowsParent(node, page.nodes));
+	    if (childOverflows.length > 0) {
+	      issues.push({
+	        code: "out_of_artboard",
+	        level: "blocking",
+	        message: `画板「${frame.name}」存在 ${childOverflows.length} 个节点超出父容器，可能出现内容被卡片裁剪或右侧越界。`,
+	        targetNodeIds: childOverflows.map((node) => node.id),
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "expand_parent", spacing: 20 } }
+	      });
+    }
+    const requestedDetail = /详情|明细|查看|资料|profile|detail/i.test(userRequest);
+    const requestedList = /列表|表格|清单|table|list|搜索|筛选|查询/i.test(userRequest);
+    const irrelevantListSections = requestedDetail && !requestedList
+      ? children.filter((node) => isTableLikeNode(node) || /筛选|搜索|查询|分页|filter|search|pagination/i.test(`${node.name} ${node.text ?? ""}`))
+      : [];
+	    if (irrelevantListSections.length > 0) {
+	      issues.push({
+	        code: "wrong_page_mode",
+	        level: "blocking",
+	        message: `画板「${frame.name}」疑似详情页混入 ${irrelevantListSections.length} 个列表/筛选结构，应移除或改为详情布局。`,
+	        targetNodeIds: irrelevantListSections.map((node) => node.id),
+	        suggestedFix: { tool: "layout.apply_intent_patch", input: { pageId: page.id, targetNodeId: frame.id, operation: "remove_irrelevant_section", spacing: 20, userRequest } }
+	      });
     }
   });
   return issues;
+}
+
+function summarizeDesignReviewIssues(issues: DesignReviewIssue[]) {
+  const counts = issues.reduce<Record<string, number>>((result, issue) => {
+    result[issue.code] = (result[issue.code] ?? 0) + 1;
+    return result;
+  }, {});
+  return {
+    counts,
+    blockingCodes: Array.from(new Set(issues.filter((issue) => issue.level === "blocking").map((issue) => issue.code))),
+    patchableCount: issues.filter((issue) => Boolean(issue.suggestedFix)).length
+  };
+}
+
+function inferPageModeFromReviewRequest(userRequest: string) {
+  if (/详情|明细|查看|资料|detail/i.test(userRequest)) return "detail";
+  if (/新增|编辑|创建|表单|录入|form/i.test(userRequest)) return "form";
+  if (/列表|表格|管理|查询|搜索|筛选|collection|list|table/i.test(userRequest)) return "collection";
+  if (/流程|步骤|进度|timeline|steps/i.test(userRequest)) return "flow";
+  return "unknown";
+}
+
+function inferRequiredRegionsForReview(userRequest: string) {
+  const mode = inferPageModeFromReviewRequest(userRequest);
+  if (mode === "detail") return ["Header", "DescriptionList", "ActionBar"];
+  if (mode === "form") return ["Form", "ActionBar"];
+  if (mode === "collection") return /搜索|筛选|查询|filter|search|query/i.test(userRequest)
+    ? ["Header", "FilterBar", "Table", "Pagination"]
+    : ["Header", "Table", "Pagination"];
+  if (mode === "flow") return ["Steps", "ActionBar"];
+  return ["Header", "Content", "ActionBar"];
 }
 
 function isButtonTextCentered(node: WorkspaceDesignNode) {
@@ -2980,6 +4767,24 @@ function mayTextOverflow(node: WorkspaceDesignNode) {
   const lines = Math.ceil(text.length / charsPerLine);
   const requiredHeight = lines * fontSize * 1.35;
   return requiredHeight > node.height + 2;
+}
+
+function isLikelyVerticalText(node: WorkspaceDesignNode) {
+  const text = String(node.text ?? "").trim();
+  if (text.length < 2) return false;
+  const fontSize = node.fontSize || 14;
+  return /[\u4e00-\u9fa5]/.test(text) && node.width < fontSize * 2.4;
+}
+
+function nodeOverflowsParent(node: WorkspaceDesignNode, nodes: WorkspaceDesignNode[]) {
+  if (!node.parentId) return false;
+  const parent = nodes.find((item) => item.id === node.parentId);
+  if (!parent || parent.type === "frame") return false;
+  const tolerance = 2;
+  return node.x < parent.x - tolerance
+    || node.y < parent.y - tolerance
+    || node.x + node.width > parent.x + parent.width + tolerance
+    || node.y + node.height > parent.y + parent.height + tolerance;
 }
 
 function getDesignReviewRules() {
@@ -3200,6 +5005,757 @@ function createFilterBarNodes(input: {
     })
   );
   return nodes;
+}
+
+function resolveIntentPatchScope(page: WorkspaceDesignPage, input: Record<string, unknown>) {
+  const targetNodeId = typeof input.targetNodeId === "string" ? input.targetNodeId : "";
+  if (targetNodeId) return page.nodes.find((node) => node.id === targetNodeId);
+  const semantic = String(input.semantic ?? "");
+  if (semantic) {
+    const structure = analyzePageSemantics(page, String(input.userRequest ?? ""));
+    const region = structure.mainRegions.find((item) => item.type === semantic || semanticMatchesRegion(semantic, item.type));
+    if (region) return page.nodes.find((node) => node.id === region.nodeId);
+    if (/content|main/i.test(semantic)) return findMainContentCandidates(page)[0];
+    if (/form/i.test(semantic)) return findFormLikeNode(page, input);
+  }
+  return undefined;
+}
+
+function semanticMatchesRegion(semantic: string, regionType: string) {
+  if (semantic === regionType) return true;
+  if (semantic === "filter" && regionType === "filter_bar") return true;
+  if (semantic === "content" && regionType === "table") return true;
+  return false;
+}
+
+function reflowSemanticSections(nodes: WorkspaceDesignNode[], spacing: number, scopeNodeId?: string) {
+  const readableNodes = nodes.map((node) => node.type === "text" ? expandTextNodeForReadability(node) : node);
+  const scoped = scopeNodeId ? readableNodes.find((node) => node.id === scopeNodeId) : undefined;
+  const targetFrameIds = scoped?.type === "frame"
+    ? [scoped.id]
+    : scoped
+      ? [findContainingFrameId(readableNodes, scoped)].filter((id): id is string => Boolean(id))
+      : readableNodes.filter((node) => node.type === "frame").map((node) => node.id);
+  let nextNodes = readableNodes;
+  targetFrameIds.forEach((frameId) => {
+    nextNodes = reflowFrameSections(nextNodes, frameId, spacing, scoped && scoped.type !== "frame" ? scoped.id : undefined);
+  });
+  return reflowOverlappingNodes(nextNodes, spacing);
+}
+
+function reflowFrameSections(nodes: WorkspaceDesignNode[], frameId: string, spacing: number, pinnedSectionId?: string) {
+  const frame = nodes.find((node) => node.id === frameId);
+  if (!frame) return nodes;
+  const modules = collectFrameLayoutModules(nodes, frame, pinnedSectionId);
+  if (modules.length < 2) return nodes;
+  const sorted = modules.sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x);
+  const shifts = new Map<string, number>();
+  let cursorY = Math.max(frame.y + spacing, sorted[0].bounds.y);
+  sorted.forEach((module, index) => {
+    const minY = index === 0 ? module.bounds.y : cursorY + spacing;
+    const dy = Math.max(0, Math.ceil(minY - module.bounds.y));
+    if (dy > 0) shifts.set(module.root.id, dy);
+    cursorY = module.bounds.y + dy + module.bounds.height;
+  });
+  return shifts.size > 0 ? translateCanvasModulesAndChildren(nodes, shifts) : nodes;
+}
+
+function collectFrameLayoutModules(nodes: WorkspaceDesignNode[], frame: WorkspaceDesignNode, pinnedSectionId?: string) {
+  const descendants = nodes.filter((node) => node.id !== frame.id && (node.parentId === frame.id || isNodeInsideTarget(node, frame)));
+  const direct = descendants
+    .filter((node) => node.parentId === frame.id || !node.parentId)
+    .filter((node) => shouldReflowAsIntentSection(node, frame) || node.id === pinnedSectionId);
+  const roots = direct.length > 0 ? direct : descendants.filter((node) => shouldReflowAsIntentSection(node, frame));
+  return roots.map((root) => {
+    const ids = new Set([root.id, ...collectDescendantNodeIds(nodes, root.id)]);
+    const owned = nodes.filter((node) => ids.has(node.id));
+    return { root, bounds: getNodesBounds(owned.length > 0 ? owned : [root]) };
+  });
+}
+
+function shouldReflowAsIntentSection(node: WorkspaceDesignNode, frame: WorkspaceDesignNode) {
+  if (node.visible === false || node.type === "frame") return false;
+  const label = `${node.name} ${node.text ?? ""}`;
+  if (/侧边|菜单|Sidebar/i.test(label)) return false;
+  if (node.height >= frame.height * 0.82) return false;
+  if (/顶部|导航|Toolbar|Header|标题|筛选|搜索|查询|表格|列表|内容|表单|分页|底部|Action/i.test(label)) return true;
+  return node.type === "container" || node.type === "card" || node.type === "table";
+}
+
+function applySemanticGap(nodes: WorkspaceDesignNode[], targetNodeId: string, spacing: number) {
+  const target = nodes.find((node) => node.id === targetNodeId);
+  if (!target) return nodes;
+  const frameId = findContainingFrameId(nodes, target);
+  const frame = frameId ? nodes.find((node) => node.id === frameId) : undefined;
+  if (!frame) return nodes;
+  const modules = collectFrameLayoutModules(nodes, frame).sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x);
+  const targetModule = modules.find((module) => module.root.id === targetNodeId || module.root.id === target.parentId || isNodeInsideTarget(target, module.root));
+  if (!targetModule) return nodes;
+  const desiredY = targetModule.bounds.y + targetModule.bounds.height + spacing;
+  const shifts = new Map<string, number>();
+  modules.forEach((module) => {
+    if (module.bounds.y <= targetModule.bounds.y) return;
+    const dy = Math.max(0, desiredY - module.bounds.y);
+    if (dy > 0) shifts.set(module.root.id, dy);
+  });
+  return shifts.size > 0 ? translateCanvasModulesAndChildren(nodes, shifts) : nodes;
+}
+
+function translateSectionWithDescendants(nodes: WorkspaceDesignNode[], rootId: string, dx: number, dy: number) {
+  const ids = new Set([rootId, ...collectDescendantNodeIds(nodes, rootId)]);
+  return nodes.map((node) => ids.has(node.id) ? translateDesignNode(node, dx, dy) : node);
+}
+
+function findContainingFrameId(nodes: WorkspaceDesignNode[], node: WorkspaceDesignNode) {
+  if (node.type === "frame") return node.id;
+  if (node.parentId) {
+    const parent = nodes.find((candidate) => candidate.id === node.parentId);
+    if (parent?.type === "frame") return parent.id;
+    if (parent) return findContainingFrameId(nodes, parent);
+  }
+  return nodes.find((candidate) => candidate.type === "frame" && isNodeInsideTarget(node, candidate))?.id;
+}
+
+function findPrimaryTableNode(page: WorkspaceDesignPage, input: Record<string, unknown>) {
+  const target = resolveIntentPatchScope(page, { ...input, semantic: input.semantic ?? "table" });
+  if (target && isTableLikeNode(target)) return target;
+  return page.nodes.filter(isTableLikeNode).sort((a, b) => b.width * b.height - a.width * a.height)[0];
+}
+
+function findFormLikeNode(page: WorkspaceDesignPage, input: Record<string, unknown>) {
+  const targetNodeId = typeof input.targetNodeId === "string" ? input.targetNodeId : "";
+  if (targetNodeId) return page.nodes.find((node) => node.id === targetNodeId);
+  return page.nodes
+    .filter((node) => /表单|Form|输入|字段|详情|内容区|Panel|Card/i.test(`${node.name} ${node.text ?? ""}`) && (node.type === "card" || node.type === "container" || node.type === "frame"))
+    .sort((a, b) => b.width * b.height - a.width * a.height)[0];
+}
+
+function addColumnToTableRegion(nodes: WorkspaceDesignNode[], table: WorkspaceDesignNode, label: string) {
+  if (table.type === "table") {
+    const columns = parseTableColumnsFromNode(table);
+    const nextColumns = Array.from(new Set([...columns, label]));
+    return nodes.map((node) => node.id === table.id ? { ...node, text: `columns:${nextColumns.join("|")}` } : node);
+  }
+  const descendants = nodes.filter((node) => node.parentId === table.id || isNodeInsideTarget(node, table));
+  const headerTexts = descendants.filter((node) => node.type === "text" && /表头|列|名称|状态|时间|操作|编号|负责人/.test(`${node.name} ${node.text ?? ""}`));
+  const rightMost = headerTexts.sort((a, b) => (b.x + b.width) - (a.x + a.width))[0];
+  const x = rightMost ? rightMost.x + Math.min(rightMost.width + 8, 140) : table.x + table.width - 140;
+  const y = rightMost ? rightMost.y : table.y + 16;
+  const parentId = rightMost?.parentId ?? table.id;
+  const newHeader = createDesignNode("text", {
+    parentId,
+    name: `${label}表头`,
+    x: Math.min(x, table.x + table.width - 120),
+    y,
+    width: 104,
+    height: 20,
+    text: label,
+    fontSize: 13,
+    textColor: "#475467"
+  });
+  return [...nodes, newHeader];
+}
+
+function addFieldToFormRegion(nodes: WorkspaceDesignNode[], form: WorkspaceDesignNode, label: string, spacing: number) {
+  const descendants = nodes.filter((node) => node.parentId === form.id || isNodeInsideTarget(node, form));
+  const bounds = getNodesBounds(descendants.length > 0 ? descendants : [form]);
+  const y = Math.max(form.y + spacing, bounds.y + bounds.height + spacing);
+  const labelNode = createDesignNode("text", {
+    parentId: form.id,
+    name: `${label}标签`,
+    x: form.x + 24,
+    y,
+    width: Math.min(120, form.width - 48),
+    height: 22,
+    text: label,
+    fontSize: 14,
+    textColor: "#344054"
+  });
+  const inputNode = createDesignNode("input", {
+    parentId: form.id,
+    name: `${label}输入`,
+    x: form.width > 560 ? form.x + 152 : form.x + 24,
+    y: form.width > 560 ? y - 7 : y + 28,
+    width: form.width > 560 ? Math.max(180, form.width - 184) : Math.max(180, form.width - 48),
+    height: 40,
+    text: `请输入${label}`,
+    fill: "#ffffff",
+    stroke: "#d0d5dd",
+    radius: 8
+  });
+  return expandFramesToFitChildren([...nodes, labelNode, inputNode], spacing);
+}
+
+function fixVerticalTextNodes(nodes: WorkspaceDesignNode[], spacing: number, scopeNodeId?: string) {
+  const scopedNodes = nodes.filter((node) => isNodeInPatchScope(nodes, node, scopeNodeId));
+  const verticalIds = new Set(scopedNodes.filter((node) => node.type === "text" && isLikelyVerticalText(node)).map((node) => node.id));
+  if (verticalIds.size === 0) return nodes;
+  const nextNodes = nodes.map((node) => {
+    if (!verticalIds.has(node.id)) return node;
+    const parent = findLayoutParentNode(nodes, node);
+    const frame = findContainingFrameId(nodes, node);
+    const frameNode = frame ? nodes.find((item) => item.id === frame) : undefined;
+    const container = parent ?? frameNode;
+    const fontSize = node.fontSize || 14;
+    const text = String(node.text ?? "").trim();
+    const desiredWidth = Math.max(node.width, Math.min(container ? container.width - spacing * 2 : 220, text.length * fontSize * 1.1, 280), fontSize * 4);
+    const desiredHeight = Math.max(node.height, Math.ceil(fontSize * 1.45));
+    const minX = container ? container.x + spacing : node.x;
+    const maxX = container ? container.x + container.width - desiredWidth - spacing : node.x;
+    return {
+      ...node,
+      x: Math.round(clampNumber(node.x, minX, maxX)),
+      width: Math.round(desiredWidth),
+      height: desiredHeight,
+      lineHeight: Math.max(desiredHeight, Math.round(fontSize * 1.45))
+    };
+  });
+  return expandOverflowingParents(reflowSemanticSections(nextNodes, spacing, scopeNodeId), spacing, scopeNodeId);
+}
+
+function expandOverflowingParents(nodes: WorkspaceDesignNode[], spacing: number, scopeNodeId?: string) {
+  let nextNodes = [...nodes];
+  const containers = nextNodes
+    .filter((node) => isNodeInPatchScope(nextNodes, node, scopeNodeId))
+    .filter((node) => node.type === "frame" || node.type === "container" || node.type === "card")
+    .sort((a, b) => (b.parentId ? 1 : 0) - (a.parentId ? 1 : 0) || b.width * b.height - a.width * a.height);
+  containers.forEach((container) => {
+    const children = nextNodes.filter((node) => node.id !== container.id && node.parentId === container.id);
+    if (children.length === 0) return;
+    const bounds = getNodesBounds(children);
+    const parentFrameId = findContainingFrameId(nextNodes, container);
+    const frame = parentFrameId ? nextNodes.find((node) => node.id === parentFrameId) : undefined;
+    const maxWidth = frame && frame.id !== container.id ? Math.max(1, frame.x + frame.width - container.x - spacing) : Number.POSITIVE_INFINITY;
+    const nextWidth = Math.min(Math.max(container.width, bounds.x + bounds.width - container.x + spacing), maxWidth);
+    const nextHeight = Math.max(container.height, bounds.y + bounds.height - container.y + spacing);
+    if (nextWidth === container.width && nextHeight === container.height) return;
+    nextNodes = nextNodes.map((node) => node.id === container.id ? {
+      ...node,
+      width: Math.round(nextWidth),
+      height: Math.round(nextHeight)
+    } : node);
+  });
+  return expandFramesToFitChildren(reflowSemanticSections(nextNodes, spacing, scopeNodeId), spacing);
+}
+
+function convertTablesToCardLists(nodes: WorkspaceDesignNode[], spacing: number, scopeNodeId?: string) {
+  let nextNodes = [...nodes];
+  const tables = nextNodes
+    .filter((node) => isNodeInPatchScope(nextNodes, node, scopeNodeId) && isTableLikeNode(node))
+    .filter((node) => node.type !== "frame" && node.id !== scopeNodeId)
+    .filter((node) => node.type === "table" || /表格|列表|table|grid/i.test(`${node.name} ${node.text ?? ""}`));
+  tables.forEach((table) => {
+    if (!nextNodes.some((node) => node.id === table.id)) return;
+    const parentId = table.parentId;
+    const frameId = findContainingFrameId(nextNodes, table);
+    const frame = frameId ? nextNodes.find((node) => node.id === frameId) : undefined;
+    const cardWidth = Math.max(220, Math.min(table.width, (frame?.width ?? table.width) - spacing * 2));
+    const columns = parseTableColumnsFromNode(table);
+    const labels = columns.length > 0 ? columns.slice(0, 4) : ["标题", "状态", "说明"];
+    const descendants = collectDescendantNodeIds(nextNodes, table.id);
+    const removeIds = new Set([table.id, ...descendants]);
+    const cards = Array.from({ length: 3 }).flatMap((_, rowIndex) => {
+      const cardY = table.y + rowIndex * 104;
+      const card = createDesignNode("card", {
+        parentId,
+        name: `${table.name || "列表"}卡片${rowIndex + 1}`,
+        x: table.x,
+        y: cardY,
+        width: cardWidth,
+        height: 88,
+        fill: "#ffffff",
+        stroke: "#e6eaf2",
+        radius: 12
+      });
+      const title = createDesignNode("text", {
+        parentId: card.id,
+        name: `${card.name}标题`,
+        x: card.x + 16,
+        y: card.y + 14,
+        width: card.width - 32,
+        height: 22,
+        text: labels[0] ? `${labels[0]} ${rowIndex + 1}` : `项目 ${rowIndex + 1}`,
+        fontSize: 15,
+        fontWeight: 600,
+        textColor: "#111827"
+      });
+      const meta = createDesignNode("text", {
+        parentId: card.id,
+        name: `${card.name}信息`,
+        x: card.x + 16,
+        y: card.y + 44,
+        width: card.width - 32,
+        height: 22,
+        text: labels.slice(1).join(" / ") || "详情信息",
+        fontSize: 13,
+        textColor: "#667085"
+      });
+      return [card, title, meta];
+    });
+    nextNodes = nextNodes.filter((node) => !removeIds.has(node.id)).concat(cards);
+  });
+  return expandOverflowingParents(reflowSemanticSections(nextNodes, spacing, scopeNodeId), spacing, scopeNodeId);
+}
+
+function normalizeActionBars(nodes: WorkspaceDesignNode[], spacing: number, scopeNodeId?: string) {
+  let nextNodes = nodes.map((node) => {
+    if (node.type !== "button" || !isNodeInPatchScope(nodes, node, scopeNodeId)) return node;
+    return {
+      ...node,
+      height: Math.max(44, node.height),
+      textAlign: "center" as const,
+      textVerticalAlign: "middle" as const,
+      lineHeight: Math.max(44, node.height)
+    };
+  });
+  const frames = nextNodes.filter((node) => node.type === "frame" && isNodeInPatchScope(nextNodes, node, scopeNodeId));
+  frames.forEach((frame) => {
+    const buttons = nextNodes
+      .filter((node) => node.type === "button" && (node.parentId === frame.id || isNodeInsideTarget(node, frame)))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+    if (buttons.length === 0) return;
+    const actionRow = buttons.filter((button) => button.y > frame.y + frame.height * 0.72);
+    const rowButtons = actionRow.length > 0 ? actionRow : buttons.slice(-Math.min(2, buttons.length));
+    const gap = spacing;
+    const width = Math.floor((frame.width - spacing * 2 - gap * (rowButtons.length - 1)) / rowButtons.length);
+    const y = frame.width <= 480 ? frame.y + frame.height - 72 : Math.min(...rowButtons.map((button) => button.y));
+    nextNodes = nextNodes.map((node) => {
+      const index = rowButtons.findIndex((button) => button.id === node.id);
+      if (index < 0) return node;
+      return {
+        ...node,
+        x: Math.round(frame.x + spacing + index * (width + gap)),
+        y: Math.round(y),
+        width,
+        height: 44,
+        textAlign: "center" as const,
+        textVerticalAlign: "middle" as const,
+        lineHeight: 44
+      };
+    });
+  });
+  return expandOverflowingParents(nextNodes, spacing, scopeNodeId);
+}
+
+function removeIrrelevantSections(nodes: WorkspaceDesignNode[], input: Record<string, unknown>, userRequest: string, scopeNodeId?: string) {
+  const explicitScope = scopeNodeId ? nodes.find((node) => node.id === scopeNodeId) : undefined;
+  const requestedDetail = /详情|明细|查看|资料|profile|detail/i.test(userRequest);
+  const keepList = /列表|表格|清单|table|list|搜索|筛选|查询/i.test(userRequest);
+  const scopedNodes = explicitScope
+    ? nodes.filter((node) => node.id !== explicitScope.id && isNodeInPatchScope(nodes, node, explicitScope.id))
+    : nodes;
+  const candidates = scopedNodes.filter((node) => {
+    if (!requestedDetail || keepList) return false;
+    const label = `${node.name} ${node.text ?? ""}`;
+    return isTableLikeNode(node) || /筛选|搜索|查询|分页|filter|search|pagination/i.test(label);
+  });
+  const removeIds = new Set<string>();
+  candidates.forEach((node) => {
+    removeIds.add(node.id);
+    collectDescendantNodeIds(nodes, node.id).forEach((id) => removeIds.add(id));
+  });
+  const preserved = nodes.filter((node) => !removeIds.has(node.id));
+  return reflowSemanticSections(preserved, numberOr(input.spacing, 16));
+}
+
+function changeLayoutByScope(nodes: WorkspaceDesignNode[], input: Record<string, unknown>, spacing: number, scopeNodeId?: string) {
+  const scope = scopeNodeId ? nodes.find((node) => node.id === scopeNodeId) : undefined;
+  if (!scope) return reflowSemanticSections(nodes, spacing);
+  const children = nodes
+    .filter((node) => node.parentId === scope.id)
+    .filter((node) => node.visible !== false)
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  if (children.length === 0) return reflowSemanticSections(nodes, spacing, scope.id);
+  const layout = String(input.layout ?? "stack");
+  const padding = spacing;
+  let cursorY = scope.y + padding;
+  const nextById = new Map<string, WorkspaceDesignNode>();
+  children.forEach((child) => {
+    const width = /two_column/i.test(layout)
+      ? Math.max(120, Math.floor((scope.width - padding * 3) / 2))
+      : Math.max(120, scope.width - padding * 2);
+    const columnIndex = /two_column/i.test(layout) ? children.indexOf(child) % 2 : 0;
+    const rowIndex = /two_column/i.test(layout) ? Math.floor(children.indexOf(child) / 2) : children.indexOf(child);
+    const x = scope.x + padding + columnIndex * (width + padding);
+    const y = /two_column/i.test(layout) ? scope.y + padding + rowIndex * (child.height + padding) : cursorY;
+    nextById.set(child.id, { ...child, x: Math.round(x), y: Math.round(y), width: Math.round(width) });
+    if (!/two_column/i.test(layout)) cursorY += child.height + spacing;
+  });
+  const shifted = nodes.map((node) => nextById.get(node.id) ?? node);
+  return expandOverflowingParents(reflowSemanticSections(shifted, spacing, scope.id), spacing, scope.id);
+}
+
+function isNodeInPatchScope(nodes: WorkspaceDesignNode[], node: WorkspaceDesignNode, scopeNodeId?: string) {
+  if (!scopeNodeId) return true;
+  if (node.id === scopeNodeId) return true;
+  const scope = nodes.find((item) => item.id === scopeNodeId);
+  if (!scope) return true;
+  if (node.parentId === scopeNodeId) return true;
+  return collectDescendantNodeIds(nodes, scopeNodeId).includes(node.id) || isNodeInsideTarget(node, scope);
+}
+
+function findLayoutParentNode(nodes: WorkspaceDesignNode[], node: WorkspaceDesignNode) {
+  if (node.parentId) return nodes.find((candidate) => candidate.id === node.parentId);
+  return nodes
+    .filter((candidate) => candidate.id !== node.id && (candidate.type === "card" || candidate.type === "container" || candidate.type === "frame"))
+    .filter((candidate) => isNodeInsideTarget(node, candidate))
+    .sort((a, b) => a.width * a.height - b.width * b.height)[0];
+}
+
+function readPatchRegions(input: Record<string, unknown>) {
+  const values = Array.isArray(input.regions)
+    ? input.regions
+    : input.region !== undefined
+      ? [input.region]
+      : [];
+  return values.map(String).map((item) => item.trim()).filter(Boolean);
+}
+
+function addRequiredRegionsToPage(nodes: WorkspaceDesignNode[], regions: string[], spacing: number, scopeNodeId?: string, input: Record<string, unknown> = {}) {
+  let nextNodes = [...nodes];
+  let createdCount = 0;
+  let alreadySatisfiedCount = 0;
+  const skippedRegions: string[] = [];
+  const frames = getPatchTargetFrames(nextNodes, scopeNodeId);
+  frames.forEach((frame) => {
+    const existingRegions = new Set(collectNodeRegions(nextNodes.filter((node) => node.id === frame.id || isNodeInsideTarget(node, frame))));
+    const missing = regions.filter((region) => !existingRegions.has(normalizeIntentRegionName(region)));
+    if (missing.length === 0) {
+      alreadySatisfiedCount += regions.length;
+      return;
+    }
+    let cursorY = getFrameContentBottom(nextNodes, frame, spacing);
+    const context = createRequiredRegionContext(input, frame);
+    missing.forEach((region) => {
+      const regionNodes = createRequiredRegionNodes(region, frame, cursorY, spacing, context);
+      if (regionNodes.length === 0) {
+        skippedRegions.push(region);
+        return;
+      }
+      nextNodes.push(...regionNodes);
+      createdCount += regionNodes.length;
+      cursorY = getNodesBounds(regionNodes).y + getNodesBounds(regionNodes).height + spacing;
+    });
+  });
+  return {
+    nodes: expandOverflowingParents(reflowSemanticSections(nextNodes, spacing, scopeNodeId), spacing, scopeNodeId),
+    createdCount,
+    alreadySatisfiedCount,
+    skippedRegions
+  };
+}
+
+function removeRegionsFromPage(nodes: WorkspaceDesignNode[], regions: string[], spacing: number, scopeNodeId?: string) {
+  const targetRegions = new Set(regions.map(normalizeIntentRegionName).filter(Boolean));
+  if (targetRegions.size === 0) return nodes;
+  const scopedNodes = nodes.filter((node) => isNodeInPatchScope(nodes, node, scopeNodeId));
+  const removeIds = new Set<string>();
+  scopedNodes.forEach((node) => {
+    if (node.type === "frame") return;
+    const nodeRegions = collectNodeRegions([node]);
+    if (!nodeRegions.some((region) => targetRegions.has(region))) return;
+    removeIds.add(node.id);
+    collectDescendantNodeIds(nodes, node.id).forEach((id) => removeIds.add(id));
+  });
+  if (removeIds.size === 0) return nodes;
+  return reflowSemanticSections(nodes.filter((node) => !removeIds.has(node.id)), spacing, scopeNodeId);
+}
+
+function getPatchTargetFrames(nodes: WorkspaceDesignNode[], scopeNodeId?: string) {
+  const scope = scopeNodeId ? nodes.find((node) => node.id === scopeNodeId) : undefined;
+  if (scope?.type === "frame") return [scope];
+  const frameId = scope ? findContainingFrameId(nodes, scope) : undefined;
+  const frame = frameId ? nodes.find((node) => node.id === frameId) : undefined;
+  if (frame) return [frame];
+  return nodes.filter((node) => node.type === "frame");
+}
+
+function getFrameContentBottom(nodes: WorkspaceDesignNode[], frame: WorkspaceDesignNode, spacing: number) {
+  const children = nodes.filter((node) => node.id !== frame.id && (node.parentId === frame.id || isNodeInsideTarget(node, frame)));
+  if (children.length === 0) return frame.y + spacing;
+  const bounds = getNodesBounds(children);
+  return Math.max(frame.y + spacing, bounds.y + bounds.height + spacing);
+}
+
+type RequiredRegionContext = {
+  userRequest: string;
+  pageMode: string;
+  businessEntity: string;
+};
+
+function createRequiredRegionContext(input: Record<string, unknown>, frame: WorkspaceDesignNode): RequiredRegionContext {
+  const userRequest = String(input.userRequest ?? input.reason ?? "");
+  const pageMode = String(input.pageMode ?? "").trim();
+  const explicitEntity = String(input.businessEntity ?? "").trim();
+  const inferredEntity = inferBusinessEntitiesFromText(`${explicitEntity} ${userRequest} ${frame.name} ${frame.text ?? ""}`)[0] ?? "";
+  return {
+    userRequest,
+    pageMode,
+    businessEntity: explicitEntity || inferredEntity
+  };
+}
+
+function createRequiredRegionNodes(region: string, frame: WorkspaceDesignNode, y: number, spacing: number, context: RequiredRegionContext) {
+  const normalized = normalizeIntentRegionName(region);
+  const x = frame.x + spacing;
+  const width = Math.max(240, frame.width - spacing * 2);
+  if (!context.businessEntity && ["header", "summary", "detail", "form", "action"].includes(normalized)) return [];
+  if (normalized === "header") return createHeaderRegionNodes(frame, x, y, width, context);
+  if (normalized === "summary") return createSummaryRegionNodes(frame, x, y, width, context);
+  if (normalized === "detail") return createDescriptionRegionNodes(frame, x, y, width, context);
+  if (normalized === "form") return createFormRegionNodes(frame, x, y, width, context);
+  if (normalized === "action") return createActionRegionNodes(frame, x, y, width, context);
+  if (normalized === "table" || normalized === "collection") return createTableRegionNodes(frame, x, y, width);
+  if (normalized === "pagination") return createPaginationRegionNodes(frame, x, y, width);
+  if (normalized === "filter") return createFilterBarNodes({
+    x,
+    y,
+    width,
+    height: 96,
+    filters: [
+      { label: "关键词", placeholder: "请输入关键词" },
+      { label: "状态", placeholder: "请选择状态" }
+    ]
+  }).map((node) => node.parentId ? node : { ...node, parentId: frame.id });
+  if (normalized === "steps") return createStepsRegionNodes(frame, x, y, width);
+  return [];
+}
+
+function createHeaderRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number, context: RequiredRegionContext) {
+  const id = createDesignId("region-header");
+  const entity = context.businessEntity;
+  const title = `${entity}详情页`;
+  return [
+    createDesignNode("container", { id, parentId: frame.id, name: "Header 区域", x, y, width, height: 72, fill: "#ffffff", stroke: "#e5e7eb", radius: 12 }),
+    createDesignNode("text", { parentId: id, name: "页面标题", x: x + 20, y: y + 16, width: width - 220, height: 28, text: title, fontSize: 20, fontWeight: 700, textColor: "#111827" }),
+    createDesignNode("button", { parentId: id, name: "返回按钮", x: x + width - 112, y: y + 16, width: 92, height: 40, text: "返回", fill: "#ffffff", stroke: "#d0d5dd", textColor: "#344054", radius: 8 })
+  ];
+}
+
+function createSummaryRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number, context: RequiredRegionContext) {
+  const id = createDesignId("region-summary");
+  const summaryItems = getEntitySummaryItems(context.businessEntity);
+  const cardWidth = Math.max(160, Math.floor((width - 32) / 3));
+  const nodes: WorkspaceDesignNode[] = [
+    createDesignNode("container", { id, parentId: frame.id, name: "Summary 摘要区域", x, y, width, height: 112, fill: "#ffffff", stroke: "#e5e7eb", radius: 12 })
+  ];
+  summaryItems.forEach((item, index) => {
+    const cardX = x + 16 + index * (cardWidth + 8);
+    nodes.push(createDesignNode("text", { parentId: id, name: `${item.label}标题`, x: cardX, y: y + 20, width: cardWidth, height: 20, text: item.label, fontSize: 13, textColor: "#667085" }));
+    nodes.push(createDesignNode("text", { parentId: id, name: `${item.label}值`, x: cardX, y: y + 50, width: cardWidth, height: 28, text: item.value, fontSize: 18, fontWeight: 700, textColor: item.tone === "primary" ? "#246bfe" : "#111827" }));
+  });
+  return nodes;
+}
+
+function createDescriptionRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number, context: RequiredRegionContext) {
+  const id = createDesignId("region-detail");
+  const fields = getEntityDetailFields(context.businessEntity);
+  const rows = Math.ceil(fields.length / 3);
+  const nodes: WorkspaceDesignNode[] = [
+    createDesignNode("container", { id, parentId: frame.id, name: "DescriptionList 详情区域", x, y, width, height: 76 + rows * 48, fill: "#ffffff", stroke: "#e5e7eb", radius: 12 }),
+    createDesignNode("text", { parentId: id, name: "详情标题", x: x + 20, y: y + 18, width: width - 40, height: 24, text: `${context.businessEntity}信息`, fontSize: 16, fontWeight: 700, textColor: "#111827" })
+  ];
+  fields.forEach((item, index) => {
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+    const itemWidth = Math.floor((width - 48) / 3);
+    nodes.push(createDesignNode("text", { parentId: id, name: `${item.label}标签`, x: x + 20 + col * itemWidth, y: y + 60 + row * 48, width: 84, height: 20, text: item.label, fontSize: 13, textColor: "#667085" }));
+    nodes.push(createDesignNode("text", { parentId: id, name: `${item.label}值`, x: x + 104 + col * itemWidth, y: y + 60 + row * 48, width: itemWidth - 96, height: 20, text: item.value, fontSize: 13, textColor: "#111827" }));
+  });
+  return nodes;
+}
+
+function createFormRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number, context: RequiredRegionContext) {
+  const id = createDesignId("region-form");
+  const fields = getEntityFormFields(context.businessEntity);
+  const nodes: WorkspaceDesignNode[] = [
+    createDesignNode("container", { id, parentId: frame.id, name: "Form 表单区域", x, y, width, height: 188, fill: "#ffffff", stroke: "#e5e7eb", radius: 12 })
+  ];
+  fields.forEach((field, index) => {
+    const rowY = y + 20 + index * 52;
+    nodes.push(createDesignNode("text", { parentId: id, name: `${field}标签`, x: x + 20, y: rowY + 8, width: 96, height: 20, text: field, fontSize: 13, textColor: "#344054" }));
+    nodes.push(createDesignNode("input", { parentId: id, name: `${field}输入`, x: x + 128, y: rowY, width: Math.max(220, width - 160), height: 38, text: `请输入${field}`, fill: "#ffffff", stroke: "#d0d5dd", radius: 8 }));
+  });
+  return nodes;
+}
+
+function createActionRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number, context: RequiredRegionContext) {
+  const id = createDesignId("region-actions");
+  const actions = getEntityActions(context.businessEntity, context.pageMode);
+  return [
+    createDesignNode("container", { id, parentId: frame.id, name: "ActionBar 操作区域", x, y, width, height: 72, fill: "#ffffff", stroke: "#e5e7eb", radius: 12 }),
+    ...actions.map((action, index) => createDesignNode("button", {
+      parentId: id,
+      name: `${action}按钮`,
+      x: x + width - 20 - (actions.length - index) * 104,
+      y: y + 16,
+      width: 92,
+      height: 40,
+      text: action,
+      fill: index === actions.length - 1 ? "#246bfe" : "#ffffff",
+      stroke: index === actions.length - 1 ? "#246bfe" : "#d0d5dd",
+      textColor: index === actions.length - 1 ? "#ffffff" : "#344054",
+      radius: 8
+    }))
+  ];
+}
+
+function getEntitySummaryItems(entity: string) {
+  if (entity === "订单") {
+    return [
+      { label: "订单状态", value: "待发货", tone: "primary" },
+      { label: "实付金额", value: "¥ 2,368.00", tone: "default" },
+      { label: "下单时间", value: "2026-05-14 10:28", tone: "default" }
+    ];
+  }
+  if (entity === "商品") {
+    return [
+      { label: "商品状态", value: "在售", tone: "primary" },
+      { label: "销售价", value: "¥ 199.00", tone: "default" },
+      { label: "可用库存", value: "1,280", tone: "default" }
+    ];
+  }
+  if (entity === "客户" || entity === "用户") {
+    return [
+      { label: "账号状态", value: "正常", tone: "primary" },
+      { label: "最近访问", value: "2026-05-14", tone: "default" },
+      { label: "风险等级", value: "低", tone: "default" }
+    ];
+  }
+  return [
+    { label: `${entity}状态`, value: "正常", tone: "primary" },
+    { label: "更新时间", value: "2026-05-14", tone: "default" },
+    { label: "负责人", value: "负责人 A", tone: "default" }
+  ];
+}
+
+function getEntityDetailFields(entity: string) {
+  if (entity === "订单") {
+    return [
+      { label: "订单编号", value: "ORD202605140001" },
+      { label: "订单状态", value: "待发货" },
+      { label: "支付状态", value: "已支付" },
+      { label: "下单用户", value: "张三 / 138****8201" },
+      { label: "收货信息", value: "上海市浦东新区" },
+      { label: "配送方式", value: "顺丰快递" },
+      { label: "商品数量", value: "3 件" },
+      { label: "优惠金额", value: "¥ 120.00" },
+      { label: "订单备注", value: "工作日配送" }
+    ];
+  }
+  if (entity === "商品") {
+    return [
+      { label: "商品编号", value: "SKU-20260514-001" },
+      { label: "商品名称", value: "基础款长袖衬衫" },
+      { label: "商品状态", value: "在售" },
+      { label: "商品分类", value: "服饰 / 衬衫" },
+      { label: "销售价格", value: "¥ 199.00" },
+      { label: "库存数量", value: "1,280" },
+      { label: "上架时间", value: "2026-05-01" },
+      { label: "供应商", value: "华东仓" },
+      { label: "商品描述", value: "透气亲肤，支持日常通勤" }
+    ];
+  }
+  if (entity === "客户" || entity === "用户") {
+    return [
+      { label: "用户编号", value: "USR202605140001" },
+      { label: "用户姓名", value: "张三" },
+      { label: "手机号", value: "138****8201" },
+      { label: "账号状态", value: "正常" },
+      { label: "注册时间", value: "2026-04-18" },
+      { label: "最近登录", value: "2026-05-14" }
+    ];
+  }
+  return [
+    { label: `${entity}编号`, value: "ID202605140001" },
+    { label: `${entity}名称`, value: `${entity}名称` },
+    { label: "当前状态", value: "正常" },
+    { label: "创建时间", value: "2026-05-14" },
+    { label: "负责人", value: "负责人 A" },
+    { label: "备注说明", value: "暂无备注" }
+  ];
+}
+
+function getEntityFormFields(entity: string) {
+  if (entity === "订单") return ["订单编号", "收货人", "收货地址", "配送方式"];
+  if (entity === "商品") return ["商品名称", "商品分类", "销售价格", "库存数量"];
+  if (entity === "客户" || entity === "用户") return ["姓名", "手机号", "账号状态", "备注"];
+  return [`${entity}名称`, `${entity}类型`, "状态"];
+}
+
+function getEntityActions(entity: string, pageMode: string) {
+  if (entity === "订单") return pageMode === "form" ? ["取消", "保存"] : ["返回", "导出", "查看物流"];
+  if (entity === "商品") return pageMode === "form" ? ["取消", "保存"] : ["返回", "编辑", "下架"];
+  if (entity === "客户" || entity === "用户") return pageMode === "form" ? ["取消", "保存"] : ["返回", "编辑", "禁用"];
+  return pageMode === "form" ? ["取消", "保存"] : ["返回", "编辑"];
+}
+
+function createTableRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number) {
+  return createGranularTableNodesFromDraft({
+    refId: "required-table",
+    type: "table",
+    name: "Table 数据区域",
+    x: x - frame.x,
+    y: y - frame.y,
+    width,
+    height: 260,
+    text: "columns:名称|状态|时间|操作"
+  }, {
+    nodeId: createDesignId("region-table"),
+    parentId: frame.id,
+    originX: frame.x,
+    originY: frame.y,
+    platform: frame.width <= 480 ? "mobile_app" : "web"
+  });
+}
+
+function createPaginationRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number) {
+  const id = createDesignId("region-pagination");
+  return [
+    createDesignNode("container", { id, parentId: frame.id, name: "Pagination 分页区域", x, y, width, height: 56, fill: "#ffffff", stroke: "#e5e7eb", radius: 12 }),
+    createDesignNode("text", { parentId: id, name: "分页统计", x: x + 20, y: y + 18, width: 180, height: 20, text: "共 128 条", fontSize: 13, textColor: "#667085" }),
+    createDesignNode("button", { parentId: id, name: "上一页", x: x + width - 220, y: y + 10, width: 72, height: 36, text: "上一页", fill: "#ffffff", stroke: "#d0d5dd", textColor: "#344054", radius: 8 }),
+    createDesignNode("button", { parentId: id, name: "下一页", x: x + width - 136, y: y + 10, width: 72, height: 36, text: "下一页", fill: "#ffffff", stroke: "#d0d5dd", textColor: "#344054", radius: 8 })
+  ];
+}
+
+function createStepsRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number) {
+  const id = createDesignId("region-steps");
+  const steps = ["已提交", "处理中", "已完成"];
+  const nodes: WorkspaceDesignNode[] = [
+    createDesignNode("container", { id, parentId: frame.id, name: "Steps 流程区域", x, y, width, height: 96, fill: "#ffffff", stroke: "#e5e7eb", radius: 12 })
+  ];
+  steps.forEach((step, index) => {
+    const stepX = x + 32 + index * Math.max(120, Math.floor((width - 64) / steps.length));
+    nodes.push(createDesignNode("container", { parentId: id, name: `${step}节点`, x: stepX, y: y + 28, width: 18, height: 18, fill: index === 0 ? "#246bfe" : "#e5e7eb", stroke: "transparent", radius: 999 }));
+    nodes.push(createDesignNode("text", { parentId: id, name: `${step}文本`, x: stepX + 28, y: y + 26, width: 96, height: 22, text: step, fontSize: 13, textColor: "#344054" }));
+  });
+  return nodes;
+}
+
+function createGenericRegionNodes(frame: WorkspaceDesignNode, x: number, y: number, width: number, region: string) {
+  const id = createDesignId("region-generic");
+  return [
+    createDesignNode("container", { id, parentId: frame.id, name: `${region} 区域`, x, y, width, height: 96, fill: "#ffffff", stroke: "#e5e7eb", radius: 12 }),
+    createDesignNode("text", { parentId: id, name: `${region}标题`, x: x + 20, y: y + 20, width: width - 40, height: 24, text: region, fontSize: 16, fontWeight: 700, textColor: "#111827" })
+  ];
+}
+
+function collectNodeRegions(nodes: WorkspaceDesignNode[]) {
+  return Array.from(new Set(nodes.flatMap((node) => {
+    const label = `${node.type} ${node.name} ${node.text ?? ""}`;
+    const regions = [normalizeIntentRegionName(label)];
+    if (node.type === "table") regions.push("table", "collection");
+    if (node.type === "input") regions.push("form");
+    if (node.type === "button") regions.push("action");
+    if (/filter|search|查询|搜索|筛选/i.test(label)) regions.push("filter");
+    if (/pagination|pager|分页|上一页|下一页/i.test(label)) regions.push("pagination");
+    if (/descriptionlist|detail|详情|明细|资料/i.test(label)) regions.push("detail");
+    if (/summary|metric|摘要|统计|指标/i.test(label)) regions.push("summary");
+    if (/header|toolbar|标题|页头|顶部/i.test(label)) regions.push("header");
+    if (/steps|timeline|流程|步骤|时间线/i.test(label)) regions.push("steps");
+    return regions.filter(Boolean);
+  })));
 }
 
 function reflowOverlappingNodes(nodes: WorkspaceDesignNode[], spacing: number) {

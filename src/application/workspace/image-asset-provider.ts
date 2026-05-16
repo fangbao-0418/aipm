@@ -24,35 +24,22 @@ export class ImageAssetProvider {
     const resolved: ResolvedDesignImageAsset[] = [];
     for (const request of requests) {
       const normalized = normalizeAssetRequest(request);
-      if (normalized.type === "icon") {
-        resolved.push({
-          id: normalized.id,
-          type: "icon",
-          name: normalized.name,
-          usage: normalized.usage,
-          source: "local-placeholder",
-          license: "local-svg"
-        });
-        continue;
-      }
       const query = buildAssetSearchQuery(normalized, context.userRequest);
-      const searched = await searchImage(query, normalized);
-      if (searched) {
-        resolved.push(searched);
-        continue;
-      }
-      const generated = await generateImage(query, normalized);
-      if (generated) {
-        resolved.push(generated);
-        continue;
-      }
       resolved.push({
         id: normalized.id,
-        type: normalized.type === "illustration" ? "illustration" : "image",
+        type: normalized.type,
         name: normalized.name,
         usage: normalized.usage,
         source: "local-placeholder",
-        license: "generated-placeholder"
+        license: "local-placeholder",
+        imageUrl: buildPlaceholderSvgDataUrl({
+          label: normalized.name,
+          kind: normalized.type,
+          hint: query
+        }),
+        alt: `${normalized.name} placeholder`,
+        width: 512,
+        height: 320
       });
     }
     return resolved;
@@ -60,7 +47,7 @@ export class ImageAssetProvider {
 }
 
 function normalizeAssetRequest(request: DesignImageAssetRequest) {
-  const type = request.type === "image" || request.type === "illustration" || request.type === "icon" ? request.type : "image";
+  const type: ResolvedDesignImageAsset["type"] = request.type === "image" || request.type === "illustration" || request.type === "icon" ? request.type : "image";
   const name = request.name || request.query || request.prompt || "design asset";
   return {
     id: `${type}_${name}`.replace(/[^\w-]+/g, "_").toLowerCase(),
@@ -93,6 +80,37 @@ async function searchImage(query: string, request: ReturnType<typeof normalizeAs
     return searchUnsplash(query, request);
   }
   return undefined;
+}
+
+function buildPlaceholderSvgDataUrl(input: { label: string; kind: string; hint: string }) {
+  const title = sanitizeSvgText(input.label || input.kind || "Image").slice(0, 12);
+  const subtitle = input.kind === "icon" ? "ICON" : input.kind === "illustration" ? "ILLUSTRATION" : "IMAGE";
+  const bg = input.kind === "icon" ? "#2563eb" : input.kind === "illustration" ? "#eef4ff" : "#f3f6fb";
+  const fg = input.kind === "icon" ? "#ffffff" : "#64748b";
+  const accent = input.kind === "icon" ? "#ffffff" : "#2563eb";
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="320" viewBox="0 0 512 320">`,
+    `<rect width="512" height="320" rx="28" fill="${bg}"/>`,
+    `<rect x="36" y="36" width="440" height="248" rx="20" fill="none" stroke="${accent}" stroke-opacity="0.18" stroke-width="2" stroke-dasharray="10 10"/>`,
+    `<circle cx="176" cy="132" r="34" fill="${accent}" fill-opacity="${input.kind === "icon" ? "0.28" : "0.16"}"/>`,
+    `<rect x="226" y="108" width="126" height="14" rx="7" fill="${fg}" fill-opacity="${input.kind === "icon" ? "0.9" : "0.32"}"/>`,
+    `<rect x="226" y="136" width="172" height="12" rx="6" fill="${fg}" fill-opacity="${input.kind === "icon" ? "0.72" : "0.22"}"/>`,
+    `<rect x="116" y="198" width="280" height="12" rx="6" fill="${fg}" fill-opacity="${input.kind === "icon" ? "0.62" : "0.2"}"/>`,
+    `<text x="256" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="${fg}">${subtitle}</text>`,
+    `<text x="256" y="274" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="${fg}" fill-opacity="0.78">${title}</text>`,
+    `</svg>`
+  ].join("");
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function sanitizeSvgText(value: string) {
+  return value.replace(/[<>&"']/g, (char) => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    "\"": "&quot;",
+    "'": "&apos;"
+  }[char] ?? char));
 }
 
 async function searchUnsplash(query: string, request: ReturnType<typeof normalizeAssetRequest>): Promise<ResolvedDesignImageAsset | undefined> {
@@ -216,4 +234,3 @@ async function generateImage(prompt: string, request: ReturnType<typeof normaliz
     return undefined;
   }
 }
-

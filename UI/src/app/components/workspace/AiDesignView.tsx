@@ -28,6 +28,7 @@ import {
   Send,
   Share2,
   Settings2,
+  Sparkles,
   Table2,
   TextCursorInput,
   Trash2,
@@ -62,7 +63,11 @@ import {
   updateWorkspaceLlmSettings,
   type AiDesignAgentStreamEvent,
   type WorkspaceDesignFile,
-  type WorkspaceDesignPage
+  type WorkspaceDesignImageColorControls,
+  type WorkspaceDesignPage,
+  type WorkspaceDesignPageTemplate,
+  type WorkspaceDesignPaint,
+  type WorkspaceDesignStyleProfile
 } from "../../utils/workspace-api";
 import { useStopWhellHook } from "../../utils/event";
 
@@ -84,7 +89,9 @@ interface DesignNode {
   width: number;
   height: number;
   fill: string;
+  fills?: WorkspaceDesignPaint[];
   stroke: string;
+  borders?: WorkspaceDesignPaint[];
   strokeWidth?: number;
   strokePosition?: "center" | "inside" | "outside";
   strokeDashPattern?: number[];
@@ -110,10 +117,13 @@ interface DesignNode {
   visible: boolean;
   locked: boolean;
   imageUrl?: string;
+  imageFilter?: string;
+  imageColorControls?: WorkspaceDesignImageColorControls;
   fillImageUrl?: string;
   fillImageMode?: "stretch" | "fill" | "fit" | "tile";
   fillImageScale?: number;
   svgPath?: string;
+  svgPathAssetRef?: string;
   svgFillRule?: "nonzero" | "evenodd";
   svgPaths?: Array<{
     d: string;
@@ -127,7 +137,9 @@ interface DesignNode {
     opacity?: number;
     transform?: string;
   }>;
+  svgPathsAssetRef?: string;
   svgTree?: DesignSvgNode;
+  svgTreeAssetRef?: string;
   clipBounds?: {
     x: number;
     y: number;
@@ -142,6 +154,7 @@ interface DesignNode {
     svgPath: string;
     fillRule?: "nonzero" | "evenodd";
   };
+  clipPathSvgAssetRef?: string;
   sourceRef?: string;
   sourceLayerClass?: string;
   opacity?: number;
@@ -161,6 +174,15 @@ interface DesignNode {
   innerShadow?: string;
   zIndex?: number;
   sourceMeta?: {
+    rotation?: number;
+    isFlippedHorizontal?: boolean;
+    isFlippedVertical?: boolean;
+    layerOpacity?: number;
+    inheritedOpacity?: number;
+    effectiveOpacity?: number;
+    localRotation?: number;
+    inheritedRotation?: number;
+    effectiveRotation?: number;
     hasClippingMask?: boolean;
     activeClippingMask?: {
       sourceLayerId?: string;
@@ -224,17 +246,27 @@ interface LocalComponentLibrary {
   updatedAt: string;
 }
 
+type PageTemplate = WorkspaceDesignPageTemplate;
+
 interface ImportedDesignAsset {
   id: string;
   name: string;
   sourceFileName: string;
-  type: "image";
+  type: "image" | "vector";
   mimeType: string;
   url: string;
   sourceRef?: string;
   width?: number;
   height?: number;
 }
+
+type DesignVectorResource = {
+  kind?: string;
+  svgPath?: string;
+  svgFillRule?: "nonzero" | "evenodd";
+  svgPaths?: DesignNode["svgPaths"];
+  svgTree?: DesignSvgNode;
+};
 
 type AiDesignFile = WorkspaceDesignFile;
 
@@ -341,6 +373,7 @@ export function AiDesignView() {
   useStopWhellHook();
   const project = useMemo(() => projectId ? getProject(projectId) : null, [projectId]);
   const [file, setFile] = useState<AiDesignFile>(() => createInitialDesignFile(project?.name ?? "未命名设计"));
+  const [vectorResourceMap, setVectorResourceMap] = useState<Record<string, DesignVectorResource>>({});
   const [designFileLoaded, setDesignFileLoaded] = useState(false);
   const [loadingPageId, setLoadingPageId] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<DesignLeftTab>("layers");
@@ -363,6 +396,7 @@ export function AiDesignView() {
   const [createComponentDialog, setCreateComponentDialog] = useState<{ nodeIds: string[]; defaultName: string } | null>(null);
   const [componentForm, setComponentForm] = useState({ name: "", libraryId: "", description: "" });
   const [editComponentInfo, setEditComponentInfo] = useState<ImportedDesignComponent | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<PageTemplate | null>(null);
   const editingComponentId = searchParams.get("component-id") ?? "";
   const [importingDesignFile, setImportingDesignFile] = useState(false);
   const [aiMessages, setAiMessages] = useState<AiDesignChatMessage[]>([
@@ -460,6 +494,8 @@ export function AiDesignView() {
     current: { x: number; y: number };
   } | null>(null);
   const [dragPreviewNodeIds, setDragPreviewNodeIds] = useState<string[]>([]);
+  const aiMessagesViewportRef = useRef<HTMLDivElement | null>(null);
+  const aiInputRef = useRef<HTMLTextAreaElement | null>(null);
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const canvasSurfaceRef = useRef<HTMLDivElement | null>(null);
   const canvasOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -488,6 +524,57 @@ export function AiDesignView() {
     currentX: number;
     currentY: number;
   } | null>(null);
+
+  const scrollAiMessagesToBottom = (behavior: ScrollBehavior = "smooth") => {
+    window.requestAnimationFrame(() => {
+      const viewport = aiMessagesViewportRef.current;
+      if (!viewport) return;
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+    });
+  };
+
+  const scrollAiInputToBottom = () => {
+    window.requestAnimationFrame(() => {
+      const input = aiInputRef.current;
+      if (!input) return;
+      input.scrollTop = input.scrollHeight;
+    });
+  };
+
+  useEffect(() => {
+    if (leftTab !== "ai") return;
+    scrollAiMessagesToBottom(aiBusy || aiConversationRunning ? "auto" : "smooth");
+  }, [aiMessages, aiBusy, aiConversationRunning, leftTab]);
+
+  useEffect(() => {
+    const vectorAssets = (file.importedAssets ?? []).filter((asset) => asset.type === "vector" && asset.sourceRef && asset.url);
+    if (vectorAssets.length === 0) {
+      setVectorResourceMap({});
+      return;
+    }
+    let cancelled = false;
+    const loadResources = async () => {
+      const entries = await Promise.all(vectorAssets.map(async (asset) => {
+        if (!asset.sourceRef) return null;
+        try {
+          const response = await fetch(asset.url);
+          if (!response.ok) return null;
+          const payload = await response.json() as DesignVectorResource;
+          return [asset.sourceRef, payload] as const;
+        } catch (error) {
+          console.warn("[AIPM][Design] failed to load vector asset", asset.sourceRef, error);
+          return null;
+        }
+      }));
+      if (cancelled) return;
+      setVectorResourceMap(Object.fromEntries(entries.filter((entry): entry is readonly [string, DesignVectorResource] => Boolean(entry))));
+    };
+    void loadResources();
+    return () => {
+      cancelled = true;
+    };
+  }, [file.importedAssets]);
+
   const panPreviewFrameRef = useRef<number | null>(null);
   const selectionDragRef = useRef<{
     append: boolean;
@@ -497,12 +584,13 @@ export function AiDesignView() {
   const resizeDragRef = useRef<ResizeSession | null>(null);
 
   const selectedPage = file.pages.find((page) => page.id === selectedPageId) ?? file.pages[0]!;
-  const selectedNode = selectedPage.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const selectedNodes = selectedPage.nodes.filter((node) => selectedNodeIds.includes(node.id));
+  const resolvedSelectedPageNodes = useMemo(() => hydrateDesignVectorResources(selectedPage.nodes, vectorResourceMap), [selectedPage.nodes, vectorResourceMap]);
+  const selectedNode = resolvedSelectedPageNodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedNodes = resolvedSelectedPageNodes.filter((node) => selectedNodeIds.includes(node.id));
   const selectionBounds = getNodesBoundsForSelection(selectedNodes);
-  const hoveredNode = hoveredNodeId ? selectedPage.nodes.find((node) => node.id === hoveredNodeId) ?? null : null;
+  const hoveredNode = hoveredNodeId ? resolvedSelectedPageNodes.find((node) => node.id === hoveredNodeId) ?? null : null;
   const hoverBounds = hoveredNode && !selectedNodeIds.includes(hoveredNode.id) ? nodeToBounds(hoveredNode) : null;
-  const visibleNodes = selectedPage.nodes.filter((node) => node.visible !== false);
+  const visibleNodes = resolvedSelectedPageNodes.filter((node) => node.visible !== false);
   const sceneContentBounds = useMemo(() => expandBounds(getNodesBounds(visibleNodes), 360), [visibleNodes]);
   const visibleSceneBounds = useMemo(() => ({
     x: -pan.x / zoom,
@@ -523,15 +611,17 @@ export function AiDesignView() {
     const movingIds = new Set(dragPreviewNodeIds);
     return visibleNodes.filter((node) => !movingIds.has(node.id) && (selectedNodeIds.includes(node.id) || rectsIntersect(sceneViewport, nodeToBounds(node))));
   }, [dragPreviewNodeIds, selectedNodeIds, visibleNodes, visibleSceneBounds, zoom]);
-  const hitTestNodes = renderedNodes;
-  const canvasRenderedNodes = renderedNodes;
+  const effectiveRenderedNodes = useMemo(() => applyEffectiveCanvasOpacity(renderedNodes, resolvedSelectedPageNodes), [renderedNodes, resolvedSelectedPageNodes]);
+  const hitTestNodes = useMemo(() => effectiveRenderedNodes.filter((node) => isDesignNodeHitTestable(node)), [effectiveRenderedNodes]);
+  const canvasRenderedNodes = effectiveRenderedNodes;
   const dragPreviewNodes = useMemo(() => {
     if (dragPreviewNodeIds.length === 0) return [];
     const movingIds = new Set(dragPreviewNodeIds);
-    return selectedPage.nodes.filter((node) => movingIds.has(node.id));
-  }, [dragPreviewNodeIds, selectedPage.nodes]);
+    return resolvedSelectedPageNodes.filter((node) => movingIds.has(node.id));
+  }, [dragPreviewNodeIds, resolvedSelectedPageNodes]);
   const layerTree = useMemo(() => buildDesignLayerTree(selectedPage.nodes, layerQuery), [layerQuery, selectedPage.nodes]);
   const localComponents = useMemo(() => (file.importedComponents ?? []).filter((component) => component.sourceFileName === LOCAL_COMPONENT_SOURCE_NAME), [file.importedComponents]);
+  const pageTemplates = useMemo(() => file.pageTemplates ?? [], [file.pageTemplates]);
   const externalImportedComponents = useMemo(() => (file.importedComponents ?? []).filter((component) => component.sourceFileName !== LOCAL_COMPONENT_SOURCE_NAME), [file.importedComponents]);
   const componentLibraries = useMemo(() => file.componentLibraries ?? [], [file.componentLibraries]);
   const selectedComponentLibrary = componentLibraries.find((library) => library.id === selectedComponentLibraryId) ?? componentLibraries[0] ?? null;
@@ -1147,6 +1237,102 @@ export function AiDesignView() {
     setContextMenu(null);
   };
 
+	  const getTemplateSourceFromSelection = (anchorNodeId?: string) => {
+	    const sourceIds = getContextActionNodeIds(anchorNodeId, selectedNodeIds);
+    const selectedSet = new Set(sourceIds);
+    const directFrames = sourceIds
+      .map((id) => selectedPage.nodes.find((node) => node.id === id))
+      .filter((node): node is DesignNode => Boolean(node && node.type === "frame"));
+    if (directFrames.length > 0) {
+      const frame = directFrames.sort((first, second) => (second.width * second.height) - (first.width * first.height))[0];
+      return {
+        name: frame.name || selectedPage.name,
+        sourceFrameId: frame.id,
+        width: frame.width,
+        height: frame.height,
+        nodes: createPageTemplateNodes(selectedPage.nodes, frame)
+      };
+    }
+    const selectedSourceNodes = selectedPage.nodes.filter((node) => selectedSet.has(node.id));
+    const selectedBounds = getNodesBoundsForSelection(selectedSourceNodes);
+    if (!selectedBounds) {
+      return undefined;
+    }
+    const containingFrame = selectedPage.nodes
+      .filter((node) => node.type === "frame")
+      .filter((frame) => rectContainsRect(selectedBounds, nodeToRect(frame), 8) || rectContainsRect(nodeToRect(frame), selectedBounds, 8))
+      .sort((first, second) => (second.width * second.height) - (first.width * first.height))[0];
+    if (containingFrame) {
+      return {
+        name: containingFrame.name || selectedPage.name,
+        sourceFrameId: containingFrame.id,
+        width: containingFrame.width,
+        height: containingFrame.height,
+        nodes: createPageTemplateNodes(selectedPage.nodes, containingFrame)
+      };
+    }
+    const topLevelIds = getTopLevelNodeIds(sourceIds, selectedPage.nodes);
+    const nodes = createPageTemplateNodesFromSelection(selectedPage.nodes, topLevelIds, selectedBounds);
+    return {
+      name: selectedSourceNodes.length === 1 ? selectedSourceNodes[0].name : "选区页面模板",
+      sourceFrameId: "",
+      width: selectedBounds.width,
+      height: selectedBounds.height,
+      nodes
+	    };
+	  };
+
+	  const canCreateTemplateFromContext = (anchorNodeId?: string) => {
+	    return getContextActionNodeIds(anchorNodeId, selectedNodeIds).length > 0;
+	  };
+
+  const createTemplateFromSelection = (anchorNodeId?: string) => {
+    const templateSource = getTemplateSourceFromSelection(anchorNodeId);
+    if (!templateSource || templateSource.nodes.length === 0) {
+      toast.error("请先框选要创建为页面模板的区域");
+      return;
+    }
+    const templateNodes = templateSource.nodes;
+    const now = new Date().toISOString();
+    const template: PageTemplate = {
+      id: createId("page-template"),
+      name: `${templateSource.name || selectedPage.name} 模板`,
+      description: "从框选区域创建的页面模板，包含 StyleProfile，可供后续 AI/Renderer 参考。",
+      sourcePageId: selectedPage.id,
+      sourceFrameId: templateSource.sourceFrameId,
+      sourceFileName: file.name,
+      nodeCount: templateNodes.length,
+      width: Math.max(1, Math.round(templateSource.width)),
+      height: Math.max(1, Math.round(templateSource.height)),
+      nodes: templateNodes,
+      styleProfile: extractStyleProfileFromNodes(templateNodes),
+      createdAt: now,
+      updatedAt: now
+    };
+    updateFile((current) => ({
+      ...current,
+      pageTemplates: [template, ...(current.pageTemplates ?? []).filter((item) => item.id !== template.id)]
+    }));
+    setPreviewTemplate(template);
+    setLeftTab("components");
+    setComponentCollectionView("all");
+    setContextMenu(null);
+    toast.success(`已创建页面模板：${template.name}`);
+  };
+
+  const deletePageTemplate = (template: PageTemplate) => {
+    const confirmed = window.confirm(`确定删除页面模板「${template.name}」吗？`);
+    if (!confirmed) return;
+    updateFile((current) => ({
+      ...current,
+      pageTemplates: (current.pageTemplates ?? []).filter((item) => item.id !== template.id)
+    }));
+    if (previewTemplate?.id === template.id) {
+      setPreviewTemplate(null);
+    }
+    toast.success(`已删除页面模板：${template.name}`);
+  };
+
   const createComponentLibrary = async (input: { name: string; description?: string }) => {
     const name = input.name.trim();
     if (!name) {
@@ -1537,14 +1723,15 @@ export function AiDesignView() {
   };
 
   const resolveDrillNodeAtPoint = (point: { x: number; y: number }) => {
-    return findTopDesignNodeAtPoint(hitTestNodes, point);
+    return findNextDrillNodeAtPoint(hitTestNodes, selectedPage.nodes, point, selectedNodeIds[0]);
   };
 
   const getDragNodesForSelection = (selectionIds: string[]) => {
     const dragIds = expandSelectionWithDescendants(selectionIds, selectedPage.nodes);
+    const selectionSet = new Set(selectionIds);
     return dragIds
       .map((id) => selectedPage.nodes.find((item) => item.id === id))
-      .filter((item): item is DesignNode => Boolean(item) && (!item.locked || hasSelectedAncestor(item, selectionIds, selectedPage.nodes)));
+      .filter((item): item is DesignNode => Boolean(item) && (!item.locked || selectionSet.has(item.id) || hasSelectedAncestor(item, selectionIds, selectedPage.nodes)));
   };
 
   const clearPanPreviewStyles = () => {
@@ -1649,7 +1836,7 @@ export function AiDesignView() {
     }
     const scenePoint = getScenePoint(event.clientX, event.clientY);
     const hitNode = resolveDrillNodeAtPoint(scenePoint);
-    if (!hitNode || hitNode.locked) {
+    if (!hitNode) {
       return;
     }
     selectNodes([hitNode.id], hitNode.id);
@@ -1691,7 +1878,7 @@ export function AiDesignView() {
 
     const scenePoint = getScenePoint(event.clientX, event.clientY);
     const hitNode = resolveInteractiveNodeAtPoint(scenePoint);
-    if (hitNode && !hitNode.locked) {
+    if (hitNode) {
       const append = event.shiftKey || event.metaKey || event.ctrlKey;
       const nextSelection = append
         ? selectedNodeIds.includes(hitNode.id)
@@ -1701,7 +1888,10 @@ export function AiDesignView() {
             ? selectedNodeIds
             : [hitNode.id];
       selectNodes(nextSelection, hitNode.id);
-      startNodeDragSession(selectedNodeIds.includes(hitNode.id) && !append ? selectedNodeIds : nextSelection, scenePoint);
+      const dragSelection = selectedNodeIds.includes(hitNode.id) && !append ? selectedNodeIds : nextSelection;
+      if (!hitNode.locked || selectedNodeIds.includes(hitNode.id)) {
+        startNodeDragSession(dragSelection, scenePoint);
+      }
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
@@ -1839,7 +2029,7 @@ export function AiDesignView() {
     if (!interactiveNode) {
       return;
     }
-    if (interactiveNode.locked) {
+    if (interactiveNode.locked && !selectedNodeIds.includes(interactiveNode.id)) {
       selectNodes([interactiveNode.id]);
       return;
     }
@@ -1852,7 +2042,10 @@ export function AiDesignView() {
         ? selectedNodeIds
         : [interactiveNode.id];
     selectNodes(nextSelection, interactiveNode.id);
-    startNodeDragSession(selectedNodeIds.includes(interactiveNode.id) && !append ? selectedNodeIds : nextSelection, scenePoint);
+    const dragSelection = selectedNodeIds.includes(interactiveNode.id) && !append ? selectedNodeIds : nextSelection;
+    if (!interactiveNode.locked || selectedNodeIds.includes(interactiveNode.id)) {
+      startNodeDragSession(dragSelection, scenePoint);
+    }
     canvasViewportRef.current?.setPointerCapture(event.pointerId);
   };
 
@@ -1922,6 +2115,7 @@ export function AiDesignView() {
 
   const activeSelectionRect = selectionRect ? normalizeRect(selectionRect.start, selectionRect.current) : null;
   const showSelectionBounds = selectionBounds && selectedNodeIds.length > 0;
+	  const canCreateTemplateForContextMenu = contextMenu ? canCreateTemplateFromContext(contextMenu.nodeId) : false;
 
   return (
     <>
@@ -2018,6 +2212,15 @@ export function AiDesignView() {
           >
             创建组件
           </button>
+	          {canCreateTemplateForContextMenu ? (
+            <button
+              type="button"
+              className="flex w-full items-center px-4 py-2.5 text-left hover:bg-[#f6f6f7]"
+              onClick={() => createTemplateFromSelection(contextMenu.nodeId)}
+            >
+              创建页面模板
+            </button>
+          ) : null}
           <div className="my-2 h-px bg-[#eeeeef]" />
           <button
             type="button"
@@ -2313,6 +2516,48 @@ export function AiDesignView() {
                 <>
               <button
                 type="button"
+                onClick={() => setComponentCollectionView("all")}
+                className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#ececef] bg-white p-3 text-left"
+              >
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#e9f2ff] text-[#246bfe]">
+                  <Sparkles className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold">页面模板</div>
+                  <div className="mt-1 truncate text-xs text-[#777]">{pageTemplates.length} 个模板，框选区域后右击创建</div>
+                </div>
+              </button>
+              {pageTemplates.length ? (
+                <div className="mb-5 space-y-2">
+                  {pageTemplates.slice(0, 6).map((template) => (
+                    <div key={template.id} className="rounded-2xl border border-[#ececef] bg-white p-3">
+                      <div className="flex items-center gap-2">
+                        <Frame className="size-4 text-[#246bfe]" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{template.name}</span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" className="flex size-7 items-center justify-center rounded-full hover:bg-[#ececf1]">
+                              <MoreHorizontal className="size-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setPreviewTemplate(template)}>预览模板</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => deletePageTemplate(template)}>删除模板</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className="mt-2 h-24">
+                        <DesignMiniPreview nodes={template.nodes} className="h-full" />
+                      </div>
+                      <div className="mt-2 truncate text-xs text-[#777]">
+                        {template.width}x{template.height} · {template.nodeCount} layers · {template.styleProfile.platform}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <button
+                type="button"
                 onClick={() => setComponentCollectionView("libraries")}
                 className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-[#ececef] bg-white p-3 text-left transition hover:border-[#246bfe] hover:bg-[#f7faff]"
               >
@@ -2378,9 +2623,9 @@ export function AiDesignView() {
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <div className="mb-2 text-sm font-semibold">图片资源</div>
               <div className="mb-4 text-xs leading-5 text-[#777]">Sketch 里解析出的 bitmap / assets 会显示在这里。点击插入，或拖到画布指定位置。</div>
-              {file.importedAssets?.length ? (
+              {file.importedAssets?.some((asset) => asset.type === "image") ? (
                 <div className="grid grid-cols-2 gap-3">
-                  {file.importedAssets.map((asset) => (
+                  {file.importedAssets.filter((asset) => asset.type === "image").map((asset) => (
                     <button
                       key={asset.id}
                       type="button"
@@ -2546,7 +2791,7 @@ export function AiDesignView() {
                 </div>
               </div> */}
 
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div ref={aiMessagesViewportRef} className="min-h-0 flex-1 overflow-y-auto p-3">
                 <div className="space-y-3">
                   {aiMessages.map((message) => (
                     <div key={message.id} className={`rounded-2xl px-3 py-2 text-sm leading-6 ${message.role === "user" ? "ml-6 bg-[#246bfe] text-white" : "mr-6 border border-[#ececef] bg-white text-[#333]"}`}>
@@ -2578,8 +2823,12 @@ export function AiDesignView() {
 
               <div className="border-t border-[#eeeeef] bg-white p-3">
                 <Textarea
+                  ref={aiInputRef}
                   value={aiInput}
-                  onChange={(event) => setAiInput(event.target.value)}
+                  onChange={(event) => {
+                    setAiInput(event.target.value);
+                    scrollAiInputToBottom();
+                  }}
                   placeholder="告诉 AI：生成一个后台表格查询页 / 删除当前页 / 获取 schema..."
                   className="h-20 resize-none rounded-2xl border-[#e4e4e7] bg-[#fafafa] text-sm leading-5"
                 />
@@ -2619,7 +2868,7 @@ export function AiDesignView() {
           >
             <div ref={canvasSurfaceRef} className="pointer-events-none absolute inset-0 will-change-transform">
               <CanvasDesignRenderer nodes={canvasRenderedNodes} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
-              <CanvasDragPreviewRenderer nodes={dragPreviewNodes} previewRef={dragPreviewRef} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
+              <CanvasDragPreviewRenderer nodes={dragPreviewNodes} allNodes={resolvedSelectedPageNodes} previewRef={dragPreviewRef} width={viewportSize.width} height={viewportSize.height} pan={pan} zoom={zoom} />
             </div>
             {loadingPageId === selectedPageId ? (
               <div className="pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 rounded-full border border-[#e4e4e7] bg-white/90 px-4 py-2 text-xs font-semibold text-[#555] shadow-sm">
@@ -2726,12 +2975,15 @@ export function AiDesignView() {
                       <NumberField label="Y" value={selectedNode.y} onChange={(value) => updateNode(selectedNode.id, { y: value })} />
                       <NumberField label="W" value={selectedNode.width} onChange={(value) => updateNode(selectedNode.id, { width: value })} />
                       <NumberField label="H" value={selectedNode.height} onChange={(value) => updateNode(selectedNode.id, { height: value })} />
+                      <NumberField label="R" value={selectedNode.rotation ?? 0} onChange={(value) => updateNode(selectedNode.id, { rotation: normalizeRotationInput(value) })} />
                       <NumberField label="Z" value={selectedNode.zIndex ?? 0} onChange={(value) => updateNode(selectedNode.id, { zIndex: value })} />
                     </div>
                   </InspectorSection>
                   <InspectorSection title="外观">
-                    <ColorField label="填充" value={selectedNode.fill} onChange={(value) => updateNode(selectedNode.id, { fill: value })} />
-                    <ColorField label="描边" value={selectedNode.stroke} onChange={(value) => updateNode(selectedNode.id, { stroke: value })} />
+                    <ColorField label="填充" value={selectedNode.fill} onChange={(value) => updateNode(selectedNode.id, { fill: value, fills: undefined })} />
+                    <PaintLayersView paints={selectedNode.fills} />
+                    <ColorField label="描边" value={selectedNode.stroke} onChange={(value) => updateNode(selectedNode.id, { stroke: value, borders: undefined })} />
+                    <PaintLayersView paints={selectedNode.borders} />
                     <NumberField label="圆角" value={selectedNode.radius} onChange={(value) => updateNode(selectedNode.id, { radius: value })} />
                   </InspectorSection>
                   <InspectorSection title="文字">
@@ -2893,6 +3145,31 @@ export function AiDesignView() {
         </div>
       </DialogContent>
     </Dialog>
+    <Dialog open={Boolean(previewTemplate)} onOpenChange={(open) => !open && setPreviewTemplate(null)}>
+      <DialogContent className="max-h-[92vh] max-w-[880px] overflow-hidden p-0">
+        <DialogHeader className="border-b border-[#eeeeef] px-5 py-4">
+          <DialogTitle>{previewTemplate?.name ?? "页面模板预览"}</DialogTitle>
+        </DialogHeader>
+        {previewTemplate ? (
+          <div className="grid max-h-[82vh] grid-cols-[1fr_260px] overflow-hidden">
+            <div className="overflow-auto bg-[#f5f5f6] p-4">
+              <DesignMiniPreview nodes={previewTemplate.nodes} className="h-[68vh]" />
+            </div>
+            <div className="overflow-auto border-l border-[#eeeeef] p-4 text-xs leading-6 text-[#555]">
+              <div className="mb-3 text-sm font-semibold text-[#171717]">StyleProfile</div>
+              <div>平台：{previewTemplate.styleProfile.platform}</div>
+              <div>主色：{previewTemplate.styleProfile.colors.primary ?? "-"}</div>
+              <div>背景：{previewTemplate.styleProfile.colors.background ?? "-"}</div>
+              <div>卡片圆角：{previewTemplate.styleProfile.radius.card ?? "-"}</div>
+              <div>按钮圆角：{previewTemplate.styleProfile.radius.button ?? "-"}</div>
+              <div>正文字号：{previewTemplate.styleProfile.typography.body ?? "-"}</div>
+              <div>区块间距：{previewTemplate.styleProfile.spacing.sectionGap ?? "-"}</div>
+              <div className="mt-4 text-[#777]">{previewTemplate.nodeCount} 个图层 · {previewTemplate.width}x{previewTemplate.height}</div>
+            </div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
     <Dialog open={Boolean(libraryDialogMode)} onOpenChange={(open) => !open && closeLibraryDialog()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -3025,6 +3302,40 @@ function CanvasOutlineBoundsView({ bounds, tone }: { bounds: RectBounds; tone: "
 
 const canvasImageCache = new Map<string, { image: HTMLImageElement; loaded: boolean; failed: boolean }>();
 
+function applyEffectiveCanvasOpacity(nodes: DesignNode[], allNodes: DesignNode[]) {
+  if (nodes.length === 0) {
+    return nodes;
+  }
+  const nodeById = new Map(allNodes.map((node) => [node.id, node]));
+  const opacityById = new Map<string, number>();
+  const resolveOpacity = (node: DesignNode, visiting = new Set<string>()): number => {
+    const cached = opacityById.get(node.id);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (node.sourceMeta?.effectiveOpacity !== undefined) {
+      const opacity = Math.max(0, Math.min(1, node.opacity ?? node.sourceMeta.effectiveOpacity));
+      opacityById.set(node.id, opacity);
+      return opacity;
+    }
+    if (visiting.has(node.id)) {
+      return node.opacity ?? 1;
+    }
+    visiting.add(node.id);
+    const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
+    const inherited = parent ? resolveOpacity(parent, visiting) : 1;
+    visiting.delete(node.id);
+    const opacity = Math.max(0, Math.min(1, inherited * (node.opacity ?? 1)));
+    opacityById.set(node.id, opacity);
+    return opacity;
+  };
+
+  return nodes.map((node) => {
+    const opacity = resolveOpacity(node);
+    return opacity === (node.opacity ?? 1) ? node : { ...node, opacity };
+  });
+}
+
 function CanvasDesignRenderer({
   nodes,
   width,
@@ -3065,7 +3376,6 @@ function CanvasDesignRenderer({
     context.scale(zoom, zoom);
     const sortedNodes = [...nodes]
       .sort((first, second) => ((first.zIndex ?? 0) - (second.zIndex ?? 0)));
-    console.log(JSON.stringify(sortedNodes), 'sortedNodes')
     sortedNodes.forEach((node) => drawDesignNodeOnCanvas(context, node, () => setImageRevision((current) => current + 1)));
     context.restore();
   }, [height, nodes, pan.x, pan.y, width, zoom]);
@@ -3075,6 +3385,7 @@ function CanvasDesignRenderer({
 
 function CanvasDragPreviewRenderer({
   nodes,
+  allNodes,
   previewRef,
   width,
   height,
@@ -3082,6 +3393,7 @@ function CanvasDragPreviewRenderer({
   zoom
 }: {
   nodes: DesignNode[];
+  allNodes: DesignNode[];
   previewRef: MutableRefObject<{ nodeIds: string[]; dx: number; dy: number } | null>;
   width: number;
   height: number;
@@ -3117,7 +3429,7 @@ function CanvasDragPreviewRenderer({
         context.translate(pan.x, pan.y);
         context.scale(zoom, zoom);
         context.translate(preview.dx, preview.dy);
-        [...nodes]
+        applyEffectiveCanvasOpacity(nodes, allNodes)
           .sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0))
           .forEach((node) => drawDesignNodeOnCanvas(context, node, () => setImageRevision((current) => current + 1)));
         context.restore();
@@ -3131,7 +3443,7 @@ function CanvasDragPreviewRenderer({
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, width, height);
     };
-  }, [height, nodes, pan.x, pan.y, previewRef, width, zoom]);
+  }, [allNodes, height, nodes, pan.x, pan.y, previewRef, width, zoom]);
 
   return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" />;
 }
@@ -3285,6 +3597,7 @@ function DesignNodeView({
     textDecorationLine: getNodeTextDecoration(node),
     textTransform: node.textTransform ?? "none",
     opacity: node.opacity ?? 1,
+    filter: getDesignNodeCssFilter(node),
     transform: getDesignNodeCssTransform(node),
     transformOrigin: "center center",
     boxShadow: node.shadow || undefined,
@@ -3363,7 +3676,7 @@ function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; cla
               top: node.y,
               width: node.width,
               height: node.height,
-              background: hasVectorOnlyPaint(node) ? "transparent" : node.type === "image" && node.imageUrl ? `url(${node.imageUrl}) center / 100% 100% no-repeat` : node.fill || "transparent",
+              background: hasVectorOnlyPaint(node) ? "transparent" : node.type === "image" && node.imageUrl ? `url(${node.imageUrl}) center / 100% 100% no-repeat` : getCssPaintBackground(node.fills, node.fill),
               borderColor: node.stroke,
               borderWidth: hasVectorOnlyPaint(node) || node.stroke === "transparent" ? 0 : Math.max(0, node.strokeWidth ?? 1),
               borderRadius: Math.max(2, node.radius),
@@ -3378,6 +3691,7 @@ function DesignMiniPreview({ nodes, className = "" }: { nodes: DesignNode[]; cla
               textDecorationLine: getNodeTextDecoration(node),
               textTransform: node.textTransform ?? "none",
               opacity: node.opacity ?? 1,
+              filter: getDesignNodeCssFilter(node),
               transform: getDesignNodeCssTransform(node),
               transformOrigin: "center center",
               boxShadow: node.shadow || undefined,
@@ -3448,6 +3762,7 @@ function DomSvgDesignNode({ treeNode, parentNode }: { treeNode: DesignRenderTree
     borderRadius: visualRadius,
     boxShadow: node.shadow || undefined,
     opacity: node.opacity ?? 1,
+    filter: getDesignNodeCssFilter(node),
     transform: getDesignNodeCssTransform(node),
     transformOrigin: "center center",
     zIndex: node.zIndex,
@@ -3545,11 +3860,15 @@ function DomIconFontFallback({ node }: { node: DesignNode }) {
 }
 
 function getDomSvgNodeBackgroundStyle(node: DesignNode, parentNode?: DesignNode): CSSProperties {
+  if (node.type === "text") {
+    return { background: "transparent" };
+  }
+  const paintBackground = getCssPaintBackground(node.fills, node.fill);
   const baseFill = node.svgTree || node.svgPath || node.svgPaths?.length
     ? "transparent"
-    : isTransparentPaint(node.fill)
+    : isTransparentPaint(paintBackground)
       ? getImportedTransparentFallbackFill(node, parentNode) ?? "transparent"
-      : node.fill;
+      : paintBackground;
   if (!node.fillImageUrl) {
     return { background: baseFill || "transparent" };
   }
@@ -3560,6 +3879,10 @@ function getDomSvgNodeBackgroundStyle(node: DesignNode, parentNode?: DesignNode)
     backgroundPosition: "center",
     backgroundSize: getFillImageBackgroundSize(node)
   };
+}
+
+function getCssPaintBackground(paints: WorkspaceDesignPaint[] | undefined, fallback: string | undefined) {
+  return getRenderablePaintCssLayers(paints, fallback).join(", ") || fallback || "transparent";
 }
 
 function getImportedTransparentFallbackFill(node: DesignNode, parentNode?: DesignNode) {
@@ -3581,6 +3904,30 @@ function isLikelySketchSidebarBackground(node: DesignNode, parentNode?: DesignNo
     && (!parentNode || Math.abs(node.x - parentNode.x) <= 1)
     && node.zIndex !== undefined
     && (node.depth ?? 0) <= 3;
+}
+
+function isDesignNodeHitTestable(node: DesignNode) {
+  if (node.visible === false || node.width <= 0 || node.height <= 0 || (node.opacity ?? 1) <= 0) {
+    return false;
+  }
+  if (node.type === "image") {
+    return Boolean(node.imageUrl || node.fillImageUrl);
+  }
+  if (node.type === "text") {
+    return Boolean((node.text ?? "").trim() || node.textRuns?.some((run) => run.text.trim()));
+  }
+  if (node.svgTree || node.svgPath || node.svgPaths?.length) {
+    return true;
+  }
+  if (node.fillImageUrl) {
+    return true;
+  }
+  if (node.shadow || node.innerShadow) {
+    return true;
+  }
+  const fill = getCssPaintBackground(node.fills, node.fill);
+  const stroke = getFirstRenderablePaintCssLayer(node.borders, node.stroke);
+  return !isTransparentPaint(fill) || (!isTransparentPaint(stroke) && (node.strokeWidth ?? 0) > 0);
 }
 
 function isTransparentPaint(value: string | undefined) {
@@ -3778,7 +4125,6 @@ function buildDesignSvgDocument(nodes: DesignNode[], name: string) {
     .sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0));
   const bounds = getExactNodesBounds(visibleNodes);
   const defs = new SvgExportDefinitions();
-  console.log(visibleNodes, 'visibleNodes')
   const content = visibleNodes
     .map((node) => serializeDesignNodeForExport(node, bounds, defs))
     .filter(Boolean)
@@ -4033,8 +4379,8 @@ class SvgExportDefinitions {
 function buildSvgLinearGradientDefinition(id: string, value: string) {
   const args = extractCssFunctionArgs(value);
   const firstArg = args[0] ?? "";
-  const angle = firstArg.endsWith("deg") ? Number(firstArg.replace("deg", "")) : 180;
-  const stops = (firstArg.endsWith("deg") ? args.slice(1) : args)
+  const angle = parseCssLinearGradientAngle(firstArg);
+  const stops = (isCssLinearGradientDirectionArg(firstArg) ? args.slice(1) : args)
     .map(parseCssColorStop)
     .filter((stop): stop is { color: string; position: number } => Boolean(stop));
   const radians = (angle - 90) * Math.PI / 180;
@@ -4047,10 +4393,14 @@ function buildSvgLinearGradientDefinition(id: string, value: string) {
 }
 
 function buildSvgRadialGradientDefinition(id: string, value: string) {
-  const stops = extractCssFunctionArgs(value)
+  const args = extractCssFunctionArgs(value);
+  const firstArg = args[0] ?? "";
+  const hasShapeArg = isCssRadialGradientShapeArg(firstArg);
+  const center = parseCssRadialGradientCenter(firstArg);
+  const stops = (hasShapeArg ? args.slice(1) : args)
     .map(parseCssColorStop)
     .filter((stop): stop is { color: string; position: number } => Boolean(stop));
-  return `<radialGradient${serializeSvgAttributes({ id, cx: "50%", cy: "50%", r: "70%" })}>${stops.map((stop) => {
+  return `<radialGradient${serializeSvgAttributes({ id, cx: `${formatSvgNumber(center.x * 100)}%`, cy: `${formatSvgNumber(center.y * 100)}%`, r: "70%" })}>${stops.map((stop) => {
     const paint = normalizeSvgGradientStopPaint(stop.color);
     return `<stop${serializeSvgAttributes({ offset: `${Math.round(stop.position * 100)}%`, "stop-color": paint.color, "stop-opacity": paint.opacity })}/>`;
   }).join("")}</radialGradient>`;
@@ -4224,6 +4574,13 @@ function getNodeTextDecoration(node: DesignNode) {
   ].filter(Boolean).join(" ") || undefined;
 }
 
+function getDesignNodeCssFilter(node: DesignNode) {
+  return [
+    node.blurRadius ? `blur(${node.blurRadius}px)` : "",
+    node.imageFilter ?? ""
+  ].filter(Boolean).join(" ") || undefined;
+}
+
 function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
   if (node.visible === false || node.width <= 0 || node.height <= 0) {
     return;
@@ -4241,7 +4598,7 @@ function drawDesignNodeOnCanvas(context: CanvasRenderingContext2D, node: DesignN
   context.translate(-node.width / 2, -node.height / 2);
   context.globalAlpha = node.opacity ?? 1;
   context.globalCompositeOperation = (node.blendMode ?? "source-over") as GlobalCompositeOperation;
-  context.filter = node.blurRadius ? `blur(${node.blurRadius}px)` : "none";
+  context.filter = getDesignNodeCssFilter(node) ?? "none";
 
   if (shouldDrawNodeAsGradientBox(node)) {
     drawBoxNode(context, node, requestRedraw);
@@ -4440,7 +4797,8 @@ function drawSvgPathOnCanvas(
   }
   try {
     const path = new Path2D(pathNode.d);
-    const fill = getCanvasFillStyle(context, node, pathNode.fill ?? node.fill);
+    const fillLayers = getCanvasFillStyleLayers(context, node, pathNode.fill ?? node.fill);
+    const fill = fillLayers[0] ?? "";
     const stroke = getCanvasFillStyle(context, node, pathNode.stroke ?? node.stroke);
     if (pathNode.opacity !== undefined) {
       context.save();
@@ -4451,10 +4809,10 @@ function drawSvgPathOnCanvas(
       applyCanvasSvgTransform(context, pathNode.transform);
     }
     drawPathShadowLayers(context, path, node, fill || getCanvasPaint(pathNode.fill ?? node.fill));
-    if (fill) {
-      context.fillStyle = fill;
+    fillLayers.slice().reverse().forEach((fillLayer) => {
+      context.fillStyle = fillLayer;
       context.fill(path, pathNode.fillRule === "evenodd" ? "evenodd" : "nonzero");
-    }
+    });
     if (stroke && (pathNode.strokeWidth ?? node.strokeWidth ?? 0) > 0) {
       applyCanvasStrokeStyle(context, {
         ...node,
@@ -4546,7 +4904,8 @@ function drawImageNode(context: CanvasRenderingContext2D, node: DesignNode, requ
 }
 
 function drawBoxNode(context: CanvasRenderingContext2D, node: DesignNode, requestRedraw: () => void) {
-  const fill = getCanvasFillStyle(context, node, node.fill);
+  const fillLayers = getCanvasFillStyleLayers(context, node, node.fill);
+  const fill = fillLayers[0] ?? "";
   const stroke = getCanvasStrokeStyle(context, node);
   const strokeWidth = Math.max(0, node.strokeWidth ?? 0);
   const strokeOffset = node.strokePosition === "inside" ? strokeWidth / 2 : node.strokePosition === "outside" ? -strokeWidth / 2 : 0;
@@ -4561,10 +4920,10 @@ function drawBoxNode(context: CanvasRenderingContext2D, node: DesignNode, reques
   if (node.fillImageUrl) {
     drawFillImage(context, node, path, requestRedraw);
   }
-  if (fill) {
-    context.fillStyle = fill;
+  fillLayers.slice().reverse().forEach((fillLayer) => {
+    context.fillStyle = fillLayer;
     context.fill(path);
-  }
+  });
   if (stroke && (node.strokeWidth ?? 0) > 0) {
     applyCanvasStrokeStyle(context, node);
     context.strokeStyle = stroke;
@@ -4874,7 +5233,7 @@ function getCanvasTextStartY(node: DesignNode, totalHeight: number, lineHeight: 
     return Math.max(verticalPadding, node.height - totalHeight - verticalPadding);
   }
   if (align === "middle") {
-    return Math.max(verticalPadding, Math.min(node.height - lineHeight, node.height / 2 - totalHeight / 2));
+    return Math.max(0, Math.min(Math.max(0, node.height - totalHeight), node.height / 2 - totalHeight / 2));
   }
   return verticalPadding;
 }
@@ -5197,7 +5556,7 @@ function getCanvasPaint(value: string | undefined) {
 }
 
 function getCanvasStrokeStyle(context: CanvasRenderingContext2D, node: DesignNode): string | CanvasGradient {
-  const stroke = getFirstCanvasPaintLayer(node.stroke);
+  const stroke = getFirstRenderablePaintCssLayer(node.borders, node.stroke);
   if (isTransparentPaint(stroke) || stroke?.startsWith("url(")) {
     return "";
   }
@@ -5206,6 +5565,9 @@ function getCanvasStrokeStyle(context: CanvasRenderingContext2D, node: DesignNod
   }
   if (stroke.startsWith("radial-gradient")) {
     return createCanvasRadialGradient(context, node, stroke) || "";
+  }
+  if (stroke.startsWith("conic-gradient")) {
+    return createCanvasConicGradient(context, node, stroke) || "";
   }
   return stroke;
 }
@@ -5228,7 +5590,7 @@ function getMinimapNodeColor(node: DesignNode) {
 }
 
 function getCanvasFillStyle(context: CanvasRenderingContext2D, node: DesignNode, value: string | undefined): string | CanvasGradient {
-  const paint = getFirstCanvasPaintLayer(value);
+  const paint = getFirstRenderableCanvasPaintLayer(value);
   if (isTransparentPaint(paint) || paint?.startsWith("url(")) {
     return "";
   }
@@ -5238,7 +5600,97 @@ function getCanvasFillStyle(context: CanvasRenderingContext2D, node: DesignNode,
   if (paint.startsWith("radial-gradient")) {
     return createCanvasRadialGradient(context, node, paint) || "";
   }
+  if (paint.startsWith("conic-gradient")) {
+    return createCanvasConicGradient(context, node, paint) || "";
+  }
   return paint;
+}
+
+function getCanvasFillStyleLayers(context: CanvasRenderingContext2D, node: DesignNode, value: string | undefined): Array<string | CanvasGradient> {
+  if (node.type === "text") {
+    return [];
+  }
+  if (value === undefined || value === node.fill) {
+    const structuredLayers = getCanvasStructuredPaintLayers(context, node, node.fills);
+    if (structuredLayers.length > 0) {
+      return structuredLayers;
+    }
+  }
+  return splitCssLayers(value)
+    .map((paint) => paint.trim())
+    .filter((paint) => paint && !isTransparentPaint(paint) && !paint.startsWith("url("))
+    .map((paint) => getCanvasFillStyle(context, node, paint))
+    .filter((paint): paint is string | CanvasGradient => Boolean(paint));
+}
+
+function getCanvasStructuredPaintLayers(context: CanvasRenderingContext2D, node: DesignNode, paints: WorkspaceDesignPaint[] | undefined): Array<string | CanvasGradient> {
+  if (!paints?.length) {
+    return [];
+  }
+  return paints
+    .filter((paint) => paint.enabled !== false)
+    .map((paint) => getCanvasStyleFromStructuredPaint(context, node, paint))
+    .filter((paint): paint is string | CanvasGradient => Boolean(paint))
+    .reverse();
+}
+
+function getCanvasStyleFromStructuredPaint(context: CanvasRenderingContext2D, node: DesignNode, paint: WorkspaceDesignPaint) {
+  if (paint.kind === "gradient" && paint.gradient) {
+    return createCanvasGradientFromPaint(context, node, paint.gradient);
+  }
+  if (paint.kind === "solid") {
+    return paint.color || paint.css;
+  }
+  return "";
+}
+
+function createCanvasGradientFromPaint(context: CanvasRenderingContext2D, node: DesignNode, gradientPaint: NonNullable<WorkspaceDesignPaint["gradient"]>) {
+  if (gradientPaint.type === "radial" || gradientPaint.type === "diamond") {
+    const centerX = node.width * gradientPaint.from.x;
+    const centerY = node.height * gradientPaint.from.y;
+    const radius = Math.max(node.width, node.height) / 2;
+    const gradient = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+    addCanvasGradientStops(gradient, gradientPaint.stops);
+    return gradient;
+  }
+  if (gradientPaint.type === "angular" && typeof context.createConicGradient === "function") {
+    const angle = Math.atan2(gradientPaint.to.y - gradientPaint.from.y, gradientPaint.to.x - gradientPaint.from.x) + Math.PI / 2;
+    const gradient = context.createConicGradient(angle, node.width * gradientPaint.from.x, node.height * gradientPaint.from.y);
+    addCanvasGradientStops(gradient, gradientPaint.stops);
+    return gradient;
+  }
+  const startX = node.width * gradientPaint.from.x;
+  const startY = node.height * gradientPaint.from.y;
+  const endX = node.width * gradientPaint.to.x;
+  const endY = node.height * gradientPaint.to.y;
+  const gradient = context.createLinearGradient(startX, startY, endX, endY);
+  addCanvasGradientStops(gradient, gradientPaint.stops);
+  return gradient;
+}
+
+function addCanvasGradientStops(gradient: CanvasGradient, stops: Array<{ color: string; position: number }>) {
+  stops.forEach((stop) => {
+    try {
+      gradient.addColorStop(Math.max(0, Math.min(1, stop.position)), stop.color);
+    } catch {
+      // Ignore malformed imported color stops; falling back would be worse than skipping one stop.
+    }
+  });
+}
+
+function getRenderablePaintCssLayers(paints: WorkspaceDesignPaint[] | undefined, fallback: string | undefined) {
+  if (paints?.length) {
+    return paints
+      .filter((paint) => paint.enabled !== false)
+      .map((paint) => paint.css)
+      .filter(Boolean)
+      .reverse();
+  }
+  return splitCssLayers(fallback);
+}
+
+function getFirstRenderablePaintCssLayer(paints: WorkspaceDesignPaint[] | undefined, fallback: string | undefined) {
+  return getRenderablePaintCssLayers(paints, fallback).find((paint) => paint && !paint.startsWith("url("))?.trim() || getFirstCanvasPaintLayer(fallback);
 }
 
 function createCanvasLinearGradient(context: CanvasRenderingContext2D, node: DesignNode, value: string) {
@@ -5247,8 +5699,8 @@ function createCanvasLinearGradient(context: CanvasRenderingContext2D, node: Des
     return undefined;
   }
   const firstArg = args[0];
-  const angle = firstArg.endsWith("deg") ? Number(firstArg.replace("deg", "")) : 180;
-  const stops = (firstArg.endsWith("deg") ? args.slice(1) : args).map(parseCssColorStop).filter(Boolean) as Array<{ color: string; position: number }>;
+  const angle = parseCssLinearGradientAngle(firstArg);
+  const stops = (isCssLinearGradientDirectionArg(firstArg) ? args.slice(1) : args).map(parseCssColorStop).filter(Boolean) as Array<{ color: string; position: number }>;
   if (stops.length === 0) {
     return undefined;
   }
@@ -5271,13 +5723,19 @@ function createCanvasLinearGradient(context: CanvasRenderingContext2D, node: Des
 }
 
 function createCanvasRadialGradient(context: CanvasRenderingContext2D, node: DesignNode, value: string) {
-  const stops = extractCssFunctionArgs(value).map(parseCssColorStop).filter(Boolean) as Array<{ color: string; position: number }>;
+  const args = extractCssFunctionArgs(value);
+  const firstArg = args[0] ?? "";
+  const hasShapeArg = isCssRadialGradientShapeArg(firstArg);
+  const stops = (hasShapeArg ? args.slice(1) : args).map(parseCssColorStop).filter(Boolean) as Array<{ color: string; position: number }>;
   if (stops.length === 0) {
     return undefined;
   }
 
+  const center = parseCssRadialGradientCenter(firstArg);
   const radius = Math.max(node.width, node.height) / 2;
-  const gradient = context.createRadialGradient(node.width / 2, node.height / 2, 0, node.width / 2, node.height / 2, radius);
+  const centerX = node.width * center.x;
+  const centerY = node.height * center.y;
+  const gradient = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
   stops.forEach((stop) => {
     try {
       gradient.addColorStop(stop.position, stop.color);
@@ -5288,9 +5746,84 @@ function createCanvasRadialGradient(context: CanvasRenderingContext2D, node: Des
   return gradient;
 }
 
+function createCanvasConicGradient(context: CanvasRenderingContext2D, node: DesignNode, value: string) {
+  if (typeof context.createConicGradient !== "function") {
+    return undefined;
+  }
+  const args = extractCssFunctionArgs(value);
+  const firstArg = args[0] ?? "";
+  const hasPositionArg = isCssConicGradientPositionArg(firstArg);
+  const stops = (hasPositionArg ? args.slice(1) : args).map(parseCssColorStop).filter(Boolean) as Array<{ color: string; position: number }>;
+  if (stops.length === 0) {
+    return undefined;
+  }
+
+  const position = parseCssConicGradientPosition(firstArg);
+  const gradient = context.createConicGradient(position.angle * Math.PI / 180, node.width * position.x, node.height * position.y);
+  stops.forEach((stop) => {
+    try {
+      gradient.addColorStop(stop.position, stop.color);
+    } catch {
+      // Ignore malformed imported color stops; falling back would be worse than skipping one stop.
+    }
+  });
+  return gradient;
+}
+
+function isCssLinearGradientDirectionArg(value: string) {
+  return /(?:^|\s)(?:-?\d+(?:\.\d+)?deg|to\s+(?:top|bottom|left|right))/i.test(value.trim());
+}
+
+function parseCssLinearGradientAngle(value: string) {
+  const text = value.trim().toLowerCase();
+  const degree = /(-?\d+(?:\.\d+)?)deg/.exec(text);
+  if (degree) {
+    return Number(degree[1]);
+  }
+  if (text === "to top") return 0;
+  if (text === "to right") return 90;
+  if (text === "to bottom") return 180;
+  if (text === "to left") return 270;
+  if (text === "to top right" || text === "to right top") return 45;
+  if (text === "to bottom right" || text === "to right bottom") return 135;
+  if (text === "to bottom left" || text === "to left bottom") return 225;
+  if (text === "to top left" || text === "to left top") return 315;
+  return 180;
+}
+
+function isCssRadialGradientShapeArg(value: string) {
+  return /^(circle|ellipse|closest|farthest|at\s+)/i.test(value.trim());
+}
+
+function isCssConicGradientPositionArg(value: string) {
+  return /^(from\s+-?\d+(?:\.\d+)?deg)?(?:\s+at\s+-?\d+(?:\.\d+)?%\s+-?\d+(?:\.\d+)?%)?$/i.test(value.trim());
+}
+
+function parseCssConicGradientPosition(value: string) {
+  const text = value.trim();
+  const angle = /from\s+(-?\d+(?:\.\d+)?)deg/i.exec(text);
+  const center = /\bat\s+(-?\d+(?:\.\d+)?)%\s+(-?\d+(?:\.\d+)?)%/i.exec(text);
+  return {
+    angle: angle ? Number(angle[1]) : 0,
+    x: center ? Number(center[1]) / 100 : 0.5,
+    y: center ? Number(center[2]) / 100 : 0.5
+  };
+}
+
+function parseCssRadialGradientCenter(value: string) {
+  const match = /\bat\s+(-?\d+(?:\.\d+)?)%\s+(-?\d+(?:\.\d+)?)%/i.exec(value);
+  if (!match) {
+    return { x: 0.5, y: 0.5 };
+  }
+  return {
+    x: Number(match[1]) / 100,
+    y: Number(match[2]) / 100
+  };
+}
+
 function extractCssFunctionArgs(value: string) {
   const start = value.indexOf("(");
-  const end = value.lastIndexOf(")");
+  const end = findMatchingCssFunctionEnd(value, start);
   if (start < 0 || end <= start) {
     return [];
   }
@@ -5314,12 +5847,35 @@ function extractCssFunctionArgs(value: string) {
   return args;
 }
 
+function findMatchingCssFunctionEnd(value: string, start: number) {
+  if (start < 0) {
+    return -1;
+  }
+  let depth = 0;
+  for (let index = start; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
 function getFirstCanvasPaintLayer(value: string | undefined) {
   const paint = value?.trim();
   if (!paint) {
     return undefined;
   }
   return splitCssLayers(paint)[0]?.trim() || paint;
+}
+
+function getFirstRenderableCanvasPaintLayer(value: string | undefined) {
+  return splitCssLayers(value).find((paint) => paint && !paint.startsWith("url("))?.trim() || getFirstCanvasPaintLayer(value);
 }
 
 function splitCssLayers(value: string | undefined) {
@@ -5331,7 +5887,7 @@ function splitCssLayers(value: string | undefined) {
   let current = "";
   Array.from(value).forEach((char) => {
     if (char === "(") depth += 1;
-    if (char === ")") depth -= 1;
+    if (char === ")") depth = Math.max(0, depth - 1);
     if (char === "," && depth === 0) {
       layers.push(current.trim());
       current = "";
@@ -5410,8 +5966,8 @@ function getSvgPaintDescriptor(node: DesignNode, value: string | undefined, kind
 function renderSvgLinearGradient(id: string, value: string) {
   const args = extractCssFunctionArgs(value);
   const firstArg = args[0] ?? "";
-  const angle = firstArg.endsWith("deg") ? Number(firstArg.replace("deg", "")) : 180;
-  const stops = (firstArg.endsWith("deg") ? args.slice(1) : args)
+  const angle = parseCssLinearGradientAngle(firstArg);
+  const stops = (isCssLinearGradientDirectionArg(firstArg) ? args.slice(1) : args)
     .map(parseCssColorStop)
     .filter(Boolean) as Array<{ color: string; position: number }>;
   const radians = (angle - 90) * Math.PI / 180;
@@ -5430,11 +5986,15 @@ function renderSvgLinearGradient(id: string, value: string) {
 }
 
 function renderSvgRadialGradient(id: string, value: string) {
-  const stops = extractCssFunctionArgs(value)
+  const args = extractCssFunctionArgs(value);
+  const firstArg = args[0] ?? "";
+  const hasShapeArg = isCssRadialGradientShapeArg(firstArg);
+  const center = parseCssRadialGradientCenter(firstArg);
+  const stops = (hasShapeArg ? args.slice(1) : args)
     .map(parseCssColorStop)
     .filter(Boolean) as Array<{ color: string; position: number }>;
   return (
-    <radialGradient key={id} id={id} cx="50%" cy="50%" r="70%">
+    <radialGradient key={id} id={id} cx={`${formatSvgNumber(center.x * 100)}%`} cy={`${formatSvgNumber(center.y * 100)}%`} r="70%">
       {stops.map((stop, index) => {
         const paint = normalizeSvgGradientStopPaint(stop.color);
         return (
@@ -5502,6 +6062,37 @@ function findTopDesignNodeAtPoint(nodes: DesignNode[], point: { x: number; y: nu
     .find(({ node }) => pointInDesignNode(node, point))?.node ?? null;
 }
 
+function findNextDrillNodeAtPoint(
+  renderNodes: DesignNode[],
+  allNodes: DesignNode[],
+  point: { x: number; y: number },
+  selectedId?: string
+) {
+  const hitNode = findTopDesignNodeAtPoint(renderNodes, point);
+  if (!hitNode) {
+    return null;
+  }
+  const hitPath = [...getAncestorNodes(hitNode, allNodes)].reverse().concat(hitNode);
+  if (!selectedId) {
+    return getDefaultClickSelectionTarget(hitNode, allNodes) ?? hitNode;
+  }
+  const selectedIndex = hitPath.findIndex((node) => node.id === selectedId);
+  if (selectedIndex >= 0 && selectedIndex < hitPath.length - 1) {
+    return hitPath[selectedIndex + 1];
+  }
+  const selectedNode = allNodes.find((node) => node.id === selectedId);
+  if (selectedNode && pointInDesignNode(selectedNode, point)) {
+    const child = findTopDesignNodeAtPoint(
+      renderNodes.filter((node) => node.parentId === selectedNode.id),
+      point
+    );
+    if (child) {
+      return child;
+    }
+  }
+  return hitNode;
+}
+
 function pointInDesignNode(node: DesignNode, point: { x: number; y: number }) {
   if (!rectContainsPoint(nodeToBounds(node), point)) {
     return false;
@@ -5525,7 +6116,20 @@ function getCanvasSelectionTarget(hitNode: DesignNode, nodes: DesignNode[], sele
       return hitNode;
     }
   }
-  return getHiddenRootAdjacentTarget(hitNode, nodes);
+  return getDefaultClickSelectionTarget(hitNode, nodes);
+}
+
+function getDefaultClickSelectionTarget(hitNode: DesignNode, nodes: DesignNode[]) {
+  const ancestors = getAncestorNodes(hitNode, nodes);
+  const visibleRoot = ancestors[ancestors.length - 1];
+  if (visibleRoot && !isHiddenRootNode(visibleRoot, nodes) && isDesignNodeHitTestable(visibleRoot)) {
+    return visibleRoot;
+  }
+  const adjacentTarget = getHiddenRootAdjacentTarget(hitNode, nodes);
+  if (adjacentTarget && isDesignNodeHitTestable(adjacentTarget)) {
+    return adjacentTarget;
+  }
+  return [hitNode, ...ancestors].find((node) => !isHiddenRootNode(node, nodes) && isDesignNodeHitTestable(node)) ?? null;
 }
 
 function getAncestorNodes(node: DesignNode, nodes: DesignNode[]) {
@@ -5628,11 +6232,15 @@ function rectContainsPoint(rect: RectBounds, point: { x: number; y: number }) {
   return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
 }
 
-function rectContainsRect(outer: RectBounds, inner: RectBounds) {
-  return inner.x >= outer.x
-    && inner.y >= outer.y
-    && inner.x + inner.width <= outer.x + outer.width
-    && inner.y + inner.height <= outer.y + outer.height;
+function rectContainsRect(outer: RectBounds, inner: RectBounds, tolerance = 0) {
+  return inner.x >= outer.x - tolerance
+    && inner.y >= outer.y - tolerance
+    && inner.x + inner.width <= outer.x + outer.width + tolerance
+    && inner.y + inner.height <= outer.y + outer.height + tolerance;
+}
+
+function nodeToRect(node: DesignNode): RectBounds {
+  return { x: node.x, y: node.y, width: node.width, height: node.height };
 }
 
 function translateSvgPath(path: string, offsetX: number, offsetY: number) {
@@ -5861,15 +6469,144 @@ function TextStyleButton({ active, onClick, children }: { active: boolean; onCli
 }
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const gradient = parseEditableGradientPaint(value);
+  const mode = gradient?.type ?? "solid";
+  const firstStop = gradient?.stops[0] ?? { color: normalizeColor(value), position: 0 };
+  const lastStop = gradient?.stops[gradient.stops.length - 1] ?? { color: "#ffffff", position: 1 };
+  const angle = gradient?.angle ?? 180;
+  const center = gradient?.center ?? { x: 0.5, y: 0.5 };
+  const setMode = (nextMode: string) => {
+    if (nextMode === "solid") {
+      onChange(firstStop.color);
+      return;
+    }
+    if (nextMode === "linear") {
+      onChange(buildEditableLinearGradient(angle, firstStop, lastStop));
+      return;
+    }
+    onChange(buildEditableRadialGradient(center, firstStop, lastStop));
+  };
+  const updateGradient = (patch: Partial<{ angle: number; centerX: number; centerY: number; firstColor: string; firstPosition: number; lastColor: string; lastPosition: number }>) => {
+    const nextFirst = {
+      color: patch.firstColor ?? firstStop.color,
+      position: clampGradientPosition((patch.firstPosition ?? firstStop.position * 100) / 100)
+    };
+    const nextLast = {
+      color: patch.lastColor ?? lastStop.color,
+      position: clampGradientPosition((patch.lastPosition ?? lastStop.position * 100) / 100)
+    };
+    if (mode === "radial") {
+      onChange(buildEditableRadialGradient({
+        x: clampGradientPosition((patch.centerX ?? center.x * 100) / 100),
+        y: clampGradientPosition((patch.centerY ?? center.y * 100) / 100)
+      }, nextFirst, nextLast));
+      return;
+    }
+    onChange(buildEditableLinearGradient(patch.angle ?? angle, nextFirst, nextLast));
+  };
   return (
-    <label className="mb-3 grid grid-cols-[80px_1fr] items-center gap-3 text-xs">
-      <span className="text-xs font-medium text-[#777]">{label}</span>
-      <div className="flex items-center gap-2 rounded-xl border border-[#e4e4e7] px-3 py-2">
-        <input type="color" value={normalizeColor(value)} onChange={(event) => onChange(event.target.value)} className="size-7 rounded border-0 bg-transparent p-0" />
-        <Input value={value} onChange={(event) => onChange(event.target.value)} className="h-8 border-0 px-0 shadow-none focus-visible:ring-0" />
+    <div className="mb-4 space-y-2 text-xs">
+      <span className="block text-xs font-medium text-[#777]">{label}</span>
+      <div className="space-y-3 rounded-xl border border-[#e4e4e7] p-3">
+        <div className="grid grid-cols-[36px_1fr] items-center gap-3">
+          <div className="size-9 rounded-lg border border-[#e4e4e7]" style={{ background: value || "transparent" }} />
+          <Select value={mode} onValueChange={setMode}>
+            <SelectTrigger className="h-9 w-full rounded-lg border-[#e4e4e7] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="solid">纯色</SelectItem>
+              <SelectItem value="linear">线性</SelectItem>
+              <SelectItem value="radial">径向</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {mode === "solid" ? (
+          <div className="grid grid-cols-[36px_1fr] items-center gap-3">
+            <input type="color" value={normalizeColor(value)} onChange={(event) => onChange(event.target.value)} className="size-9 rounded border-0 bg-transparent p-0" />
+            <Input value={value} onChange={(event) => onChange(event.target.value)} className="h-9 rounded-lg border-[#e4e4e7] px-2 font-mono text-[11px]" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {mode === "linear" ? (
+              <label className="space-y-1.5">
+                <span className="text-[#777]">角度</span>
+                <Input type="number" value={Math.round(angle)} onChange={(event) => updateGradient({ angle: Number(event.target.value) || 0 })} className="h-9 rounded-lg border-[#e4e4e7]" />
+              </label>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <label className="space-y-1">
+                  <span className="text-[#777]">X%</span>
+                  <Input type="number" value={Math.round(center.x * 100)} onChange={(event) => updateGradient({ centerX: Number(event.target.value) || 0 })} className="h-9 rounded-lg border-[#e4e4e7]" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[#777]">Y%</span>
+                  <Input type="number" value={Math.round(center.y * 100)} onChange={(event) => updateGradient({ centerY: Number(event.target.value) || 0 })} className="h-9 rounded-lg border-[#e4e4e7]" />
+                </label>
+              </div>
+            )}
+            <GradientStopField label="起点" stop={firstStop} onChange={(patch) => updateGradient({ firstColor: patch.color, firstPosition: patch.position })} />
+            <GradientStopField label="终点" stop={lastStop} onChange={(patch) => updateGradient({ lastColor: patch.color, lastPosition: patch.position })} />
+            <label className="space-y-1.5">
+              <span className="text-[#777]">CSS</span>
+              <Input value={value} onChange={(event) => onChange(event.target.value)} className="h-9 rounded-lg border-[#e4e4e7] font-mono text-[11px]" />
+            </label>
+          </div>
+        )}
       </div>
-    </label>
+    </div>
   );
+}
+
+function GradientStopField({
+  label,
+  stop,
+  onChange
+}: {
+  label: string;
+  stop: { color: string; position: number };
+  onChange: (patch: { color?: string; position?: number }) => void;
+}) {
+  return (
+    <div className="space-y-1.5 rounded-lg bg-[#f7f7f8] p-2">
+      <span className="text-[#777]">{label}</span>
+      <div className="grid grid-cols-[36px_1fr_64px] items-center gap-2">
+        <input type="color" value={normalizeColor(stop.color)} onChange={(event) => onChange({ color: event.target.value })} className="size-9 rounded border-0 bg-transparent p-0" />
+        <Input value={stop.color} onChange={(event) => onChange({ color: event.target.value })} className="h-9 rounded-lg border-[#e4e4e7] px-2 font-mono text-[11px]" />
+        <Input type="number" value={Math.round(stop.position * 100)} onChange={(event) => onChange({ position: Number(event.target.value) || 0 })} className="h-9 rounded-lg border-[#e4e4e7] px-2" />
+      </div>
+    </div>
+  );
+}
+
+function PaintLayersView({ paints }: { paints?: WorkspaceDesignPaint[] }) {
+  if (!paints?.length) {
+    return null;
+  }
+  return (
+    <div className="-mt-2 mb-4 space-y-2 rounded-xl bg-[#f7f7f8] p-2 text-xs">
+      {paints.map((paint) => (
+        <div key={`${paint.sourceIndex}-${paint.kind}`} className="grid grid-cols-[28px_1fr_auto] items-center gap-2">
+          <div className="size-7 rounded-md border border-[#e4e4e7]" style={{ background: paint.css || "transparent" }} />
+          <div className="min-w-0">
+            <div className="truncate font-mono text-[10px] text-[#555]">{paint.css || paint.kind}</div>
+            {paint.gradient ? (
+              <div className="mt-0.5 text-[10px] text-[#888]">
+                {paint.gradient.type} · {paint.gradient.stops.length} stops · from {formatPaintPoint(paint.gradient.from)} to {formatPaintPoint(paint.gradient.to)}
+              </div>
+            ) : null}
+          </div>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${paint.enabled ? "bg-[#e8f3ff] text-[#246bfe]" : "bg-[#eeeeef] text-[#888]"}`}>
+            {paint.enabled ? "显示" : "隐藏"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatPaintPoint(point: { x: number; y: number }) {
+  return `${Number(point.x.toFixed(2))}, ${Number(point.y.toFixed(2))}`;
 }
 
 function DesignLayerTree({
@@ -6045,6 +6782,206 @@ function createLocalComponentNodes(sourceNodes: DesignNode[]) {
   ];
 }
 
+function createPageTemplateNodes(allNodes: DesignNode[], frame: DesignNode) {
+  const frameIds = new Set<string>([frame.id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    allNodes.forEach((node) => {
+      if (node.parentId && frameIds.has(node.parentId) && !frameIds.has(node.id)) {
+        frameIds.add(node.id);
+        changed = true;
+      }
+    });
+  }
+  const sourceNodes = allNodes.filter((node) => frameIds.has(node.id));
+  const cloned = cloneDesignNodesWithNewIds(sourceNodes, (node, index) => ({
+    x: Math.round(node.x - frame.x),
+    y: Math.round(node.y - frame.y),
+    zIndex: index,
+    locked: false,
+    visible: node.visible !== false
+  }));
+  return cloned.map((node, index) => index === 0
+    ? { ...node, x: 0, y: 0, parentId: undefined, width: frame.width, height: frame.height }
+    : node);
+}
+
+function createPageTemplateNodesFromSelection(allNodes: DesignNode[], topLevelIds: string[], bounds: RectBounds) {
+  if (topLevelIds.length === 0) return [];
+  const selectedIds = new Set<string>();
+  topLevelIds.forEach((id) => {
+    selectedIds.add(id);
+    allNodes
+      .filter((node) => isDescendantOfNode(node, id, allNodes))
+      .forEach((node) => selectedIds.add(node.id));
+  });
+  const sourceNodes = allNodes.filter((node) => selectedIds.has(node.id));
+  if (sourceNodes.length === 0) return [];
+  const rootId = createId("node");
+  const topLevelSet = new Set(topLevelIds);
+  const cloned = cloneDesignNodesWithNewIds(sourceNodes, (node, index) => ({
+    x: Math.round(node.x - bounds.x),
+    y: Math.round(node.y - bounds.y),
+    zIndex: index + 1,
+    locked: false,
+    visible: node.visible !== false
+  }));
+  return [
+    createNode("frame", {
+      id: rootId,
+      name: "选区模板画板",
+      x: 0,
+      y: 0,
+      width: Math.max(1, Math.round(bounds.width)),
+      height: Math.max(1, Math.round(bounds.height)),
+      fill: inferSelectionTemplateBackground(sourceNodes),
+      stroke: "transparent",
+      strokeWidth: 0,
+      text: "",
+      zIndex: 0
+    }),
+    ...cloned.map((node, index) => ({
+      ...node,
+      parentId: topLevelSet.has(sourceNodes[index]?.id) ? rootId : node.parentId
+    }))
+  ];
+}
+
+function inferSelectionTemplateBackground(nodes: DesignNode[]) {
+  const frame = nodes.find((node) => node.type === "frame");
+  if (frame?.fill && frame.fill !== "transparent") return frame.fill;
+  const largeSurface = [...nodes]
+    .filter((node) => node.fill && node.fill !== "transparent")
+    .sort((first, second) => (second.width * second.height) - (first.width * first.height))[0];
+  return largeSurface?.fill ?? "#f7f7f8";
+}
+
+function extractStyleProfileFromNodes(nodes: DesignNode[]): WorkspaceDesignStyleProfile {
+  const frame = nodes.find((node) => node.type === "frame") ?? nodes[0];
+  const visibleNodes = nodes.filter((node) => node.visible !== false);
+  const fills = mostFrequentColors(visibleNodes.map((node) => node.fill));
+  const strokes = mostFrequentColors(visibleNodes.map((node) => node.stroke));
+  const textColors = mostFrequentColors(visibleNodes.map((node) => node.textColor));
+  const textSizes = visibleNodes
+    .filter((node) => node.type === "text" || Boolean(node.text))
+    .map((node) => node.fontSize)
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .sort((a, b) => a - b);
+  const buttonNodes = visibleNodes.filter((node) => node.type === "button" || /button|按钮|确认|保存|提交|新增/i.test(`${node.name} ${node.text ?? ""}`));
+  const inputNodes = visibleNodes.filter((node) => node.type === "input" || /input|输入|搜索|查询|请选择/i.test(`${node.name} ${node.text ?? ""}`));
+  const cardNodes = visibleNodes.filter((node) => ["container", "card", "frame"].includes(node.type) && node.fill && node.fill !== "transparent");
+  const childNodes = visibleNodes.filter((node) => node.id !== frame?.id && node.parentId === frame?.id).sort((a, b) => a.y - b.y);
+  const verticalGaps = childNodes.slice(1)
+    .map((node, index) => Math.round(node.y - (childNodes[index].y + childNodes[index].height)))
+    .filter((gap) => gap >= 0 && gap <= 96);
+  const pageMargin = frame
+    ? Math.round(Math.min(
+      ...visibleNodes
+        .filter((node) => node.id !== frame.id && node.parentId === frame.id)
+        .map((node) => Math.max(0, node.x))
+        .filter((value) => Number.isFinite(value))
+    ))
+    : undefined;
+  return {
+    platform: frame && frame.width <= 520 ? "mobile" : frame && frame.width >= 960 ? "web" : "unknown",
+    colors: {
+      primary: pickPrimaryColor([...buttonNodes.map((node) => node.fill), ...fills]),
+      background: frame?.fill && frame.fill !== "transparent" ? frame.fill : fills[0],
+      surface: fills.find((color) => isLightColor(color)) ?? fills[0],
+      border: strokes[0],
+      text: textColors[0],
+      mutedText: textColors.find((color) => color !== textColors[0])
+    },
+    typography: {
+      title: textSizes.at(-1),
+      body: medianNumber(textSizes),
+      caption: textSizes[0]
+    },
+    spacing: {
+      pageMargin: Number.isFinite(pageMargin) ? pageMargin : undefined,
+      sectionGap: medianNumber(verticalGaps),
+      itemGap: medianNumber(verticalGaps.filter((gap) => gap <= 24))
+    },
+    radius: {
+      card: medianNumber(cardNodes.map((node) => node.radius).filter((value) => value > 0)),
+      button: medianNumber(buttonNodes.map((node) => node.radius).filter((value) => value > 0)),
+      input: medianNumber(inputNodes.map((node) => node.radius).filter((value) => value > 0))
+    },
+    components: {
+      button: buttonNodes.length ? {
+        height: medianNumber(buttonNodes.map((node) => node.height)),
+        radius: medianNumber(buttonNodes.map((node) => node.radius).filter((value) => value > 0)),
+        primaryFill: pickPrimaryColor(buttonNodes.map((node) => node.fill)),
+        textColor: mostFrequentColors(buttonNodes.map((node) => node.textColor))[0]
+      } : undefined,
+      input: inputNodes.length ? {
+        height: medianNumber(inputNodes.map((node) => node.height)),
+        radius: medianNumber(inputNodes.map((node) => node.radius).filter((value) => value > 0)),
+        fill: mostFrequentColors(inputNodes.map((node) => node.fill))[0],
+        border: mostFrequentColors(inputNodes.map((node) => node.stroke))[0]
+      } : undefined,
+      card: cardNodes.length ? {
+        radius: medianNumber(cardNodes.map((node) => node.radius).filter((value) => value > 0)),
+        fill: mostFrequentColors(cardNodes.map((node) => node.fill))[0],
+        border: mostFrequentColors(cardNodes.map((node) => node.stroke))[0],
+        padding: Number.isFinite(pageMargin) ? pageMargin : undefined
+      } : undefined
+    }
+  };
+}
+
+function mostFrequentColors(values: Array<string | undefined>) {
+  const counts = new Map<string, number>();
+  values
+    .map((value) => normalizeColorToken(value))
+    .filter((value): value is string => Boolean(value))
+    .forEach((value) => counts.set(value, (counts.get(value) ?? 0) + 1));
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([color]) => color);
+}
+
+function normalizeColorToken(value?: string) {
+  if (!value || value === "transparent" || /\b(?:linear|radial|conic)-gradient\(/.test(value)) return "";
+  const trimmed = value.trim();
+  return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(trimmed) || /^rgba?\(/i.test(trimmed) ? trimmed : "";
+}
+
+function medianNumber(values: number[]) {
+  const sorted = values.filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
+  if (sorted.length === 0) return undefined;
+  return Math.round(sorted[Math.floor(sorted.length / 2)]);
+}
+
+function pickPrimaryColor(values: Array<string | undefined>) {
+  return mostFrequentColors(values).find((color) => !isLightColor(color) && !isGrayColor(color));
+}
+
+function isLightColor(color?: string) {
+  const rgb = parseRgbColor(color);
+  return rgb ? (rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114) > 235 : false;
+}
+
+function isGrayColor(color?: string) {
+  const rgb = parseRgbColor(color);
+  return rgb ? Math.max(rgb.r, rgb.g, rgb.b) - Math.min(rgb.r, rgb.g, rgb.b) < 18 : false;
+}
+
+function parseRgbColor(color?: string) {
+  if (!color) return undefined;
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(color)?.[1];
+  if (hex) {
+    const normalized = hex.length === 3 ? hex.split("").map((item) => item + item).join("") : hex.slice(0, 6);
+    return {
+      r: Number.parseInt(normalized.slice(0, 2), 16),
+      g: Number.parseInt(normalized.slice(2, 4), 16),
+      b: Number.parseInt(normalized.slice(4, 6), 16)
+    };
+  }
+  const rgb = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/i.exec(color);
+  if (!rgb) return undefined;
+  return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]) };
+}
+
 function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile {
   const fallback = createInitialDesignFile(projectName);
   if (!value || typeof value !== "object") {
@@ -6079,6 +7016,7 @@ function normalizeDesignFile(value: unknown, projectName: string): AiDesignFile 
     aiSettings: source.aiSettings ?? fallback.aiSettings,
     pages,
     componentLibraries,
+    pageTemplates: Array.isArray(source.pageTemplates) ? source.pageTemplates : [],
     importedComponents: Array.isArray(source.importedComponents)
       ? source.importedComponents.map((component) => component.sourceFileName === LOCAL_COMPONENT_SOURCE_NAME && !component.libraryId && defaultLibraryId
         ? { ...component, libraryId: defaultLibraryId }
@@ -6100,6 +7038,46 @@ function applyDragPreviewToNodes(
   return nodes.map((node) => movingIds.has(node.id)
     ? translateDesignNode(node, dragPreview.dx, dragPreview.dy)
     : node);
+}
+
+function hydrateDesignVectorResources(nodes: DesignNode[], resources: Record<string, DesignVectorResource>) {
+  if (Object.keys(resources).length === 0) return nodes;
+  return nodes.map((node) => {
+    let nextNode = node;
+    const svgPathResource = node.svgPathAssetRef ? resources[node.svgPathAssetRef] : undefined;
+    if (svgPathResource?.svgPath) {
+      nextNode = {
+        ...nextNode,
+        svgPath: svgPathResource.svgPath,
+        svgFillRule: svgPathResource.svgFillRule ?? nextNode.svgFillRule
+      };
+    }
+    const svgPathsResource = node.svgPathsAssetRef ? resources[node.svgPathsAssetRef] : undefined;
+    if (svgPathsResource?.svgPaths) {
+      nextNode = {
+        ...nextNode,
+        svgPaths: svgPathsResource.svgPaths
+      };
+    }
+    const svgTreeResource = node.svgTreeAssetRef ? resources[node.svgTreeAssetRef] : undefined;
+    if (svgTreeResource?.svgTree) {
+      nextNode = {
+        ...nextNode,
+        svgTree: svgTreeResource.svgTree
+      };
+    }
+    const clipPathResource = node.clipPathSvgAssetRef ? resources[node.clipPathSvgAssetRef] : undefined;
+    if (clipPathResource?.svgPath && nextNode.clipPath) {
+      nextNode = {
+        ...nextNode,
+        clipPath: {
+          ...nextNode.clipPath,
+          svgPath: clipPathResource.svgPath
+        }
+      };
+    }
+    return nextNode;
+  });
 }
 
 function translateDesignNode(node: DesignNode, dx: number, dy: number): DesignNode {
@@ -6198,6 +7176,7 @@ function createInitialDesignFile(projectName: string): AiDesignFile {
     },
     updatedAt: now,
     componentLibraries: [],
+    pageTemplates: [],
     importedComponents: [],
     importedAssets: [],
     pages: [
@@ -6278,5 +7257,89 @@ function normalizeColor(value: string) {
   if (/^#[0-9a-f]{6}$/i.test(value)) {
     return value;
   }
+  const rgba = /^rgba?\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/i.exec(value.trim());
+  if (rgba) {
+    return `#${[rgba[1], rgba[2], rgba[3]].map((channel) => Math.max(0, Math.min(255, Math.round(Number(channel)))).toString(16).padStart(2, "0")).join("")}`;
+  }
   return "#ffffff";
+}
+
+function normalizeRotationInput(value: number) {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
+    return 0;
+  }
+  return Number(value.toFixed(4));
+}
+
+function parseEditableGradientPaint(value: string): {
+  type: "linear" | "radial";
+  angle?: number;
+  center?: { x: number; y: number };
+  stops: Array<{ color: string; position: number }>;
+} | undefined {
+  const paint = getFirstCanvasPaintLayer(value);
+  if (!paint?.startsWith("linear-gradient") && !paint?.startsWith("radial-gradient")) {
+    return undefined;
+  }
+  const args = extractCssFunctionArgs(paint);
+  if (args.length === 0) {
+    return undefined;
+  }
+  if (paint.startsWith("radial-gradient")) {
+    const firstArg = args[0] ?? "";
+    const hasShapeArg = isCssRadialGradientShapeArg(firstArg);
+    const stops = (hasShapeArg ? args.slice(1) : args)
+      .map(parseCssColorStop)
+      .filter((stop): stop is { color: string; position: number } => Boolean(stop));
+    return {
+      type: "radial",
+      center: parseCssRadialGradientCenter(firstArg),
+      stops: ensureEditableGradientStops(stops)
+    };
+  }
+  const firstArg = args[0] ?? "";
+  const hasDirectionArg = isCssLinearGradientDirectionArg(firstArg);
+  const stops = (hasDirectionArg ? args.slice(1) : args)
+    .map(parseCssColorStop)
+    .filter((stop): stop is { color: string; position: number } => Boolean(stop));
+  return {
+    type: "linear",
+    angle: parseCssLinearGradientAngle(firstArg),
+    stops: ensureEditableGradientStops(stops)
+  };
+}
+
+function ensureEditableGradientStops(stops: Array<{ color: string; position: number }>) {
+  if (stops.length >= 2) {
+    return stops;
+  }
+  if (stops.length === 1) {
+    return [stops[0], { color: "#ffffff", position: 1 }];
+  }
+  return [{ color: "#e2e4ff", position: 0 }, { color: "rgba(255, 255, 255, 0)", position: 1 }];
+}
+
+function buildEditableLinearGradient(angle: number, first: { color: string; position: number }, last: { color: string; position: number }) {
+  return `linear-gradient(${normalizeEditableGradientAngle(angle)}deg, ${formatEditableGradientStop(first)}, ${formatEditableGradientStop(last)})`;
+}
+
+function buildEditableRadialGradient(center: { x: number; y: number }, first: { color: string; position: number }, last: { color: string; position: number }) {
+  return `radial-gradient(circle at ${formatEditableGradientPercent(center.x)}% ${formatEditableGradientPercent(center.y)}%, ${formatEditableGradientStop(first)}, ${formatEditableGradientStop(last)})`;
+}
+
+function formatEditableGradientStop(stop: { color: string; position: number }) {
+  return `${stop.color} ${formatEditableGradientPercent(stop.position)}%`;
+}
+
+function formatEditableGradientPercent(value: number) {
+  const percent = clampGradientPosition(value) * 100;
+  return Number.isInteger(percent) ? String(percent) : percent.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function normalizeEditableGradientAngle(angle: number) {
+  return Number.isFinite(angle) ? Math.round((((angle % 360) + 360) % 360) * 100) / 100 : 180;
+}
+
+function clampGradientPosition(value: number) {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 }

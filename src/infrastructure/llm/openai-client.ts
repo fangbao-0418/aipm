@@ -18,6 +18,11 @@ interface StreamArgs extends GenerateArgs {
   onToken?: (token: string) => void | Promise<void>;
 }
 
+interface StreamWithImagesArgs extends GenerateWithImagesArgs {
+  signal?: AbortSignal;
+  onToken?: (token: string) => void | Promise<void>;
+}
+
 type OpenAIContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
@@ -247,6 +252,119 @@ export class OpenAIClient {
     return text;
   }
 
+  async generateTextWithImagesStream(args: StreamWithImagesArgs) {
+    if (!this.apiKey) {
+      throw new Error("OPENAI_API_KEY is not set");
+    }
+
+    const startedAt = Date.now();
+    console.info("[AIPM][LLM] vision_stream:start", {
+      model: this.model,
+      baseUrl: this.baseUrl,
+      systemPromptChars: args.systemPrompt.length,
+      userPromptChars: args.userPrompt.length,
+      imageCount: args.images.length
+    });
+
+    const userContent: OpenAIContentPart[] = [
+      { type: "text", text: args.userPrompt },
+      ...args.images.map((image) => ({
+        type: "image_url" as const,
+        image_url: { url: image.dataUrl }
+      })),
+      {
+        type: "text",
+        text: args.images.map((image, index) => `图片 ${index + 1}: ${image.label || "画板预览"}`).join("\n")
+      }
+    ];
+
+    const requestBody = JSON.stringify({
+      model: this.model,
+      temperature: args.temperature ?? 0.2,
+      stream: true,
+      messages: [
+        { role: "system", content: args.systemPrompt },
+        { role: "user", content: userContent }
+      ] satisfies OpenAIMessage[]
+    });
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`
+        },
+        signal: args.signal,
+        body: requestBody
+      });
+    } catch (error) {
+      console.error("[AIPM][LLM] vision_stream:fetch_failed", {
+        model: this.model,
+        baseUrl: this.baseUrl,
+        durationMs: Date.now() - startedAt,
+        requestBodyChars: requestBody.length,
+        imageCount: args.images.length,
+        error: serializeUnknownError(error)
+      });
+      throw new Error(`OpenAI vision stream request failed before response: ${formatUnknownError(error)}`);
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`OpenAI vision request failed: ${response.status} ${text}`);
+    }
+    if (!response.body) {
+      throw new Error("OpenAI vision streaming response missing body");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let output = "";
+    let done = false;
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !readerDone });
+
+      let boundary = findSseBoundary(buffer);
+      while (boundary) {
+        const rawEvent = buffer.slice(0, boundary.index);
+        buffer = buffer.slice(boundary.index + boundary.length);
+        const parsed = parseSseData(rawEvent);
+
+        if (parsed === "[DONE]") {
+          done = true;
+          break;
+        }
+
+        if (parsed) {
+          const payload = JSON.parse(parsed) as ChatCompletionResponse;
+          const chunk = extractText(payload.choices?.[0]?.delta?.content);
+          if (chunk) {
+            output += chunk;
+            await args.onToken?.(chunk);
+          }
+        }
+
+        boundary = findSseBoundary(buffer);
+      }
+
+      if (readerDone) {
+        done = true;
+      }
+    }
+
+    console.info("[AIPM][LLM] vision_stream:success", {
+      model: this.model,
+      durationMs: Date.now() - startedAt,
+      responseChars: output.length
+    });
+    return output.trim();
+  }
+
   async generateTextStream(args: StreamArgs) {
     if (!this.apiKey) {
       throw new Error("OPENAI_API_KEY is not set");
@@ -358,7 +476,7 @@ export class OpenAIClient {
   }
 
   async generateJson<S extends ZodTypeAny>(schema: S, args: GenerateArgs): Promise<z.output<S>> {
-    const text = await this.generateText({
+    const text = await this.generateTextStream({
       ...args,
       userPrompt: `${args.userPrompt}\n\n只返回 JSON，不要输出解释、代码块标记或额外文本。`
     });
@@ -375,7 +493,24 @@ export class OpenAIClient {
   }
 
   async generateJsonWithImages<S extends ZodTypeAny>(schema: S, args: GenerateWithImagesArgs): Promise<z.output<S>> {
-    const text = await this.generateTextWithImages({
+    const text = await this.generateTextWithImagesStream({
+      ...args,
+      userPrompt: `${args.userPrompt}\n\n只返回 JSON，不要输出解释、代码块标记或额外文本。`
+    });
+    try {
+      const extractedJson = extractJson(text);
+      return schema.parse(JSON.parse(extractedJson));
+    } catch (error) {
+      throw new StructuredOutputParseError(
+        error instanceof Error ? error.message : "Failed to parse structured vision LLM output",
+        text,
+        tryExtractJson(text)
+      );
+    }
+  }
+
+  async generateJsonWithImagesStream<S extends ZodTypeAny>(schema: S, args: StreamWithImagesArgs): Promise<z.output<S>> {
+    const text = await this.generateTextWithImagesStream({
       ...args,
       userPrompt: `${args.userPrompt}\n\n只返回 JSON，不要输出解释、代码块标记或额外文本。`
     });

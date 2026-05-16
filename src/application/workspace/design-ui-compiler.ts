@@ -57,8 +57,55 @@ export interface StitchUiSchemaDraft {
     height: number;
     layout?: string;
     styleTokens?: Record<string, unknown>;
+    layoutIntent?: LayoutIntentDraftNode;
     nodes?: StitchUiDraftNode[];
   }>;
+}
+
+export interface LayoutIntentDraftNode {
+  type: string;
+  name?: string;
+  title?: string;
+  text?: string;
+  label?: string;
+  variant?: string;
+  role?: string;
+  slot?: "nav" | "header" | "summary" | "filter" | "content" | "sidebar" | "detail" | "footer" | "actions";
+  layout?: "singleColumn" | "twoColumn" | "masterDetail" | "dashboard" | "form" | "table" | "cards";
+  density?: "compact" | "comfortable" | "spacious";
+  tone?: "default" | "muted" | "primary" | "warning" | "success" | "danger";
+  emphasis?: "low" | "medium" | "high";
+  priority?: "primary" | "secondary" | "tertiary";
+  align?: "start" | "center" | "end" | "between";
+  wrap?: boolean;
+  repeat?: number;
+  items?: Array<string | Record<string, string>>;
+  options?: Array<string | Record<string, string>>;
+  direction?: "vertical" | "horizontal";
+  gap?: "none" | "xs" | "sm" | "md" | "lg" | "xl";
+  padding?: "none" | "xs" | "sm" | "md" | "lg" | "xl";
+  width?: "fill" | "hug" | number;
+  height?: "fill" | "hug" | number;
+  fill?: string;
+  stroke?: string;
+  radius?: number;
+  textColor?: string;
+  color?: string;
+  fontSize?: number;
+  fontWeight?: number | string;
+  lineHeight?: number | string;
+  textAlign?: "left" | "center" | "right" | "justify";
+  decoration?: string;
+  columnCount?: number;
+  src?: string;
+  imageUrl?: string;
+  columns?: string[];
+  rows?: string[][];
+  fields?: string[];
+  actions?: string[];
+  metrics?: Array<{ label: string; value: string }>;
+  children?: LayoutIntentDraftNode[];
+  props?: Record<string, unknown>;
 }
 
 export interface StitchUiDraftNode {
@@ -188,7 +235,10 @@ export function compileStitchUiDraftToSceneGraph(
     semanticTree,
     layoutTree,
     nodes: normalizedNodes,
-    diagnostics: collectSceneGraphDiagnostics(normalizedNodes, layoutTree)
+    diagnostics: [
+      ...collectSceneGraphDiagnostics(normalizedNodes, layoutTree),
+      ...collectLayoutIntentCoverageDiagnostics(schemaDraft, normalizedNodes)
+    ]
   };
 }
 
@@ -201,7 +251,8 @@ export function compileWorkspaceNodesToSceneGraph(
   const clamped = clampNodesIntoArtboards(componentNormalized, profile);
   const stacked = stackFunctionalSiblings(clamped, profile);
   const stabilized = stabilizeArtboardModuleLayout(stacked, profile);
-  const nodes = expandFramesToFitChildren(stabilized, getCompilerSpacing(profile, "md"));
+  const measured = measureAndReflowReadableLayout(stabilized, profile);
+  const nodes = expandFramesToFitChildren(measured, getCompilerSpacing(profile, "md"));
   const semanticTree = buildSemanticTreeFromNodes(nodes, profile);
   const layoutTree = buildLayoutTreeFromSemanticTree(semanticTree, getSceneCanvasBounds(nodes), profile);
   return {
@@ -222,6 +273,7 @@ function compileStitchArtboard(
   const targetFrame = options.targetFrame;
   const request = `${options.userRequest ?? ""} ${schemaDraft.intent ?? ""} ${artboard.name ?? ""} ${(artboard.nodes ?? []).map((node) => `${node.name} ${node.text ?? ""}`).join(" ")}`;
   const isMobile = schemaDraft.platform === "mobile_app" || profile.platform === "mobile_app" || profile.platform === "wechat_mini_program";
+  const tokens = profile.libraries[0]?.tokens;
   const frame = targetFrame ?? createCompilerNode("frame", {
     id: createCompilerId("frame"),
     name: `${artboard.name || "页面"} 画板`,
@@ -229,10 +281,13 @@ function compileStitchArtboard(
     y: options.placement?.topY ?? 220,
     width: isMobile ? Math.min(430, artboard.width || 375) : Math.max(1180, artboard.width || 1440),
     height: isMobile ? Math.max(760, artboard.height || 812) : Math.max(900, artboard.height || 1024),
-    fill: isMobile ? "#f6f7f9" : "#f5f7fb",
-    stroke: "#d9e2ec",
-    radius: isMobile ? 28 : 0
+    fill: tokens?.colors.background ?? (isMobile ? "#f6f7f9" : "#f5f7fb"),
+    stroke: tokens?.colors.border ?? "#d9e2ec",
+    radius: isMobile ? (tokens?.radius.card ?? 28) : 0
   });
+  if (artboard.layoutIntent) {
+    return compileLayoutIntentArtboard(artboard.layoutIntent, frame, schemaDraft, profile, { includeFrame: !targetFrame });
+  }
   if ((artboard.nodes ?? []).length === 0 && /外框|shell|canvas|页面外框/i.test(`${schemaDraft.intent ?? ""} ${artboard.layout ?? ""}`)) {
     return [applyLibraryTokens(frame, profile)];
   }
@@ -329,6 +384,1369 @@ function createExplicitDraftNode(
     lineHeight: lineHeight ?? (type === "button" ? height : undefined),
     imageUrl: draftNode.imageUrl ?? draftNode.src
   });
+}
+
+function compileLayoutIntentArtboard(
+  intent: LayoutIntentDraftNode,
+  frame: WorkspaceDesignNode,
+  schemaDraft: StitchUiSchemaDraft,
+  profile: DesignCapabilityProfile,
+  options: { includeFrame: boolean }
+) {
+  const rootIntent = normalizeLayoutIntentRoot(intent, schemaDraft, frame);
+  const contentFrame = {
+    x: frame.x,
+    y: frame.y,
+    width: frame.width,
+    height: frame.height
+  };
+  const nodes = renderLayoutIntentNode(rootIntent, contentFrame, frame.id, profile, 0);
+  return [
+    ...(options.includeFrame ? [applyLibraryTokens(frame, profile)] : []),
+    ...nodes.map((node) => applyLibraryTokens(node, profile))
+  ];
+}
+
+function normalizeLayoutIntentRoot(
+  intent: LayoutIntentDraftNode,
+  schemaDraft: StitchUiSchemaDraft,
+  frame: WorkspaceDesignNode
+): LayoutIntentDraftNode {
+  if (/^page$/i.test(intent.type) || /^screen$/i.test(intent.type) || /^artboard$/i.test(intent.type)) {
+    return ensureLayoutIntentCoverage({
+      ...intent,
+      type: "Page",
+      title: intent.title ?? frame.name.replace(/\s*画板$/, ""),
+      direction: intent.direction ?? "vertical",
+      gap: intent.gap ?? "lg",
+      padding: intent.padding ?? (schemaDraft.platform === "mobile_app" ? "md" : "lg")
+    }, schemaDraft, frame);
+  }
+  return ensureLayoutIntentCoverage({
+    type: "Page",
+    title: frame.name.replace(/\s*画板$/, ""),
+    direction: "vertical",
+    gap: "lg",
+    padding: schemaDraft.platform === "mobile_app" ? "md" : "lg",
+    children: [intent]
+  }, schemaDraft, frame);
+}
+
+function ensureLayoutIntentCoverage(
+  root: LayoutIntentDraftNode,
+  schemaDraft: StitchUiSchemaDraft,
+  frame: WorkspaceDesignNode
+): LayoutIntentDraftNode {
+  const request = `${schemaDraft.intent ?? ""} ${root.title ?? ""} ${root.name ?? ""} ${frame.name}`;
+  const children = root.children ?? [];
+  const hasContent = children.some((child) => /table|datatable|list|card|grid|content|form/i.test(child.type) || /内容|列表|表格|卡片|表单|详情/.test(`${child.name ?? ""}${child.title ?? ""}`));
+  const hasFilter = children.some((child) => /filter|search/i.test(child.type) || /筛选|查询|搜索/.test(`${child.name ?? ""}${child.title ?? ""}`));
+  const isDetail = /详情|查看|资料|detail|inspect/i.test(request);
+  const isCollection = !isDetail && /列表|管理|查询|搜索|记录|table|list/i.test(request);
+  if (children.length >= 3 && hasContent) return root;
+  if (!isCollection && hasContent) return root;
+
+  const nextChildren: LayoutIntentDraftNode[] = [];
+  const hasHeaderLike = children.some((child) => /toolbar|title|header|action/i.test(child.type) || /标题|顶部|操作/.test(`${child.name ?? ""}${child.title ?? ""}`));
+  if (!hasHeaderLike) {
+    nextChildren.push({
+      type: "Toolbar",
+      direction: "horizontal",
+      gap: "md",
+      padding: "none",
+      children: [
+        { type: "Text", text: inferPageTitle(request), variant: "title", width: "fill" },
+        { type: "ActionBar", direction: "horizontal", gap: "sm", width: "hug", children: [
+          { type: "Button", text: inferPrimaryAction(request), variant: "primary" },
+          ...(/导出|export/i.test(request) ? [{ type: "Button", text: "导出", variant: "secondary" } satisfies LayoutIntentDraftNode] : [])
+        ] }
+      ]
+    });
+  }
+  nextChildren.push(...children);
+  return {
+    ...root,
+    children: nextChildren
+  };
+}
+
+function renderLayoutIntentNode(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  depth: number
+): WorkspaceDesignNode[] {
+  const normalizedType = normalizeLayoutIntentType(intent.type);
+  if (normalizedType === "Repeat") {
+    return renderLayoutIntentRepeat(intent, slot, parentId, profile, depth);
+  }
+  if (normalizedType === "Page" || normalizedType === "Stack" || normalizedType === "Section") {
+    return renderLayoutIntentStack(intent, slot, parentId, profile, depth, normalizedType);
+  }
+  if (normalizedType === "Grid") {
+    return renderLayoutIntentGrid(intent, slot, parentId, profile, depth);
+  }
+  if (normalizedType === "Toolbar" || normalizedType === "ActionBar") {
+    return renderLayoutIntentStack({ ...intent, direction: "horizontal", gap: intent.gap ?? "sm" }, slot, parentId, profile, depth, normalizedType);
+  }
+  if (normalizedType === "FilterBar") {
+    return renderLayoutIntentFilterBar(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "MetricGroup") {
+    return renderLayoutIntentMetricGroup(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "Table") {
+    return renderLayoutIntentTable(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "Form") {
+    return renderLayoutIntentForm(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "Upload") {
+    return renderLayoutIntentUpload(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "Select") {
+    return [renderLayoutIntentSelect(intent, slot, parentId, profile)];
+  }
+  if (normalizedType === "RadioGroup" || normalizedType === "CheckboxGroup") {
+    return renderLayoutIntentChoiceGroup(intent, slot, parentId, profile, normalizedType);
+  }
+  if (normalizedType === "EmptyState") {
+    return renderLayoutIntentEmptyState(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "ListItem") {
+    return renderLayoutIntentListItem(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "CardList") {
+    return renderLayoutIntentCardList(intent, slot, parentId, profile, depth);
+  }
+  if (normalizedType === "Modal" || normalizedType === "Drawer") {
+    return renderLayoutIntentOverlay(intent, slot, parentId, profile, depth, normalizedType);
+  }
+  if (normalizedType === "Steps") {
+    return renderLayoutIntentSteps(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "DescriptionList") {
+    return renderLayoutIntentDescriptionList(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "Tabs") {
+    return renderLayoutIntentTabs(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "Pagination") {
+    return renderLayoutIntentPagination(intent, slot, parentId, profile);
+  }
+  if (normalizedType === "StatusTag") {
+    return [renderLayoutIntentStatusTag(intent, slot, parentId)];
+  }
+  if (normalizedType === "Card" || normalizedType === "Panel") {
+    return renderLayoutIntentSurface(intent, slot, parentId, profile, depth, normalizedType);
+  }
+  return [renderLayoutIntentPrimitive(intent, slot, parentId, profile, normalizedType)];
+}
+
+function renderLayoutIntentRepeat(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  depth: number
+) {
+  const template = intent.children?.[0];
+  if (!template) return [];
+  const items = normalizeRepeatItems(intent);
+  const repeatedChildren = items.map((item, index) => applyRepeatItemToIntent(template, item, index));
+  return renderLayoutIntentGrid({
+    ...intent,
+    type: "Grid",
+    children: repeatedChildren,
+    props: {
+      ...intent.props,
+      columns: intent.props?.columns ?? (profile.platform === "pc_web" ? Math.min(4, Math.max(1, repeatedChildren.length)) : 1)
+    }
+  }, slot, parentId, profile, depth);
+}
+
+function computeIntentChildSlots(
+  intent: LayoutIntentDraftNode,
+  children: LayoutIntentDraftNode[],
+  inner: LayoutBounds,
+  gap: number,
+  profile: DesignCapabilityProfile,
+  normalizedType: string,
+  direction: "vertical" | "horizontal"
+) {
+  if (intent.layout === "twoColumn") {
+    return computeColumnLayoutSlots(children, inner, gap, profile, [1, 1]);
+  }
+  if (intent.layout === "masterDetail") {
+    return computeColumnLayoutSlots(children, inner, gap, profile, [0.36, 0.64]);
+  }
+  if (intent.layout === "cards") {
+    return computeGridLikeSlots(children, inner, gap, profile, Math.min(4, Math.max(1, Number(intent.props?.columns ?? 3) || 3)));
+  }
+  if (intent.layout === "dashboard") {
+    return computeDashboardSlots(children, inner, gap, profile);
+  }
+  if (direction === "horizontal") {
+    return computeHorizontalIntentSlots(children, inner, gap, profile, normalizedType === "ActionBar" ? "end" : intent.align ?? "start");
+  }
+  return computeVerticalIntentSlots(children, inner, gap, profile);
+}
+
+function renderLayoutIntentStack(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  depth: number,
+  normalizedType: string
+): WorkspaceDesignNode[] {
+  const padding = resolveDensitySpace(resolveIntentSpace(intent.padding, profile, normalizedType === "Page" ? "lg" : "md"), intent.density);
+  const gap = resolveDensitySpace(resolveIntentSpace(intent.gap, profile, "md"), intent.density);
+  const direction = intent.direction ?? "vertical";
+  const children = expandLayoutIntentChildren(intent.children ?? []);
+  const container = normalizedType === "Page" ? undefined : createCompilerNode(normalizedType === "Section" ? "container" : "container", {
+    parentId,
+    name: intent.name ?? intent.title ?? normalizedType,
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: intent.fill ?? (normalizedType === "Toolbar" || normalizedType === "ActionBar" ? "transparent" : "#ffffff"),
+    stroke: intent.stroke ?? (normalizedType === "Section" ? "#e6edf5" : "transparent"),
+    radius: intent.radius ?? (normalizedType === "Section" ? (profile.platform === "pc_web" ? 8 : 16) : 0)
+  });
+  const childParentId = container?.id ?? parentId;
+  const inner = {
+    x: slot.x + padding,
+    y: slot.y + padding,
+    width: Math.max(1, slot.width - padding * 2),
+    height: Math.max(1, slot.height - padding * 2)
+  };
+  const childSlots = computeIntentChildSlots(intent, children, inner, gap, profile, normalizedType, direction);
+  const childNodes = children.flatMap((child, index) => renderLayoutIntentNode(child, childSlots[index], childParentId, profile, depth + 1));
+  return container ? [container, ...childNodes] : childNodes;
+}
+
+function renderLayoutIntentGrid(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  depth: number
+) {
+  const children = expandLayoutIntentChildren(intent.children ?? []);
+  const padding = resolveDensitySpace(resolveIntentSpace(intent.padding, profile, "md"), intent.density);
+  const gap = resolveDensitySpace(resolveIntentSpace(intent.gap, profile, "md"), intent.density);
+  const inner = {
+    x: slot.x + padding,
+    y: slot.y + padding,
+    width: Math.max(1, slot.width - padding * 2),
+    height: Math.max(1, slot.height - padding * 2)
+  };
+  if (intent.layout === "twoColumn") {
+    const slots = computeColumnLayoutSlots(children, inner, gap, profile, [1, 1]);
+    return children.flatMap((child, index) => renderLayoutIntentNode(child, slots[index], parentId, profile, depth + 1));
+  }
+  if (intent.layout === "masterDetail") {
+    const slots = computeColumnLayoutSlots(children, inner, gap, profile, [0.36, 0.64]);
+    return children.flatMap((child, index) => renderLayoutIntentNode(child, slots[index], parentId, profile, depth + 1));
+  }
+  const columns = Math.max(1, Math.min(4, Number(intent.props?.columns ?? intent.columnCount ?? intent.columns?.length ?? 3) || 3));
+  const cellWidth = Math.max(80, (inner.width - gap * (columns - 1)) / columns);
+  const rows = Math.max(1, Math.ceil(children.length / columns));
+  const cellHeight = Math.max(80, (inner.height - gap * (rows - 1)) / rows);
+  return children.flatMap((child, index) => renderLayoutIntentNode(child, {
+    x: inner.x + (index % columns) * (cellWidth + gap),
+    y: inner.y + Math.floor(index / columns) * (cellHeight + gap),
+    width: cellWidth,
+    height: cellHeight
+  }, parentId, profile, depth + 1));
+}
+
+function renderLayoutIntentSurface(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  depth: number,
+  normalizedType: string
+) {
+  const surface = createCompilerNode(normalizedType === "Card" ? "card" : "container", {
+    parentId,
+    name: intent.name ?? intent.title ?? normalizedType,
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: intent.fill ?? getIntentToneFill(intent.tone, "#ffffff"),
+    stroke: intent.stroke ?? getIntentToneStroke(intent.tone, "#e6edf5"),
+    radius: intent.radius ?? (profile.platform === "pc_web" ? 8 : 16)
+  });
+  const children = intent.children ?? [];
+  if (children.length === 0) return [surface];
+  const padding = resolveDensitySpace(resolveIntentSpace(intent.padding, profile, "md"), intent.density);
+  const gap = resolveDensitySpace(resolveIntentSpace(intent.gap, profile, "md"), intent.density);
+  const childSlots = computeVerticalIntentSlots(children, {
+    x: slot.x + padding,
+    y: slot.y + padding,
+    width: Math.max(1, slot.width - padding * 2),
+    height: Math.max(1, slot.height - padding * 2)
+  }, gap, profile);
+  return [surface, ...children.flatMap((child, index) => renderLayoutIntentNode(child, childSlots[index], surface.id, profile, depth + 1))];
+}
+
+function renderLayoutIntentFilterBar(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  const fields = intent.fields?.length ? intent.fields : (intent.children ?? []).map((child) => child.label ?? child.title ?? child.name ?? "筛选项").slice(0, 4);
+  if (!isPc) {
+    return [renderLayoutIntentPrimitive({ type: "Input", text: intent.text ?? `搜索${fields[0] ?? ""}` }, slot, parentId, profile, "Input")];
+  }
+  const card = createCompilerNode("card", {
+    parentId,
+    name: intent.name ?? "筛选区域",
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: "#ffffff",
+    stroke: "#e6edf5",
+    radius: 8
+  });
+  const gap = resolveIntentSpace("md", profile, "md");
+  const inputWidth = Math.max(150, Math.min(220, (slot.width - 48 - 180 - gap * Math.max(0, fields.length - 1)) / Math.max(1, fields.length)));
+  const nodes: WorkspaceDesignNode[] = [card];
+  fields.slice(0, 4).forEach((field, index) => {
+    const x = slot.x + 24 + index * (inputWidth + gap);
+    nodes.push(createCompilerNode("input", {
+      parentId: card.id,
+      name: `${field}筛选`,
+      x,
+      y: slot.y + Math.max(16, Math.round((slot.height - 36) / 2)),
+      width: inputWidth,
+      height: 36,
+      text: `请输入${field}`,
+      fill: "#ffffff",
+      stroke: "#d0d5dd",
+      radius: 6
+    }));
+  });
+  nodes.push(
+    renderLayoutIntentPrimitive({ type: "Button", text: "查询", variant: "primary" }, { x: slot.x + slot.width - 180, y: slot.y + Math.max(16, Math.round((slot.height - 36) / 2)), width: 80, height: 36 }, card.id, profile, "Button"),
+    renderLayoutIntentPrimitive({ type: "Button", text: "重置", variant: "secondary" }, { x: slot.x + slot.width - 92, y: slot.y + Math.max(16, Math.round((slot.height - 36) / 2)), width: 68, height: 36 }, card.id, profile, "Button")
+  );
+  return nodes;
+}
+
+function renderLayoutIntentMetricGroup(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const metrics = intent.metrics?.length ? intent.metrics : [
+    { label: "总数", value: "8,392" },
+    { label: "新增", value: "128" },
+    { label: "待处理", value: "42" }
+  ];
+  const gap = resolveIntentSpace("md", profile, "md");
+  const width = Math.max(72, (slot.width - gap * (metrics.length - 1)) / metrics.length);
+  return metrics.slice(0, 4).flatMap((metric, index) => {
+    const x = slot.x + index * (width + gap);
+    const card = createCompilerNode("card", {
+      parentId,
+      name: `${metric.label}指标`,
+      x,
+      y: slot.y,
+      width,
+      height: slot.height,
+      fill: "#ffffff",
+      stroke: "#eef2f7",
+      radius: profile.platform === "pc_web" ? 8 : 14
+    });
+    return [
+      card,
+      renderLayoutIntentPrimitive({ type: "Text", text: metric.value, variant: "title" }, { x: x + 16, y: slot.y + 16, width: width - 32, height: 28 }, card.id, profile, "Text"),
+      renderLayoutIntentPrimitive({ type: "Text", text: metric.label, variant: "muted" }, { x: x + 16, y: slot.y + 48, width: width - 32, height: 22 }, card.id, profile, "Text")
+    ];
+  });
+}
+
+function renderLayoutIntentTable(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  const columns = intent.columns?.length ? intent.columns : ["名称", "状态", "创建时间", "操作"];
+  const rows = intent.rows?.length ? intent.rows : [
+    ["示例 A", "启用", "2026-05-08", "查看"],
+    ["示例 B", "停用", "2026-05-07", "查看"],
+    ["示例 C", "异常", "2026-05-06", "查看"]
+  ];
+  if (!isPc) {
+    const gap = resolveIntentSpace("md", profile, "md");
+    const cardHeight = 108;
+    return rows.slice(0, 4).flatMap((row, rowIndex) => {
+      const y = slot.y + rowIndex * (cardHeight + gap);
+      const card = createCompilerNode("card", {
+        parentId,
+        name: `${intent.title ?? intent.name ?? "数据"}卡片${rowIndex + 1}`,
+        x: slot.x,
+        y,
+        width: slot.width,
+        height: cardHeight,
+        fill: "#ffffff",
+        stroke: "#eef2f7",
+        radius: 16
+      });
+      const status = row.find((cell) => /待|已|启用|停用|异常|成功|失败|通过|驳回/.test(cell));
+      return [
+        card,
+        renderLayoutIntentPrimitive({ type: "Text", text: row[0] ?? "记录", variant: "title" }, { x: slot.x + 16, y: y + 14, width: slot.width - 116, height: 24 }, card.id, profile, "Text"),
+        status ? renderLayoutIntentStatusTag({ type: "StatusTag", text: status }, { x: slot.x + slot.width - 88, y: y + 14, width: 64, height: 28 }, card.id) : undefined,
+        renderLayoutIntentPrimitive({ type: "Text", text: columns.slice(1, 4).map((column, index) => `${column}: ${row[index + 1] ?? "-"}`).join(" / "), variant: "muted" }, { x: slot.x + 16, y: y + 46, width: slot.width - 32, height: 22 }, card.id, profile, "Text"),
+        renderLayoutIntentPrimitive({ type: "Text", text: row[row.length - 1] ?? "查看详情" }, { x: slot.x + 16, y: y + 74, width: slot.width - 32, height: 22 }, card.id, profile, "Text")
+      ].filter((node): node is WorkspaceDesignNode => Boolean(node));
+    });
+  }
+  const tableCard = createCompilerNode("card", {
+    parentId,
+    name: intent.name ?? intent.title ?? "数据表格",
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: "#ffffff",
+    stroke: "#e6edf5",
+    radius: 8
+  });
+  const nodes: WorkspaceDesignNode[] = [tableCard];
+  const titleHeight = intent.title || intent.name ? 52 : 20;
+  if (intent.title || intent.name) {
+    nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: intent.title ?? intent.name, variant: "title" }, { x: slot.x + 24, y: slot.y + 18, width: 280, height: 28 }, tableCard.id, profile, "Text"));
+  }
+  const tableX = slot.x + 24;
+  const tableY = slot.y + titleHeight;
+  const tableWidth = slot.width - 48;
+  const columnWidth = Math.max(80, Math.floor(tableWidth / Math.max(1, columns.length)));
+  nodes.push(createCompilerNode("container", {
+    parentId: tableCard.id,
+    name: "表头背景",
+    x: tableX,
+    y: tableY,
+    width: tableWidth,
+    height: 44,
+    fill: "#f8fafc",
+    stroke: "#e6edf5",
+    radius: 6
+  }));
+  columns.forEach((column, index) => {
+    nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: column }, {
+      x: tableX + index * columnWidth + 16,
+      y: tableY + 12,
+      width: columnWidth - 24,
+      height: 20
+    }, tableCard.id, profile, "Text"));
+  });
+  rows.slice(0, Math.max(3, Math.floor((slot.height - titleHeight - 44) / 56))).forEach((row, rowIndex) => {
+    const rowY = tableY + 44 + rowIndex * 56;
+    nodes.push(createCompilerNode("container", {
+      parentId: tableCard.id,
+      name: `数据行${rowIndex + 1}`,
+      x: tableX,
+      y: rowY,
+      width: tableWidth,
+      height: 56,
+      fill: rowIndex % 2 === 0 ? "#ffffff" : "#fcfcfd",
+      stroke: "#eef2f7",
+      radius: 0
+    }));
+    columns.forEach((column, colIndex) => {
+      const cell = row[colIndex] ?? "";
+      const cellSlot = {
+        x: tableX + colIndex * columnWidth + 16,
+        y: rowY + 14,
+        width: columnWidth - 24,
+        height: 28
+      };
+      nodes.push(/状态|审核|结果/.test(column) || /待|已|启用|停用|异常|成功|失败|通过|驳回/.test(cell)
+        ? renderLayoutIntentStatusTag({ type: "StatusTag", text: cell }, { ...cellSlot, width: Math.min(88, cellSlot.width) }, tableCard.id)
+        : renderLayoutIntentPrimitive({ type: "Text", text: cell }, { ...cellSlot, y: rowY + 18, height: 20 }, tableCard.id, profile, "Text"));
+    });
+  });
+  return nodes;
+}
+
+function renderLayoutIntentForm(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  const fields = intent.fields?.length ? intent.fields : (intent.children ?? []).map((child) => child.label ?? child.title ?? child.name ?? "").filter(Boolean);
+  const formFields = fields.length > 0 ? fields : ["名称", "类型", "状态", "备注"];
+  const panel = createCompilerNode("card", {
+    parentId,
+    name: intent.name ?? intent.title ?? "表单",
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: "#ffffff",
+    stroke: "#e6edf5",
+    radius: isPc ? 8 : 16
+  });
+  const nodes: WorkspaceDesignNode[] = [panel];
+  const columns = isPc && slot.width > 720 ? 2 : 1;
+  const gap = resolveIntentSpace("md", profile, "md");
+  const rowHeight = isPc ? 68 : 64;
+  const labelWidth = isPc ? 96 : slot.width - 32;
+  const fieldWidth = columns === 2 ? Math.floor((slot.width - 48 - gap) / 2) : slot.width - 32;
+  formFields.slice(0, 8).forEach((field, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const x = slot.x + 24 + column * (fieldWidth + gap);
+    const y = slot.y + 24 + row * rowHeight;
+    nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: field }, { x, y, width: labelWidth, height: 22 }, panel.id, profile, "Text"));
+    nodes.push(renderLayoutIntentPrimitive({ type: /类型|状态|分类|级别/.test(field) ? "Select" : "Input", text: `请输入${field}` }, {
+      x: columns === 1 ? x : x + 104,
+      y: columns === 1 ? y + 26 : y - 6,
+      width: columns === 1 ? fieldWidth : fieldWidth - 104,
+      height: isPc ? 36 : 44
+    }, panel.id, profile, "Input"));
+  });
+  const childControls = (intent.children ?? []).filter((child) => !["Text", "Title"].includes(normalizeLayoutIntentType(child.type)));
+  const childStartY = slot.y + 24 + Math.ceil(formFields.length / columns) * rowHeight + (childControls.length > 0 ? gap : 0);
+  childControls.slice(0, 8).forEach((child, index) => {
+    const normalizedChildType = normalizeLayoutIntentType(child.type);
+    const controlHeight = getIntentPreferredSize(child, { x: slot.x, y: slot.y, width: fieldWidth, height: slot.height }, profile).height;
+    const y = childStartY + index * (controlHeight + gap);
+    const label = child.label ?? child.title ?? child.name;
+    if (label && normalizedChildType !== "Upload") {
+      nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: label, variant: "muted" }, { x: slot.x + 24, y, width: fieldWidth, height: 22 }, panel.id, profile, "Text"));
+    }
+    const controlY = label && normalizedChildType !== "Upload" ? y + 26 : y;
+    nodes.push(...renderLayoutIntentNode(child, {
+      x: slot.x + 24,
+      y: controlY,
+      width: fieldWidth,
+      height: normalizedChildType === "RadioGroup" || normalizedChildType === "CheckboxGroup" ? Math.max(56, controlHeight) : controlHeight
+    }, panel.id, profile, 1));
+  });
+  const actions = intent.actions?.length ? intent.actions : ["保存", "取消"];
+  const childControlsHeight = childControls.slice(0, 8).reduce((sum, child) => sum + getIntentPreferredSize(child, { x: slot.x, y: slot.y, width: fieldWidth, height: slot.height }, profile).height + gap, 0);
+  const actionY = Math.min(slot.y + slot.height - 56, slot.y + 24 + Math.ceil(formFields.length / columns) * rowHeight + childControlsHeight + 8);
+  actions.slice(0, 3).forEach((action, index) => {
+    nodes.push(renderLayoutIntentPrimitive({ type: "Button", text: action, variant: index === 0 ? "primary" : "secondary" }, {
+      x: slot.x + slot.width - 24 - (actions.length - index) * 96,
+      y: actionY,
+      width: 84,
+      height: isPc ? 40 : 44
+    }, panel.id, profile, "Button"));
+  });
+  return nodes;
+}
+
+function renderLayoutIntentUpload(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  const box = createCompilerNode("card", {
+    parentId,
+    name: intent.name ?? intent.title ?? intent.label ?? "上传",
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: "#f8fafc",
+    stroke: "#d0d5dd",
+    radius: isPc ? 8 : 14
+  });
+  const title = intent.label ?? intent.title ?? intent.text ?? "上传文件";
+  return [
+    box,
+    renderLayoutIntentPrimitive({ type: "Text", text: "+", emphasis: "medium" }, { x: slot.x, y: slot.y + Math.max(12, slot.height * 0.18), width: slot.width, height: 34 }, box.id, profile, "Text"),
+    renderLayoutIntentPrimitive({ type: "Text", text: title, variant: "muted" }, { x: slot.x + 12, y: slot.y + Math.max(46, slot.height * 0.52), width: slot.width - 24, height: 24 }, box.id, profile, "Text")
+  ];
+}
+
+function renderLayoutIntentSelect(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const control = renderLayoutIntentPrimitive({
+    ...intent,
+    type: "Input",
+    text: intent.text ?? intent.label ?? intent.title ?? "请选择"
+  }, slot, parentId, profile, "Input");
+  return {
+    ...control,
+    name: intent.name ?? intent.label ?? "选择器",
+    text: `${control.text ?? "请选择"}  >`
+  };
+}
+
+function renderLayoutIntentChoiceGroup(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  normalizedType: "RadioGroup" | "CheckboxGroup"
+) {
+  const options = normalizeChoiceOptions(intent);
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  const gap = resolveDensitySpace(resolveIntentSpace(intent.gap, profile, "sm"), intent.density);
+  const nodes: WorkspaceDesignNode[] = [];
+  let cursorX = slot.x;
+  let cursorY = slot.y;
+  const rowHeight = isPc ? 32 : 36;
+  options.slice(0, 8).forEach((option, index) => {
+    const labelWidth = Math.max(48, Math.min(slot.width, option.length * 14 + 32));
+    if (!isPc && cursorX + labelWidth > slot.x + slot.width) {
+      cursorX = slot.x;
+      cursorY += rowHeight + gap;
+    }
+    const mark = createCompilerNode("container", {
+      parentId,
+      name: `${option}${normalizedType === "RadioGroup" ? "单选" : "多选"}`,
+      x: cursorX,
+      y: cursorY + 8,
+      width: 16,
+      height: 16,
+      fill: index === 0 && normalizedType === "RadioGroup" ? "#246bfe" : "#ffffff",
+      stroke: "#d0d5dd",
+      radius: normalizedType === "RadioGroup" ? 8 : 4
+    });
+    nodes.push(mark);
+    nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: option }, { x: cursorX + 24, y: cursorY + 4, width: labelWidth - 24, height: 24 }, parentId, profile, "Text"));
+    cursorX += labelWidth + gap;
+  });
+  return nodes;
+}
+
+function renderLayoutIntentEmptyState(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const panel = createCompilerNode("card", {
+    parentId,
+    name: intent.name ?? "空状态",
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: "#ffffff",
+    stroke: "#eef2f7",
+    radius: profile.platform === "pc_web" ? 8 : 16
+  });
+  const iconSize = Math.min(64, Math.max(40, slot.height * 0.24));
+  const iconX = slot.x + slot.width / 2 - iconSize / 2;
+  return [
+    panel,
+    createCompilerNode("container", { parentId: panel.id, name: "空状态图标", x: iconX, y: slot.y + Math.max(18, slot.height * 0.18), width: iconSize, height: iconSize, fill: "#eff6ff", stroke: "transparent", radius: iconSize / 2 }),
+    renderLayoutIntentPrimitive({ type: "Text", text: intent.title ?? intent.text ?? "暂无数据", variant: "title" }, { x: slot.x + 24, y: slot.y + slot.height * 0.55, width: slot.width - 48, height: 28 }, panel.id, profile, "Text"),
+    renderLayoutIntentPrimitive({ type: "Text", text: intent.label ?? "稍后再试或调整筛选条件", variant: "muted" }, { x: slot.x + 24, y: slot.y + slot.height * 0.55 + 34, width: slot.width - 48, height: 24 }, panel.id, profile, "Text")
+  ];
+}
+
+function renderLayoutIntentListItem(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const card = createCompilerNode("card", {
+    parentId,
+    name: intent.name ?? intent.title ?? "列表项",
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: "#ffffff",
+    stroke: "#eef2f7",
+    radius: profile.platform === "pc_web" ? 8 : 14
+  });
+  const title = intent.title ?? intent.label ?? intent.text ?? "列表项";
+  const desc = String(intent.props?.description ?? intent.props?.subtitle ?? "");
+  const status = String(intent.props?.status ?? "");
+  return [
+    card,
+    renderLayoutIntentPrimitive({ type: "Text", text: title, emphasis: "medium" }, { x: slot.x + 16, y: slot.y + 14, width: slot.width - (status ? 104 : 32), height: 24 }, card.id, profile, "Text"),
+    desc ? renderLayoutIntentPrimitive({ type: "Text", text: desc, variant: "muted" }, { x: slot.x + 16, y: slot.y + 42, width: slot.width - 32, height: 22 }, card.id, profile, "Text") : undefined,
+    status ? renderLayoutIntentStatusTag({ type: "StatusTag", text: status }, { x: slot.x + slot.width - 88, y: slot.y + 14, width: 64, height: 28 }, card.id) : undefined
+  ].filter((node): node is WorkspaceDesignNode => Boolean(node));
+}
+
+function renderLayoutIntentCardList(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  depth: number
+) {
+  const items = intent.children?.length ? intent.children : normalizeRepeatItems(intent).map((item) => ({
+    type: "ListItem",
+    title: item.label,
+    props: { description: item.value }
+  }));
+  const gap = resolveDensitySpace(resolveIntentSpace(intent.gap, profile, "md"), intent.density);
+  const itemHeight = profile.platform === "pc_web" || profile.platform === "responsive_web" ? 88 : 76;
+  return items.slice(0, 8).flatMap((item, index) => renderLayoutIntentNode({
+    ...item,
+    type: normalizeLayoutIntentType(item.type) === "Text" ? "ListItem" : item.type
+  }, {
+    x: slot.x,
+    y: slot.y + index * (itemHeight + gap),
+    width: slot.width,
+    height: itemHeight
+  }, parentId, profile, depth + 1));
+}
+
+function renderLayoutIntentOverlay(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  depth: number,
+  normalizedType: "Modal" | "Drawer"
+) {
+  const isDrawer = normalizedType === "Drawer";
+  const width = isDrawer ? Math.min(slot.width, profile.platform === "pc_web" ? 420 : slot.width) : Math.min(slot.width - 24, profile.platform === "pc_web" ? 520 : slot.width - 32);
+  const height = isDrawer ? slot.height : Math.min(slot.height - 40, profile.platform === "pc_web" ? 420 : 360);
+  const x = isDrawer ? slot.x + slot.width - width : slot.x + (slot.width - width) / 2;
+  const y = isDrawer ? slot.y : slot.y + Math.max(20, (slot.height - height) / 2);
+  return renderLayoutIntentSurface({
+    ...intent,
+    type: "Panel",
+    title: intent.title ?? (isDrawer ? "抽屉" : "弹窗"),
+    padding: intent.padding ?? "md"
+  }, { x, y, width, height }, parentId, profile, depth, "Panel");
+}
+
+function renderLayoutIntentSteps(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const steps = normalizeChoiceOptions(intent);
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  const nodes: WorkspaceDesignNode[] = [];
+  const count = Math.max(1, steps.length);
+  steps.slice(0, 6).forEach((step, index) => {
+    const x = isPc ? slot.x + index * (slot.width / count) : slot.x;
+    const y = isPc ? slot.y : slot.y + index * 44;
+    const dot = createCompilerNode("container", {
+      parentId,
+      name: `${step}步骤点`,
+      x,
+      y: y + 4,
+      width: 24,
+      height: 24,
+      fill: index === 0 ? "#246bfe" : "#ffffff",
+      stroke: index === 0 ? "transparent" : "#d0d5dd",
+      radius: 12
+    });
+    nodes.push(dot);
+    nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: step }, { x: x + 32, y, width: isPc ? Math.max(80, slot.width / count - 40) : slot.width - 32, height: 28 }, parentId, profile, "Text"));
+  });
+  return nodes;
+}
+
+function renderLayoutIntentDescriptionList(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  const items = normalizeKeyValueItems(intent);
+  const panel = createCompilerNode("card", {
+    parentId,
+    name: intent.name ?? intent.title ?? "详情信息",
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    fill: getIntentToneFill(intent.tone, "#ffffff"),
+    stroke: getIntentToneStroke(intent.tone, "#e6edf5"),
+    radius: isPc ? 8 : 16
+  });
+  const nodes: WorkspaceDesignNode[] = [panel];
+  const padding = resolveDensitySpace(resolveIntentSpace(intent.padding, profile, "md"), intent.density);
+  const gap = resolveDensitySpace(resolveIntentSpace(intent.gap, profile, "sm"), intent.density);
+  const columns = isPc && slot.width > 720 ? 2 : 1;
+  const rowHeight = isPc ? 40 : 44;
+  const columnWidth = Math.max(120, (slot.width - padding * 2 - gap * (columns - 1)) / columns);
+  items.slice(0, 12).forEach((item, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const x = slot.x + padding + column * (columnWidth + gap);
+    const y = slot.y + padding + row * rowHeight;
+    const labelWidth = Math.min(104, Math.max(64, columnWidth * 0.34));
+    if (!isPc && item.value.length > 10) {
+      const itemY = slot.y + padding + index * 64;
+      nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: item.label, variant: "muted" }, { x, y: itemY, width: columnWidth, height: 22 }, panel.id, profile, "Text"));
+      nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: item.value, emphasis: item.emphasis }, { x, y: itemY + 26, width: columnWidth, height: 34 }, panel.id, profile, "Text"));
+      return;
+    }
+    nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: item.label, variant: "muted" }, { x, y, width: labelWidth, height: 24 }, panel.id, profile, "Text"));
+    nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: item.value, emphasis: item.emphasis }, { x: x + labelWidth + 8, y, width: columnWidth - labelWidth - 8, height: 24 }, panel.id, profile, "Text"));
+  });
+  return nodes;
+}
+
+function renderLayoutIntentTabs(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const tabs = (intent.children ?? []).map((child) => child.label ?? child.title ?? child.name ?? child.text ?? "标签").slice(0, 6);
+  const labels = tabs.length > 0 ? tabs : ["全部", "待处理", "已完成"];
+  const nodes: WorkspaceDesignNode[] = [];
+  let cursorX = slot.x;
+  labels.forEach((label, index) => {
+    const width = Math.max(64, label.length * 18 + 28);
+    nodes.push(createCompilerNode("container", {
+      parentId,
+      name: `${label}标签页`,
+      x: cursorX,
+      y: slot.y,
+      width,
+      height: Math.min(slot.height, 40),
+      fill: index === 0 ? "#eff6ff" : "transparent",
+      stroke: index === 0 ? "#bfdbfe" : "transparent",
+      radius: 6
+    }));
+    nodes.push(renderLayoutIntentPrimitive({ type: "Text", text: label }, { x: cursorX + 14, y: slot.y + 9, width: width - 28, height: 20 }, parentId, profile, "Text"));
+    cursorX += width + resolveIntentSpace("sm", profile, "sm");
+  });
+  return nodes;
+}
+
+function renderLayoutIntentPagination(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile
+) {
+  const totalText = intent.text ?? "共 128 条记录";
+  return [
+    renderLayoutIntentPrimitive({ type: "Text", text: totalText, variant: "muted" }, { x: slot.x, y: slot.y + 10, width: 220, height: 24 }, parentId, profile, "Text"),
+    renderLayoutIntentPrimitive({ type: "Button", text: "上一页", variant: "secondary" }, { x: slot.x + slot.width - 176, y: slot.y + 6, width: 76, height: 32 }, parentId, profile, "Button"),
+    renderLayoutIntentPrimitive({ type: "Button", text: "下一页", variant: "secondary" }, { x: slot.x + slot.width - 88, y: slot.y + 6, width: 76, height: 32 }, parentId, profile, "Button")
+  ];
+}
+
+function renderLayoutIntentStatusTag(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string
+) {
+  const text = intent.text ?? intent.label ?? intent.title ?? "状态";
+  return createCompilerNode("button", {
+    parentId,
+    name: `${text}状态标签`,
+    x: slot.x,
+    y: slot.y,
+    width: Math.max(56, Math.min(slot.width, text.length * 14 + 28)),
+    height: Math.min(slot.height, 28),
+    text,
+    fill: getStatusFill(text),
+    stroke: "transparent",
+    textColor: getStatusColor(text),
+    radius: 14,
+    fontSize: 13,
+    lineHeight: 28,
+    textAlign: "center",
+    textVerticalAlign: "middle"
+  });
+}
+
+function renderLayoutIntentPrimitive(
+  intent: LayoutIntentDraftNode,
+  slot: LayoutBounds,
+  parentId: string,
+  profile: DesignCapabilityProfile,
+  normalizedType: string
+): WorkspaceDesignNode {
+  const tokens = profile.libraries[0]?.tokens;
+  if (normalizedType === "Button") {
+    const secondary = intent.variant === "secondary" || intent.variant === "ghost" || intent.priority === "secondary";
+    const controlHeight = Math.min(slot.height, profile.platform === "pc_web" ? 40 : 48);
+    const fill = intent.fill ?? (secondary ? "#ffffff" : getIntentToneButtonFill(intent.tone, tokens?.colors.primary ?? "#1677ff"));
+    return createCompilerNode("button", {
+      parentId,
+      name: intent.name ?? intent.label ?? intent.text ?? "按钮",
+      x: slot.x,
+      y: slot.y + Math.max(0, Math.round((slot.height - controlHeight) / 2)),
+      width: slot.width,
+      height: controlHeight,
+      text: intent.text ?? intent.label ?? intent.title ?? "按钮",
+      fill,
+      stroke: intent.stroke ?? (secondary ? getIntentToneStroke(intent.tone, "#d0d5dd") : "transparent"),
+      textColor: intent.textColor ?? intent.color ?? (secondary ? getIntentToneTextColor(intent.tone, "#344054") : "#ffffff"),
+      radius: intent.radius ?? tokens?.radius.button ?? (profile.platform === "pc_web" ? 6 : 16),
+      fontSize: intent.fontSize ?? 14,
+      lineHeight: normalizeLineHeight(intent.lineHeight, controlHeight),
+      textAlign: intent.textAlign ?? "center",
+      textVerticalAlign: "middle"
+    });
+  }
+  if (normalizedType === "Input" || normalizedType === "Field") {
+    const controlHeight = Math.min(slot.height, profile.platform === "pc_web" ? 36 : 44);
+    return createCompilerNode("input", {
+      parentId,
+      name: intent.name ?? intent.label ?? "输入框",
+      x: slot.x,
+      y: slot.y + Math.max(0, Math.round((slot.height - controlHeight) / 2)),
+      width: slot.width,
+      height: controlHeight,
+      text: intent.text ?? intent.label ?? "请输入",
+      fill: intent.fill ?? "#ffffff",
+      stroke: intent.stroke ?? tokens?.colors.border ?? "#d0d5dd",
+      radius: intent.radius ?? tokens?.radius.control ?? (profile.platform === "pc_web" ? 6 : 14),
+      textColor: intent.textColor ?? intent.color ?? "#667085",
+      fontSize: intent.fontSize ?? 14,
+      lineHeight: normalizeLineHeight(intent.lineHeight, controlHeight),
+      textVerticalAlign: "middle"
+    });
+  }
+  if (normalizedType === "Image") {
+    return createCompilerNode("image", {
+      parentId,
+      name: intent.name ?? intent.title ?? "图片",
+      x: slot.x,
+      y: slot.y,
+      width: slot.width,
+      height: slot.height,
+      fill: intent.fill ?? "#eef4ff",
+      stroke: intent.stroke ?? "transparent",
+      radius: intent.radius ?? (profile.platform === "pc_web" ? 8 : 14),
+      imageUrl: intent.imageUrl ?? intent.src
+    });
+  }
+  const isTitle = intent.variant === "title" || normalizedType === "Title";
+  const isMuted = intent.variant === "muted" || intent.role === "description";
+  const fontSize = intent.fontSize ?? (isTitle ? (profile.platform === "pc_web" ? 22 : 20) : 14);
+  return createCompilerNode("text", {
+    parentId,
+    name: intent.name ?? intent.title ?? "文本",
+    x: slot.x,
+    y: slot.y,
+    width: slot.width,
+    height: slot.height,
+    text: intent.text ?? intent.title ?? intent.label ?? intent.name ?? "文本",
+    fill: "transparent",
+    stroke: "transparent",
+    strokeWidth: 0,
+    textColor: intent.textColor ?? intent.color ?? (isMuted ? "#667085" : getIntentToneTextColor(intent.tone, tokens?.colors.text ?? "#101828")),
+    fontSize,
+    fontWeight: parseFontWeight(intent.fontWeight) ?? (isTitle || intent.emphasis === "high" ? 700 : intent.emphasis === "medium" ? 600 : undefined),
+    lineHeight: normalizeLineHeight(intent.lineHeight, Math.max(fontSize + 8, isTitle ? 30 : 22)),
+    textAlign: intent.textAlign ?? "left",
+    textVerticalAlign: "top"
+  });
+}
+
+function getIntentToneFill(tone: LayoutIntentDraftNode["tone"], fallback: string) {
+  if (tone === "primary") return "#eff6ff";
+  if (tone === "success") return "#ecfdf3";
+  if (tone === "warning") return "#fffaeb";
+  if (tone === "danger") return "#fef3f2";
+  if (tone === "muted") return "#f8fafc";
+  return fallback;
+}
+
+function getIntentToneStroke(tone: LayoutIntentDraftNode["tone"], fallback: string) {
+  if (tone === "primary") return "#bfdbfe";
+  if (tone === "success") return "#abefc6";
+  if (tone === "warning") return "#fedf89";
+  if (tone === "danger") return "#fecdca";
+  if (tone === "muted") return "#e4e7ec";
+  return fallback;
+}
+
+function getIntentToneTextColor(tone: LayoutIntentDraftNode["tone"], fallback: string) {
+  if (tone === "primary") return "#175cd3";
+  if (tone === "success") return "#067647";
+  if (tone === "warning") return "#b54708";
+  if (tone === "danger") return "#b42318";
+  if (tone === "muted") return "#667085";
+  return fallback;
+}
+
+function getIntentToneButtonFill(tone: LayoutIntentDraftNode["tone"], fallback: string) {
+  if (tone === "success") return "#12b76a";
+  if (tone === "warning") return "#f79009";
+  if (tone === "danger") return "#f04438";
+  return fallback;
+}
+
+function expandLayoutIntentChildren(children: LayoutIntentDraftNode[]) {
+  return children.flatMap((child) => {
+    if (normalizeLayoutIntentType(child.type) !== "Repeat") return [child];
+    const template = child.children?.[0];
+    if (!template) return [];
+    return normalizeRepeatItems(child).map((item, index) => applyRepeatItemToIntent(template, item, index));
+  });
+}
+
+function normalizeRepeatItems(intent: LayoutIntentDraftNode) {
+  if (intent.items?.length) {
+    return intent.items.map((item) => typeof item === "string" ? { label: item, value: item } : item);
+  }
+  const repeat = Math.max(1, Math.min(24, intent.repeat ?? 1));
+  return Array.from({ length: repeat }, (_, index) => ({
+    label: `${intent.label ?? intent.title ?? intent.name ?? "项目"} ${index + 1}`,
+    value: `${index + 1}`
+  }));
+}
+
+function applyRepeatItemToIntent(
+  template: LayoutIntentDraftNode,
+  item: Record<string, string>,
+  index: number
+): LayoutIntentDraftNode {
+  const replace = (value: string | undefined) => {
+    if (!value) return value;
+    return value.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key: string) => item[key] ?? (key === "index" ? String(index + 1) : ""));
+  };
+  return {
+    ...template,
+    name: replace(template.name),
+    title: replace(template.title),
+    text: replace(template.text) ?? item.text ?? item.label ?? template.text,
+    label: replace(template.label) ?? item.label ?? template.label,
+    children: template.children?.map((child) => applyRepeatItemToIntent(child, item, index))
+  };
+}
+
+function normalizeKeyValueItems(intent: LayoutIntentDraftNode) {
+  if (intent.items?.length) {
+    return intent.items.map((item, index) => {
+      if (typeof item === "string") return { label: item, value: "-", emphasis: undefined as LayoutIntentDraftNode["emphasis"] };
+      const label = item.label ?? item.name ?? item.key ?? `字段 ${index + 1}`;
+      const value = item.value ?? item.text ?? item.content ?? "-";
+      return { label, value, emphasis: item.emphasis as LayoutIntentDraftNode["emphasis"] };
+    });
+  }
+  if (intent.fields?.length) {
+    return intent.fields.map((field) => ({ label: field, value: "-", emphasis: undefined as LayoutIntentDraftNode["emphasis"] }));
+  }
+  return (intent.children ?? []).map((child, index) => {
+    const childTexts = (child.children ?? [])
+      .map((item) => item.text ?? item.label ?? item.title ?? item.name)
+      .filter((item): item is string => Boolean(item && item.trim()));
+    const explicitLabel = child.label ?? child.title ?? child.props?.label?.toString();
+    const explicitValue = child.text ?? child.props?.value?.toString();
+    if (childTexts.length >= 2) {
+      return {
+        label: stripKeyValueLabel(explicitLabel ?? childTexts[0]),
+        value: childTexts.slice(1).join(" / "),
+        emphasis: child.emphasis
+      };
+    }
+    return {
+      label: stripKeyValueLabel(explicitLabel ?? child.name ?? `字段 ${index + 1}`),
+      value: explicitValue ?? childTexts[0] ?? "-",
+      emphasis: child.emphasis
+    };
+  });
+}
+
+function stripKeyValueLabel(label: string) {
+  return label.replace(/^(规格项|字段|信息项|详情项)[-_:：\s]*/i, "").replace(/^(规格标签|标签|label)[-_:：\s]*/i, "").replace(/[：:]\s*$/, "：");
+}
+
+function estimateTextHeight(intent: LayoutIntentDraftNode, width: number) {
+  const text = intent.text ?? intent.title ?? intent.label ?? intent.name ?? "";
+  const fontSize = intent.fontSize ?? (intent.variant === "title" ? 22 : 14);
+  const lineHeight = normalizeLineHeight(intent.lineHeight, Math.max(fontSize + 8, 22)) ?? 22;
+  const charsPerLine = Math.max(8, Math.floor(Math.max(80, width) / Math.max(8, fontSize)));
+  const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+  return Math.ceil(lines * lineHeight);
+}
+
+function getDescriptionListPreferredHeight(intent: LayoutIntentDraftNode, parent: LayoutBounds, profile: DesignCapabilityProfile) {
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  const itemCount = Math.max(1, normalizeKeyValueItems(intent).length);
+  const columns = isPc && parent.width > 720 ? 2 : 1;
+  const rows = Math.ceil(itemCount / columns);
+  const padding = resolveDensitySpace(resolveIntentSpace(intent.padding, profile, "md"), intent.density);
+  const rowHeight = isPc ? 40 : 52;
+  return Math.max(isPc ? 96 : 120, rows * rowHeight + padding * 2);
+}
+
+function normalizeChoiceOptions(intent: LayoutIntentDraftNode) {
+  const values = [
+    ...(intent.items ?? []).map((item) => typeof item === "string" ? item : item.label ?? item.name ?? item.value ?? ""),
+    ...(intent.options ?? [] as unknown[]).map((item) => typeof item === "string" ? item : isRecordLikeIntentValue(item) ? String(item.label ?? item.name ?? item.value ?? "") : ""),
+    ...(intent.children ?? []).map((child) => child.label ?? child.title ?? child.name ?? child.text ?? "")
+  ].filter((item): item is string => Boolean(item && item.trim()));
+  return values.length > 0 ? Array.from(new Set(values)).slice(0, 12) : ["选项一", "选项二", "选项三"];
+}
+
+function isRecordLikeIntentValue(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function computeVerticalIntentSlots(
+  children: LayoutIntentDraftNode[],
+  slot: LayoutBounds,
+  gap: number,
+  profile: DesignCapabilityProfile
+): LayoutBounds[] {
+  const preferred = children.map((child) => getIntentPreferredSize(child, slot, profile).height);
+  const fillIndexes = children.map((child, index) => child.height === "fill" || normalizeLayoutIntentType(child.type) === "Table" ? index : -1).filter((index) => index >= 0);
+  const fixedTotal = preferred.reduce((sum, height, index) => fillIndexes.includes(index) ? sum : sum + height, 0);
+  const gapsTotal = gap * Math.max(0, children.length - 1);
+  const fillHeight = fillIndexes.length > 0 ? Math.max(80, (slot.height - fixedTotal - gapsTotal) / fillIndexes.length) : 0;
+  let cursorY = slot.y;
+  return children.map((child, index) => {
+    const height = fillIndexes.includes(index) ? fillHeight : preferred[index];
+    const frame = { x: slot.x, y: cursorY, width: slot.width, height: Math.min(height, Math.max(1, slot.y + slot.height - cursorY)) };
+    cursorY += height + gap;
+    return frame;
+  });
+}
+
+function computeHorizontalIntentSlots(
+  children: LayoutIntentDraftNode[],
+  slot: LayoutBounds,
+  gap: number,
+  profile: DesignCapabilityProfile,
+  align: "start" | "center" | "end" | "between" = "start"
+): LayoutBounds[] {
+  const preferred = children.map((child) => getIntentPreferredSize(child, slot, profile).width);
+  const fillIndexes = children.map((child, index) => child.width === "fill" ? index : -1).filter((index) => index >= 0);
+  const fixedTotal = preferred.reduce((sum, width, index) => fillIndexes.includes(index) ? sum : sum + width, 0);
+  const gapsTotal = gap * Math.max(0, children.length - 1);
+  const fillWidth = fillIndexes.length > 0 ? Math.max(64, (slot.width - fixedTotal - gapsTotal) / fillIndexes.length) : 0;
+  const widths = children.map((_, index) => fillIndexes.length > 0 && fillIndexes.includes(index) ? fillWidth : preferred[index]);
+  const totalWidth = widths.reduce((sum, width) => sum + width, 0) + gapsTotal;
+  const betweenGap = align === "between" && children.length > 1
+    ? Math.max(gap, (slot.width - widths.reduce((sum, width) => sum + width, 0)) / (children.length - 1))
+    : gap;
+  let cursorX = slot.x;
+  if (align === "end") cursorX = slot.x + Math.max(0, slot.width - totalWidth);
+  if (align === "center") cursorX = slot.x + Math.max(0, (slot.width - totalWidth) / 2);
+  return children.map((child, index) => {
+    const width = widths[index];
+    const frame = { x: cursorX, y: slot.y, width: Math.min(width, Math.max(1, slot.x + slot.width - cursorX)), height: slot.height };
+    cursorX += width + betweenGap;
+    return frame;
+  });
+}
+
+function computeColumnLayoutSlots(
+  children: LayoutIntentDraftNode[],
+  slot: LayoutBounds,
+  gap: number,
+  profile: DesignCapabilityProfile,
+  ratios: [number, number]
+) {
+  if (children.length === 0) return [];
+  if (children.length === 1) return [slot];
+  const leftWidth = Math.max(120, Math.round((slot.width - gap) * ratios[0] / (ratios[0] + ratios[1])));
+  const rightWidth = Math.max(120, slot.width - gap - leftWidth);
+  const leftChildren = children.filter((child, index) => child.slot === "sidebar" || (child.slot !== "detail" && index % 2 === 0));
+  const rightChildren = children.filter((child, index) => child.slot === "detail" || (child.slot !== "sidebar" && index % 2 === 1));
+  const leftSlots = computeVerticalIntentSlots(leftChildren, { x: slot.x, y: slot.y, width: leftWidth, height: slot.height }, gap, profile);
+  const rightSlots = computeVerticalIntentSlots(rightChildren, { x: slot.x + leftWidth + gap, y: slot.y, width: rightWidth, height: slot.height }, gap, profile);
+  const queue = new Map<LayoutIntentDraftNode, LayoutBounds>();
+  leftChildren.forEach((child, index) => queue.set(child, leftSlots[index]));
+  rightChildren.forEach((child, index) => queue.set(child, rightSlots[index]));
+  return children.map((child) => queue.get(child) ?? slot);
+}
+
+function computeGridLikeSlots(
+  children: LayoutIntentDraftNode[],
+  slot: LayoutBounds,
+  gap: number,
+  profile: DesignCapabilityProfile,
+  columns: number
+) {
+  const columnCount = profile.platform === "pc_web" || profile.platform === "responsive_web" ? columns : 1;
+  const cellWidth = Math.max(80, (slot.width - gap * Math.max(0, columnCount - 1)) / columnCount);
+  const rows = Math.max(1, Math.ceil(children.length / columnCount));
+  const preferredHeight = Math.max(...children.map((child) => getIntentPreferredSize(child, slot, profile).height), 96);
+  const cellHeight = Math.min(Math.max(96, preferredHeight), Math.max(96, (slot.height - gap * Math.max(0, rows - 1)) / rows));
+  return children.map((_, index) => ({
+    x: slot.x + (index % columnCount) * (cellWidth + gap),
+    y: slot.y + Math.floor(index / columnCount) * (cellHeight + gap),
+    width: cellWidth,
+    height: cellHeight
+  }));
+}
+
+function computeDashboardSlots(
+  children: LayoutIntentDraftNode[],
+  slot: LayoutBounds,
+  gap: number,
+  profile: DesignCapabilityProfile
+) {
+  const summary = children.filter((child) => child.slot === "summary" || normalizeLayoutIntentType(child.type) === "MetricGroup");
+  const rest = children.filter((child) => !summary.includes(child));
+  if (summary.length === 0) return computeVerticalIntentSlots(children, slot, gap, profile);
+  const summaryHeight = Math.min(120, Math.max(88, slot.height * 0.18));
+  const summarySlots = computeGridLikeSlots(summary, { x: slot.x, y: slot.y, width: slot.width, height: summaryHeight }, gap, profile, Math.min(4, Math.max(1, summary.length)));
+  const restSlots = computeVerticalIntentSlots(rest, { x: slot.x, y: slot.y + summaryHeight + gap, width: slot.width, height: Math.max(1, slot.height - summaryHeight - gap) }, gap, profile);
+  const queue = new Map<LayoutIntentDraftNode, LayoutBounds>();
+  summary.forEach((child, index) => queue.set(child, summarySlots[index]));
+  rest.forEach((child, index) => queue.set(child, restSlots[index]));
+  return children.map((child) => queue.get(child) ?? slot);
+}
+
+function getIntentPreferredSize(intent: LayoutIntentDraftNode, parent: LayoutBounds, profile: DesignCapabilityProfile): { width: number; height: number } {
+  const normalizedType = normalizeLayoutIntentType(intent.type);
+  if ((intent.width === "hug" || normalizedType === "ActionBar") && intent.width !== "fill" && intent.children?.length) {
+    const gap = resolveIntentSpace(intent.gap, profile, "sm");
+    const childSizes: Array<{ width: number; height: number }> = intent.children.map((child) => getIntentPreferredSize(child, parent, profile));
+    return {
+      width: childSizes.reduce((sum, size) => sum + size.width, 0) + gap * Math.max(0, childSizes.length - 1),
+      height: Math.max(...childSizes.map((size) => size.height), 1)
+    };
+  }
+  const explicitWidth = typeof intent.width === "number" ? intent.width : undefined;
+  const explicitHeight = typeof intent.height === "number" ? intent.height : undefined;
+  const isPc = profile.platform === "pc_web" || profile.platform === "responsive_web";
+  if (!explicitHeight && intent.children?.length && ["Card", "Panel", "Section", "Stack"].includes(normalizedType)) {
+    const padding = resolveDensitySpace(resolveIntentSpace(intent.padding, profile, normalizedType === "Section" ? "lg" : "md"), intent.density);
+    const gap = resolveDensitySpace(resolveIntentSpace(intent.gap, profile, "md"), intent.density);
+    const childSizes = intent.children.map((child) => getIntentPreferredSize(child, parent, profile));
+    if (intent.direction === "horizontal") {
+      return {
+        width: explicitWidth ?? parent.width,
+        height: Math.max(80, Math.max(...childSizes.map((size) => size.height), 1) + padding * 2)
+      };
+    }
+    return {
+      width: explicitWidth ?? parent.width,
+      height: Math.max(80, childSizes.reduce((sum, size) => sum + size.height, 0) + gap * Math.max(0, childSizes.length - 1) + padding * 2)
+    };
+  }
+  if (!explicitHeight && normalizedType === "Grid" && intent.children?.length) {
+    const padding = resolveDensitySpace(resolveIntentSpace(intent.padding, profile, "md"), intent.density);
+    const gap = resolveDensitySpace(resolveIntentSpace(intent.gap, profile, "md"), intent.density);
+    if (intent.layout === "twoColumn" || intent.layout === "masterDetail") {
+      const childHeights = intent.children.map((child) => getIntentPreferredSize(child, parent, profile).height);
+      return { width: explicitWidth ?? parent.width, height: Math.max(180, Math.max(...childHeights, 1) + padding * 2) };
+    }
+    const columns = Math.max(1, Math.min(4, Number(intent.props?.columns ?? intent.columnCount ?? intent.columns?.length ?? 3) || 3));
+    const rows = Math.max(1, Math.ceil(intent.children.length / columns));
+    const childHeight = Math.max(...intent.children.map((child) => getIntentPreferredSize(child, parent, profile).height), 96);
+    return { width: explicitWidth ?? parent.width, height: Math.max(180, rows * childHeight + gap * (rows - 1) + padding * 2) };
+  }
+  const defaults: Record<string, { width: number; height: number }> = {
+    Text: { width: parent.width, height: Math.max(intent.variant === "title" ? 32 : 24, estimateTextHeight(intent, parent.width)) },
+    Title: { width: parent.width, height: 34 },
+    Button: { width: isPc ? 96 : parent.width, height: isPc ? 40 : 48 },
+    Input: { width: isPc ? 220 : parent.width, height: isPc ? 36 : 44 },
+    Field: { width: parent.width, height: isPc ? 40 : 52 },
+    Select: { width: isPc ? 220 : parent.width, height: isPc ? 36 : 44 },
+    Upload: { width: parent.width, height: isPc ? 128 : 104 },
+    RadioGroup: { width: parent.width, height: isPc ? 40 : 80 },
+    CheckboxGroup: { width: parent.width, height: isPc ? 40 : 96 },
+    Image: { width: parent.width, height: isPc ? 160 : 120 },
+    Toolbar: { width: parent.width, height: isPc ? 56 : 48 },
+    ActionBar: { width: parent.width, height: isPc ? 48 : 56 },
+    FilterBar: { width: parent.width, height: isPc ? 92 : 44 },
+    MetricGroup: { width: parent.width, height: isPc ? 96 : 82 },
+    Table: { width: parent.width, height: Math.max(240, parent.height * 0.55) },
+    Form: { width: parent.width, height: isPc ? Math.max(280, parent.height * 0.5) : Math.max(320, parent.height * 0.56) },
+    DescriptionList: { width: parent.width, height: getDescriptionListPreferredHeight(intent, parent, profile) },
+    Tabs: { width: parent.width, height: 44 },
+    Pagination: { width: parent.width, height: 44 },
+    EmptyState: { width: parent.width, height: isPc ? 220 : 180 },
+    ListItem: { width: parent.width, height: isPc ? 88 : 76 },
+    CardList: { width: parent.width, height: Math.max(220, parent.height * 0.45) },
+    Modal: { width: isPc ? 520 : parent.width, height: isPc ? 420 : 360 },
+    Drawer: { width: isPc ? 420 : parent.width, height: parent.height },
+    Steps: { width: parent.width, height: isPc ? 56 : 180 },
+    StatusTag: { width: 72, height: 28 },
+    Card: { width: parent.width, height: isPc ? 148 : 104 },
+    Panel: { width: parent.width, height: isPc ? 180 : 128 },
+    Section: { width: parent.width, height: isPc ? 160 : 120 },
+    Grid: { width: parent.width, height: Math.max(180, parent.height * 0.4) },
+    Stack: { width: parent.width, height: Math.max(120, parent.height * 0.3) }
+  };
+  const fallback = defaults[normalizedType] ?? defaults.Stack;
+  return {
+    width: explicitWidth ?? fallback.width,
+    height: explicitHeight ?? fallback.height
+  };
+}
+
+function normalizeLayoutIntentType(type: string) {
+  const lower = type.toLowerCase().replace(/[\s_-]+/g, "");
+  if (["page", "screen", "artboard"].includes(lower)) return "Page";
+  if (["stack", "vstack", "hstack", "container", "box", "group"].includes(lower)) return "Stack";
+  if (["grid", "cards", "cardgrid"].includes(lower)) return "Grid";
+  if (["section"].includes(lower)) return "Section";
+  if (["card"].includes(lower)) return "Card";
+  if (["panel", "sheet", "detail", "detailpanel", "statuspanel"].includes(lower)) return "Panel";
+  if (["toolbar", "topbar", "nav"].includes(lower)) return "Toolbar";
+  if (["actionbar", "actions"].includes(lower)) return "ActionBar";
+  if (["filterbar", "searchbar", "filters", "querybar"].includes(lower)) return "FilterBar";
+  if (["metricgroup", "metrics", "summary"].includes(lower)) return "MetricGroup";
+  if (["table", "datatable", "list"].includes(lower)) return "Table";
+  if (["cardlist", "listview"].includes(lower)) return "CardList";
+  if (["listitem", "cell", "rowitem"].includes(lower)) return "ListItem";
+  if (["form", "formpanel"].includes(lower)) return "Form";
+  if (["descriptionlist", "descriptions", "keyvalue", "keyvaluelist", "infolist", "fieldlist"].includes(lower)) return "DescriptionList";
+  if (["tabs", "tab"].includes(lower)) return "Tabs";
+  if (["pagination", "pager"].includes(lower)) return "Pagination";
+  if (["emptystate", "empty", "blankstate", "nodata"].includes(lower)) return "EmptyState";
+  if (["upload", "uploader", "fileupload", "imageupload"].includes(lower)) return "Upload";
+  if (["select", "picker", "dropdown"].includes(lower)) return "Select";
+  if (["radiogroup", "radio"].includes(lower)) return "RadioGroup";
+  if (["checkboxgroup", "checkbox"].includes(lower)) return "CheckboxGroup";
+  if (["modal", "dialog", "popup"].includes(lower)) return "Modal";
+  if (["drawer", "sheetdrawer"].includes(lower)) return "Drawer";
+  if (["steps", "stepper", "timeline"].includes(lower)) return "Steps";
+  if (["repeat", "foreach", "loop"].includes(lower)) return "Repeat";
+  if (["statustag", "tag", "badge", "status"].includes(lower)) return "StatusTag";
+  if (["button"].includes(lower)) return "Button";
+  if (["input", "field", "select", "textarea", "upload"].includes(lower)) return "Input";
+  if (["image", "avatar", "illustration", "icon"].includes(lower)) return "Image";
+  if (["title", "heading"].includes(lower)) return "Title";
+  return "Text";
+}
+
+function resolveIntentSpace(
+  value: LayoutIntentDraftNode["gap"] | LayoutIntentDraftNode["padding"] | undefined,
+  profile: DesignCapabilityProfile,
+  fallback: "sm" | "md" | "lg"
+) {
+  if (value === "none") return 0;
+  if (value === "xs") return Math.max(4, Math.round(getCompilerSpacing(profile, "sm") / 2));
+  if (value === "sm") return getCompilerSpacing(profile, "sm");
+  if (value === "lg") return getCompilerSpacing(profile, "lg");
+  if (value === "xl") return getCompilerSpacing(profile, "lg") + getCompilerSpacing(profile, "sm");
+  return getCompilerSpacing(profile, fallback);
+}
+
+function resolveDensitySpace(value: number, density: LayoutIntentDraftNode["density"]) {
+  if (density === "compact") return Math.max(4, Math.round(value * 0.72));
+  if (density === "spacious") return Math.round(value * 1.28);
+  return value;
 }
 
 function normalizeSceneGraphHierarchy(nodes: WorkspaceDesignNode[]) {
@@ -1441,7 +2859,7 @@ function inferStitchSectionKind(request: string, incremental: boolean, nodes: St
   const text = `${request} ${nodes.map((node) => `${node.name} ${node.text ?? ""}`).join(" ")}`;
   if (!incremental) return "shell";
   if (/顶部|导航|标题|框架|header|topbar|sidebar|页面框架/i.test(text)) return "header";
-  if (/筛选|查询|搜索|摘要|工具栏|filter|search|toolbar|统计/i.test(text)) return "filters";
+  if (/筛选|查询|搜索|摘要|工具栏|filter|search|toolbar|统计|概览/i.test(text)) return "filters";
   if (/页脚|分页|反馈|footer|pagination/i.test(text)) return "footer";
   return "main";
 }
@@ -1470,6 +2888,7 @@ function createWebAdminStitchSection(
   const pageTitle = inferPageTitle(request);
   const entity = inferBusinessEntityForStitch(request);
   const frameId = frame.id;
+  const isDetail = /详情|查看|资料|detail|inspect/i.test(request);
   if (sectionKind === "header") {
     const sidebarId = createCompilerId("sidebar");
     nodes.push(createCompilerNode("container", {
@@ -1631,7 +3050,14 @@ function createWebAdminStitchSection(
       stroke: "#e6edf5",
       radius: 8
     }));
-    const stats = inferStatsForEntity(entity);
+    const stats = isDetail
+      ? [
+        { label: "当前状态", value: "上架中" },
+        { label: "库存", value: "1,248" },
+        { label: "价格", value: "¥ 299.00" },
+        { label: "更新时间", value: "2026-05-08" }
+      ]
+      : inferStatsForEntity(entity);
     stats.forEach((stat, index) => {
       const x = contentX + 24 + index * 180;
       nodes.push(createCompilerNode("text", {
@@ -1664,6 +3090,9 @@ function createWebAdminStitchSection(
         lineHeight: 30
       }));
     });
+    if (isDetail) {
+      return nodes.map((node) => applyLibraryTokens(node, profile));
+    }
     inferFilterFields(entity, request).forEach((field, index) => {
       const x = contentX + 24 + index * 250;
       nodes.push(createCompilerNode("text", {
@@ -1718,6 +3147,94 @@ function createWebAdminStitchSection(
     }));
   }
   if (sectionKind === "main") {
+    if (isDetail) {
+      const detailId = createCompilerId("detail-card");
+      nodes.push(createCompilerNode("card", {
+        id: detailId,
+        parentId: frameId,
+        name: `${entity}详情卡片`,
+        x: contentX,
+        y: frame.y + 416,
+        width: contentWidth,
+        height: Math.max(360, frame.height - 520),
+        fill: "#ffffff",
+        stroke: "#e6edf5",
+        radius: 8
+      }));
+      nodes.push(createCompilerNode("text", {
+        parentId: detailId,
+        name: "详情标题",
+        x: contentX + 24,
+        y: frame.y + 440,
+        width: 260,
+        height: 26,
+        text: `${entity}详情`,
+        fill: "transparent",
+        stroke: "transparent",
+        textColor: "#101828",
+        fontSize: 18,
+        fontWeight: 700,
+        lineHeight: 26
+      }));
+      inferDetailFields(entity, request).slice(0, 10).forEach((field, index) => {
+        const col = index % 2;
+        const row = Math.floor(index / 2);
+        const x = contentX + 24 + col * Math.floor((contentWidth - 72) / 2);
+        const y = frame.y + 496 + row * 72;
+        nodes.push(createCompilerNode("text", {
+          parentId: detailId,
+          name: `${field}标签`,
+          x,
+          y,
+          width: 140,
+          height: 20,
+          text: field,
+          fill: "transparent",
+          stroke: "transparent",
+          textColor: "#667085",
+          fontSize: 13,
+          lineHeight: 20
+        }));
+        nodes.push(createCompilerNode("text", {
+          parentId: detailId,
+          name: `${field}值`,
+          x,
+          y: y + 26,
+          width: Math.floor((contentWidth - 72) / 2) - 24,
+          height: 24,
+          text: inferDetailFieldValue(entity, field, request),
+          fill: "transparent",
+          stroke: "transparent",
+          textColor: "#101828",
+          fontSize: 15,
+          lineHeight: 22
+        }));
+      });
+      nodes.push(createCompilerNode("button", {
+        parentId: detailId,
+        name: "编辑按钮",
+        x: contentX + contentWidth - 244,
+        y: frame.y + 436,
+        width: 92,
+        height: 36,
+        text: "编辑",
+        radius: 6
+      }));
+      nodes.push(createCompilerNode("button", {
+        parentId: detailId,
+        name: "返回按钮",
+        x: contentX + contentWidth - 132,
+        y: frame.y + 436,
+        width: 92,
+        height: 36,
+        text: "返回",
+        fill: "#ffffff",
+        stroke: "#d0d5dd",
+        textColor: "#344054",
+        radius: 6
+      }));
+      return nodes.map((node) => applyLibraryTokens(node, profile));
+    }
     const tableId = createCompilerId("table-card");
     nodes.push(createCompilerNode("card", {
       id: tableId,
@@ -2154,6 +3671,28 @@ function inferTableRows(entity: string) {
   ];
 }
 
+function inferDetailFields(entity: string, request = "") {
+  const requestedFields = extractFieldHintsFromText(request);
+  const defaults = entity === "商品"
+    ? ["商品名称", "商品编号", "分类", "销售状态", "价格", "库存", "规格", "更新时间", "商品描述", "售后说明"]
+    : [`${entity}名称`, `${entity}编号`, "状态", "类型", "负责人", "创建时间", "更新时间", "备注"];
+  return Array.from(new Set([...(requestedFields.length > 0 ? requestedFields : defaults)]));
+}
+
+function inferDetailFieldValue(entity: string, field: string, request = "") {
+  if (/名称|标题/.test(field)) return entity === "商品" ? "智能恒温水杯 Pro" : `${entity}示例名称`;
+  if (/编号|ID|编码/.test(field)) return entity === "商品" ? "SPU-20260508-001" : `${entity.toUpperCase()}-20260508`;
+  if (/分类|类型/.test(field)) return entity === "商品" ? "智能硬件 / 生活电器" : "标准类型";
+  if (/状态/.test(field)) return entity === "商品" ? "上架中" : "启用";
+  if (/价格|金额/.test(field)) return "¥ 299.00";
+  if (/库存/.test(field)) return "1,248 件";
+  if (/规格/.test(field)) return "曜石黑 / 500ml / 标准版";
+  if (/时间|日期/.test(field)) return "2026-05-08 10:24";
+  if (/负责人/.test(field)) return "负责人 A";
+  if (/描述|说明|备注/.test(field)) return entity === "商品" ? "适合日常通勤与办公室使用，支持智能温控与状态提醒。" : "用于展示当前对象的关键详情信息。";
+  return `${field}内容`;
+}
+
 function inferMobileRows(entity: string) {
   return [
     { title: `${entity}记录 001`, desc: "负责人 A / 2026-05-08 10:24", status: "待处理", meta: "支持查看详情与后续操作" },
@@ -2548,6 +4087,109 @@ function collectSceneGraphDiagnostics(nodes: WorkspaceDesignNode[], layoutTree: 
   return diagnostics;
 }
 
+function collectLayoutIntentCoverageDiagnostics(schemaDraft: StitchUiSchemaDraft, nodes: WorkspaceDesignNode[]) {
+  const diagnostics: string[] = [];
+  schemaDraft.artboards.forEach((artboard) => {
+    if (!artboard.layoutIntent) return;
+    const coverage = collectLayoutIntentCoverage(artboard.layoutIntent);
+    const actualCounts = countRenderedCoverageNodes(nodes, artboard.name);
+    Object.entries(coverage.expectedNodeCounts).forEach(([type, expected]) => {
+      if (expected <= 0) return;
+      const actual = actualCounts[type] ?? 0;
+      if (actual === 0) {
+        diagnostics.push(`compiler-coverage:${artboard.name}:${type}:${actual}/${expected}`);
+      } else if (actual < Math.ceil(expected * 0.6)) {
+        diagnostics.push(`compiler-coverage-warning:${artboard.name}:${type}:${actual}/${expected}`);
+      }
+    });
+    const missingTexts = coverage.expectedTexts.filter((text) => !isTextCoveredByRenderedNodes(text, nodes));
+    if (coverage.expectedTexts.length >= 4 && missingTexts.length >= Math.max(3, Math.ceil(coverage.expectedTexts.length * 0.3))) {
+      diagnostics.push(`compiler-coverage:${artboard.name}:text-missing:${coverage.expectedTexts.length - missingTexts.length}/${coverage.expectedTexts.length}:${missingTexts.slice(0, 8).join("|")}`);
+    }
+    if (coverage.descriptionItems > 0) {
+      const renderedTextCount = nodes.filter((node) => node.type === "text" && isNodeLikelyInsideArtboard(node, artboard.name, nodes)).length;
+      const expectedTextCount = coverage.descriptionItems * 2;
+      if (renderedTextCount < Math.ceil(expectedTextCount * 0.6)) {
+        diagnostics.push(`compiler-coverage:${artboard.name}:DescriptionListItems:${renderedTextCount}/${expectedTextCount}`);
+      }
+    }
+  });
+  return diagnostics;
+}
+
+function collectLayoutIntentCoverage(intent: LayoutIntentDraftNode) {
+  const expectedNodeCounts: Record<string, number> = {};
+  const expectedTexts: string[] = [];
+  let descriptionItems = 0;
+  const visit = (node: LayoutIntentDraftNode) => {
+    const normalizedType = normalizeLayoutIntentType(node.type);
+    const renderedType = getCoverageRenderedType(normalizedType);
+    if (renderedType) expectedNodeCounts[renderedType] = (expectedNodeCounts[renderedType] ?? 0) + 1;
+    if (normalizedType === "DescriptionList") descriptionItems += normalizeKeyValueItems(node).length;
+    collectCoverageTexts(node).forEach((text) => {
+      if (!expectedTexts.includes(text)) expectedTexts.push(text);
+    });
+    (node.children ?? []).forEach(visit);
+  };
+  visit(intent);
+  return { expectedNodeCounts, expectedTexts, descriptionItems };
+}
+
+function getCoverageRenderedType(normalizedType: string) {
+  if (normalizedType === "Text" || normalizedType === "Title") return "text";
+  if (normalizedType === "Button" || normalizedType === "StatusTag") return "button";
+  if (normalizedType === "Input" || normalizedType === "Field" || normalizedType === "Select") return "input";
+  if (normalizedType === "Image") return "image";
+  if (normalizedType === "Table") return "table";
+  if (normalizedType === "Card" || normalizedType === "Panel") return "card";
+  return undefined;
+}
+
+function collectCoverageTexts(intent: LayoutIntentDraftNode) {
+  const normalizedType = normalizeLayoutIntentType(intent.type);
+  const values: string[] = [];
+  if (intent.text) values.push(intent.text);
+  if ((normalizedType === "Button" || normalizedType === "Input" || normalizedType === "Select") && intent.label) values.push(intent.label);
+  if (normalizedType === "DescriptionList") {
+    normalizeKeyValueItems(intent).forEach((item) => {
+      values.push(item.label, item.value);
+    });
+  }
+  return values.map(cleanCoverageText).filter(isMeaningfulCoverageText);
+}
+
+function cleanCoverageText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function isMeaningfulCoverageText(value: string) {
+  if (!value || value.length < 2) return false;
+  if (/^(文本|按钮|请输入|图片|状态|字段\s*\d+|-)$/.test(value)) return false;
+  return true;
+}
+
+function countRenderedCoverageNodes(nodes: WorkspaceDesignNode[], artboardName: string) {
+  const scopedNodes = nodes.filter((node) => isNodeLikelyInsideArtboard(node, artboardName, nodes));
+  return scopedNodes.reduce<Record<string, number>>((counts, node) => {
+    counts[node.type] = (counts[node.type] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function isTextCoveredByRenderedNodes(text: string, nodes: WorkspaceDesignNode[]) {
+  const expected = cleanCoverageText(text);
+  return nodes.some((node) => {
+    const actual = cleanCoverageText(String(node.text ?? ""));
+    return actual === expected || actual.includes(expected) || expected.includes(actual);
+  });
+}
+
+function isNodeLikelyInsideArtboard(node: WorkspaceDesignNode, artboardName: string, nodes: WorkspaceDesignNode[]) {
+  const frame = nodes.find((candidate) => candidate.type === "frame" && candidate.name.includes(artboardName));
+  if (!frame) return true;
+  return node.id === frame.id || node.parentId === frame.id || isNodeInsideTargetWithTolerance(node, frame, 4);
+}
+
 function inferLayoutMode(semantic: SemanticUiNode): LayoutTreeNode["layout"] {
   if (semantic.type === "Toolbar" || semantic.type === "Tabs" || semantic.type === "ActionBar") return "horizontal";
   if (semantic.type === "CardList") return "grid";
@@ -2789,6 +4431,140 @@ function reflowOverlappingNodes(nodes: WorkspaceDesignNode[], spacing: number) {
   });
   const movedNodes = readableNodes.map((node) => ({ ...node, y: yById.get(node.id) ?? node.y }));
   return expandFramesToFitChildren(movedNodes, spacing);
+}
+
+function measureAndReflowReadableLayout(nodes: WorkspaceDesignNode[], profile: DesignCapabilityProfile) {
+  const spacing = getCompilerSpacing(profile, "md");
+  const padding = profile.platform === "pc_web" || profile.platform === "responsive_web"
+    ? getCompilerSpacing(profile, "lg")
+    : getCompilerSpacing(profile, "md");
+  let nextNodes = nodes.map((node) => repairNodeMeasuredBounds(node, nodes, padding, profile));
+  nextNodes = expandContainersToMeasuredChildren(nextNodes, spacing);
+  nextNodes = reflowDirectChildrenWithinParents(nextNodes, spacing);
+  nextNodes = clampReadableNodesIntoParents(nextNodes, padding);
+  nextNodes = expandContainersToMeasuredChildren(nextNodes, spacing);
+  return reflowOverlappingNodes(nextNodes, spacing);
+}
+
+function repairNodeMeasuredBounds(
+  node: WorkspaceDesignNode,
+  nodes: WorkspaceDesignNode[],
+  padding: number,
+  profile: DesignCapabilityProfile
+): WorkspaceDesignNode {
+  const parent = findNodeLayoutParent(node, nodes);
+  if (!parent || node.type === "frame") return fixNodeReadability(node);
+  const maxWidth = Math.max(32, parent.width - padding * 2);
+  const maxX = parent.x + parent.width - padding;
+  const minX = parent.x + padding;
+  if (node.type === "text") {
+    const text = String(node.text ?? node.name ?? "").trim();
+    const fontSize = node.fontSize || (profile.platform === "pc_web" || profile.platform === "responsive_web" ? 14 : 13);
+    const lineHeight = node.lineHeight || Math.ceil(fontSize * 1.45);
+    const minReadableWidth = getMinimumReadableTextWidth(text, fontSize, maxWidth, profile);
+    const width = Math.min(maxWidth, Math.max(node.width, minReadableWidth));
+    const x = node.x + width > maxX ? Math.max(minX, maxX - width) : Math.max(minX, node.x);
+    const charsPerLine = Math.max(1, Math.floor(width / Math.max(fontSize * 0.72, 7)));
+    const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+    return {
+      ...node,
+      x,
+      width,
+      height: Math.max(node.height, Math.ceil(lines * lineHeight)),
+      fontSize,
+      lineHeight,
+      textVerticalAlign: node.textVerticalAlign ?? "top"
+    };
+  }
+  const width = Math.min(Math.max(node.width, node.type === "button" || node.type === "input" ? 72 : node.width), maxWidth);
+  const x = node.x + width > maxX ? Math.max(minX, maxX - width) : Math.max(minX, node.x);
+  return fixNodeReadability({ ...node, x, width });
+}
+
+function getMinimumReadableTextWidth(
+  text: string,
+  fontSize: number,
+  maxWidth: number,
+  profile: DesignCapabilityProfile
+) {
+  if (!text) return Math.min(maxWidth, 48);
+  const hasCjk = /[\u4e00-\u9fa5]/.test(text);
+  const minChars = hasCjk ? Math.min(Math.max(text.length, 2), 12) : Math.min(Math.max(text.length, 4), 16);
+  const ideal = Math.ceil(minChars * fontSize * (hasCjk ? 1.05 : 0.62));
+  const floor = profile.platform === "pc_web" || profile.platform === "responsive_web" ? 72 : 56;
+  return Math.min(maxWidth, Math.max(floor, ideal));
+}
+
+function findNodeLayoutParent(node: WorkspaceDesignNode, nodes: WorkspaceDesignNode[]) {
+  if (node.parentId) {
+    const explicit = nodes.find((item) => item.id === node.parentId);
+    if (explicit) return explicit;
+  }
+  return nodes
+    .filter((candidate) => candidate.id !== node.id && (candidate.type === "frame" || candidate.type === "container" || candidate.type === "card"))
+    .filter((candidate) => isNodeInsideTarget(node, candidate))
+    .sort((a, b) => (a.width * a.height) - (b.width * b.height))[0];
+}
+
+function clampReadableNodesIntoParents(nodes: WorkspaceDesignNode[], padding: number) {
+  return nodes.map((node) => {
+    const parent = findNodeLayoutParent(node, nodes);
+    if (!parent || node.type === "frame") return node;
+    const maxWidth = Math.max(24, parent.width - padding * 2);
+    const width = Math.min(node.width, maxWidth);
+    return {
+      ...node,
+      width,
+      x: clampNumber(node.x, parent.x + padding, Math.max(parent.x + padding, parent.x + parent.width - padding - width)),
+      y: Math.max(parent.y + padding, node.y)
+    };
+  });
+}
+
+function expandContainersToMeasuredChildren(nodes: WorkspaceDesignNode[], spacing: number) {
+  return nodes.map((node) => {
+    if (node.type !== "container" && node.type !== "card" && node.type !== "frame") return node;
+    const children = nodes.filter((child) => child.id !== node.id && child.parentId === node.id);
+    if (children.length === 0) return node;
+    const bottom = Math.max(...children.map((child) => child.y + child.height));
+    const right = Math.max(...children.map((child) => child.x + child.width));
+    return {
+      ...node,
+      height: Math.max(node.height, Math.ceil(bottom - node.y + spacing)),
+      width: Math.max(node.width, Math.ceil(right - node.x + spacing))
+    };
+  });
+}
+
+function reflowDirectChildrenWithinParents(nodes: WorkspaceDesignNode[], spacing: number) {
+  let nextNodes = [...nodes];
+  const parentIds = Array.from(new Set(nextNodes.map((node) => node.parentId).filter((id): id is string => Boolean(id))));
+  parentIds.forEach((parentId) => {
+    const children = nextNodes
+      .filter((node) => node.parentId === parentId && node.visible !== false && shouldMeasureReflowNode(node))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+    const yById = new Map<string, number>();
+    children.forEach((node, index) => {
+      let y = yById.get(node.id) ?? node.y;
+      for (let i = 0; i < index; i += 1) {
+        const previous = children[i];
+        const previousY = yById.get(previous.id) ?? previous.y;
+        const horizontalOverlap = node.x < previous.x + previous.width && node.x + node.width > previous.x;
+        const verticalConflict = y < previousY + previous.height + spacing && y + node.height > previousY;
+        if (horizontalOverlap && verticalConflict) y = previousY + previous.height + spacing;
+      }
+      yById.set(node.id, y);
+    });
+    nextNodes = nextNodes.map((node) => yById.has(node.id) ? { ...node, y: yById.get(node.id) ?? node.y } : node);
+  });
+  return nextNodes;
+}
+
+function shouldMeasureReflowNode(node: WorkspaceDesignNode) {
+  if (node.type === "frame") return false;
+  if (node.type === "button" && node.height <= 56) return false;
+  if (node.type === "input" && node.height <= 56) return false;
+  return node.type === "text" || node.type === "card" || node.type === "container" || node.type === "image" || node.type === "table";
 }
 
 function shouldAutoStackNode(node: WorkspaceDesignNode) {

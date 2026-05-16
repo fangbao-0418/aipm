@@ -38,6 +38,43 @@ export type WorkspaceDesignNodeType =
   | "card"
   | "image";
 
+export interface WorkspaceDesignPoint {
+  x: number;
+  y: number;
+}
+
+export interface WorkspaceDesignColorStop {
+  position: number;
+  color: string;
+}
+
+export interface WorkspaceDesignGradientPaint {
+  type: "linear" | "radial" | "angular" | "diamond";
+  from: WorkspaceDesignPoint;
+  to: WorkspaceDesignPoint;
+  stops: WorkspaceDesignColorStop[];
+}
+
+export interface WorkspaceDesignPaint {
+  kind: "solid" | "gradient" | "image";
+  enabled: boolean;
+  sourceIndex: number;
+  css: string;
+  color?: string;
+  gradient?: WorkspaceDesignGradientPaint;
+  imageRef?: string;
+  imageUrl?: string;
+  opacity?: number;
+}
+
+export interface WorkspaceDesignImageColorControls {
+  isEnabled: boolean;
+  brightness: number;
+  contrast: number;
+  hue: number;
+  saturation: number;
+}
+
 export interface WorkspaceDesignNode {
   id: string;
   parentId?: string;
@@ -49,7 +86,9 @@ export interface WorkspaceDesignNode {
   width: number;
   height: number;
   fill: string;
+  fills?: WorkspaceDesignPaint[];
   stroke: string;
+  borders?: WorkspaceDesignPaint[];
   strokeWidth?: number;
   strokePosition?: "center" | "inside" | "outside";
   strokeDashPattern?: number[];
@@ -74,10 +113,13 @@ export interface WorkspaceDesignNode {
   visible: boolean;
   locked: boolean;
   imageUrl?: string;
+  imageFilter?: string;
+  imageColorControls?: WorkspaceDesignImageColorControls;
   fillImageUrl?: string;
   fillImageMode?: "stretch" | "fill" | "fit" | "tile";
   fillImageScale?: number;
   svgPath?: string;
+  svgPathAssetRef?: string;
   svgFillRule?: "nonzero" | "evenodd";
   svgPaths?: Array<{
     d: string;
@@ -90,7 +132,9 @@ export interface WorkspaceDesignNode {
     fillRule?: "nonzero" | "evenodd";
     opacity?: number;
   }>;
+  svgPathsAssetRef?: string;
   svgTree?: WorkspaceDesignSvgNode;
+  svgTreeAssetRef?: string;
   clipBounds?: {
     x: number;
     y: number;
@@ -105,8 +149,17 @@ export interface WorkspaceDesignNode {
     svgPath: string;
     fillRule?: "nonzero" | "evenodd";
   };
+  clipPathSvgAssetRef?: string;
   sourceRef?: string;
   sourceLayerClass?: string;
+  sourceMeta?: {
+    layerOpacity?: number;
+    inheritedOpacity?: number;
+    effectiveOpacity?: number;
+    localRotation?: number;
+    inheritedRotation?: number;
+    effectiveRotation?: number;
+  };
   opacity?: number;
   rotation?: number;
   blendMode?: string;
@@ -148,6 +201,7 @@ export type WorkspaceDesignSvgNode = {
   strokeLineJoin?: "miter" | "round" | "bevel";
   fillRule?: "nonzero" | "evenodd";
   opacity?: number;
+  transform?: string;
 };
 
 export interface WorkspaceDesignPage {
@@ -177,11 +231,59 @@ export interface WorkspaceDesignComponentLibrary {
   updatedAt: string;
 }
 
+export interface WorkspaceDesignStyleProfile {
+  platform: "web" | "mobile" | "unknown";
+  colors: {
+    primary?: string;
+    background?: string;
+    surface?: string;
+    border?: string;
+    text?: string;
+    mutedText?: string;
+  };
+  typography: {
+    title?: number;
+    body?: number;
+    caption?: number;
+  };
+  spacing: {
+    pageMargin?: number;
+    sectionGap?: number;
+    itemGap?: number;
+  };
+  radius: {
+    card?: number;
+    button?: number;
+    input?: number;
+  };
+  components: {
+    button?: { height?: number; radius?: number; primaryFill?: string; textColor?: string };
+    input?: { height?: number; radius?: number; fill?: string; border?: string };
+    card?: { radius?: number; fill?: string; border?: string; padding?: number };
+  };
+}
+
+export interface WorkspaceDesignPageTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  sourcePageId: string;
+  sourceFrameId: string;
+  sourceFileName: string;
+  nodeCount: number;
+  width: number;
+  height: number;
+  nodes: WorkspaceDesignNode[];
+  styleProfile: WorkspaceDesignStyleProfile;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceDesignAsset {
   id: string;
   name: string;
   sourceFileName: string;
-  type: "image";
+  type: "image" | "vector";
   mimeType: string;
   url: string;
   sourceRef?: string;
@@ -204,6 +306,7 @@ export interface WorkspaceDesignFile {
   };
   pages: WorkspaceDesignPage[];
   componentLibraries?: WorkspaceDesignComponentLibrary[];
+  pageTemplates?: WorkspaceDesignPageTemplate[];
   importedComponents: WorkspaceDesignComponent[];
   importedAssets: WorkspaceDesignAsset[];
   updatedAt: string;

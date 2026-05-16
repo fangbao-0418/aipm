@@ -52,6 +52,43 @@ export type WorkspaceDesignNodeType =
   | "card"
   | "image";
 
+export interface WorkspaceDesignPoint {
+  x: number;
+  y: number;
+}
+
+export interface WorkspaceDesignColorStop {
+  position: number;
+  color: string;
+}
+
+export interface WorkspaceDesignGradientPaint {
+  type: "linear" | "radial" | "angular" | "diamond";
+  from: WorkspaceDesignPoint;
+  to: WorkspaceDesignPoint;
+  stops: WorkspaceDesignColorStop[];
+}
+
+export interface WorkspaceDesignPaint {
+  kind: "solid" | "gradient" | "image";
+  enabled: boolean;
+  sourceIndex: number;
+  css: string;
+  color?: string;
+  gradient?: WorkspaceDesignGradientPaint;
+  imageRef?: string;
+  imageUrl?: string;
+  opacity?: number;
+}
+
+export interface WorkspaceDesignImageColorControls {
+  isEnabled: boolean;
+  brightness: number;
+  contrast: number;
+  hue: number;
+  saturation: number;
+}
+
 export interface WorkspaceDesignNode {
   /** Stable node id inside the AI PM design schema. */
   id: string;
@@ -73,8 +110,12 @@ export interface WorkspaceDesignNode {
   height: number;
   /** CSS-compatible fill. Supports solid color, gradient, image fill, or transparent. */
   fill: string;
+  /** Parsed Sketch/Figma fill paint layers. Disabled layers are preserved but not rendered. */
+  fills?: WorkspaceDesignPaint[];
   /** CSS-compatible stroke color or gradient. */
   stroke: string;
+  /** Parsed Sketch/Figma border paint layers. Disabled layers are preserved but not rendered. */
+  borders?: WorkspaceDesignPaint[];
   /** Stroke thickness in canvas pixels. */
   strokeWidth?: number;
   /** Sketch/Figma-like stroke alignment. */
@@ -116,6 +157,10 @@ export interface WorkspaceDesignNode {
   locked: boolean;
   /** Bitmap/image URL resolved into the workspace asset store. */
   imageUrl?: string;
+  /** Approximate CSS filter generated from Sketch bitmap colorControls. */
+  imageFilter?: string;
+  /** Raw Sketch bitmap colorControls values for debugging and downstream renderers. */
+  imageColorControls?: WorkspaceDesignImageColorControls;
   /** Image fill URL resolved into the workspace asset store. */
   fillImageUrl?: string;
   /** Image fill rendering mode. */
@@ -124,6 +169,8 @@ export interface WorkspaceDesignNode {
   fillImageScale?: number;
   /** Single SVG path for vector primitives or collapsed shape groups. */
   svgPath?: string;
+  /** Reference to an extracted vector asset containing svgPath/svgFillRule. */
+  svgPathAssetRef?: string;
   /** Fill rule for svgPath. */
   svgFillRule?: "nonzero" | "evenodd";
   /** Multiple SVG paths when a compound shape needs separate paint metadata. */
@@ -139,8 +186,12 @@ export interface WorkspaceDesignNode {
     opacity?: number;
     transform?: string;
   }>;
+  /** Reference to an extracted vector asset containing svgPaths. */
+  svgPathsAssetRef?: string;
   /** Nested SVG tree for shapeGroup/group vector hierarchies. */
   svgTree?: WorkspaceDesignSvgNode;
+  /** Reference to an extracted vector asset containing svgTree. */
+  svgTreeAssetRef?: string;
   /** Active clipping bounds inherited from Sketch clipping masks. */
   clipBounds?: {
     x: number;
@@ -157,6 +208,8 @@ export interface WorkspaceDesignNode {
     svgPath: string;
     fillRule?: "nonzero" | "evenodd";
   };
+  /** Reference to an extracted vector asset containing clipPath.svgPath. */
+  clipPathSvgAssetRef?: string;
   /** Resolved source asset or source reference id. */
   sourceRef?: string;
   /** Original source layer id, e.g. Sketch do_objectID. */
@@ -173,6 +226,9 @@ export interface WorkspaceDesignNode {
     isFixedToViewport?: boolean;
     maintainScrollPosition?: boolean;
     booleanOperation?: number;
+    rotation?: number;
+    isFlippedHorizontal?: boolean;
+    isFlippedVertical?: boolean;
     resizingConstraint?: number;
     resizingType?: number;
     sharedStyleID?: string;
@@ -196,6 +252,19 @@ export interface WorkspaceDesignNode {
     lineSpacingBehaviour?: number;
     glyphBounds?: string;
     imageRef?: string;
+    imageColorControls?: WorkspaceDesignImageColorControls;
+    /** Raw layer opacity before parent opacity is applied. */
+    layerOpacity?: number;
+    /** Product of parent layer opacities at import time. */
+    inheritedOpacity?: number;
+    /** Final opacity after parent opacity and layer opacity are multiplied. */
+    effectiveOpacity?: number;
+    /** Raw layer rotation before parent rotation is applied. */
+    localRotation?: number;
+    /** Accumulated parent rotation at import time. */
+    inheritedRotation?: number;
+    /** Final rotation after parent rotation and layer rotation are composed. */
+    effectiveRotation?: number;
     clippingMask?: string;
     flow?: Record<string, unknown>;
     exportOptions?: Record<string, unknown>;
@@ -295,11 +364,59 @@ export interface WorkspaceDesignComponentLibrary {
   updatedAt: string;
 }
 
+export interface WorkspaceDesignStyleProfile {
+  platform: "web" | "mobile" | "unknown";
+  colors: {
+    primary?: string;
+    background?: string;
+    surface?: string;
+    border?: string;
+    text?: string;
+    mutedText?: string;
+  };
+  typography: {
+    title?: number;
+    body?: number;
+    caption?: number;
+  };
+  spacing: {
+    pageMargin?: number;
+    sectionGap?: number;
+    itemGap?: number;
+  };
+  radius: {
+    card?: number;
+    button?: number;
+    input?: number;
+  };
+  components: {
+    button?: { height?: number; radius?: number; primaryFill?: string; textColor?: string };
+    input?: { height?: number; radius?: number; fill?: string; border?: string };
+    card?: { radius?: number; fill?: string; border?: string; padding?: number };
+  };
+}
+
+export interface WorkspaceDesignPageTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  sourcePageId: string;
+  sourceFrameId: string;
+  sourceFileName: string;
+  nodeCount: number;
+  width: number;
+  height: number;
+  nodes: WorkspaceDesignNode[];
+  styleProfile: WorkspaceDesignStyleProfile;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceDesignAsset {
   id: string;
   name: string;
   sourceFileName: string;
-  type: "image";
+  type: "image" | "vector";
   mimeType: string;
   url: string;
   sourceRef?: string;
@@ -316,6 +433,7 @@ export interface WorkspaceDesignFile {
   };
   pages: WorkspaceDesignPage[];
   componentLibraries?: WorkspaceDesignComponentLibrary[];
+  pageTemplates?: WorkspaceDesignPageTemplate[];
   importedComponents: WorkspaceDesignComponent[];
   importedAssets: WorkspaceDesignAsset[];
   updatedAt: string;
