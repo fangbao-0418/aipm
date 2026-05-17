@@ -231,6 +231,7 @@ export interface WorkspaceDesignNode {
     isFlippedVertical?: boolean;
     resizingConstraint?: number;
     resizingType?: number;
+    groupBehavior?: number;
     sharedStyleID?: string;
     symbolID?: string;
     overrideValues?: Array<{ overrideName?: string; value?: string }>;

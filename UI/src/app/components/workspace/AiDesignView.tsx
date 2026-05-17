@@ -184,6 +184,7 @@ interface DesignNode {
     localRotation?: number;
     inheritedRotation?: number;
     effectiveRotation?: number;
+    groupBehavior?: number;
     hasClippingMask?: boolean;
     activeClippingMask?: {
       sourceLayerId?: string;
@@ -3380,13 +3381,23 @@ function applySketchActiveClipToNode(node: DesignNode, activeClip?: SketchActive
 }
 
 function getNodeInheritedClip(node: DesignNode, inheritedClip?: SketchActiveClip): SketchActiveClip | undefined {
-  const bounds = node.clipBounds
-    ? intersectNodeClipBounds(inheritedClip?.bounds, node.clipBounds)
+  const groupClipBounds = isSketchGroupBehaviorClipNode(node)
+    ? { x: node.x, y: node.y, width: node.width, height: node.height }
+    : undefined;
+  const nodeClipBounds = groupClipBounds
+    ? intersectNodeClipBounds(node.clipBounds, groupClipBounds)
+    : node.clipBounds;
+  const bounds = nodeClipBounds
+    ? intersectNodeClipBounds(inheritedClip?.bounds, nodeClipBounds)
     : inheritedClip?.bounds;
   return {
     bounds,
     path: node.clipPath ?? inheritedClip?.path
   };
+}
+
+function isSketchGroupBehaviorClipNode(node: DesignNode) {
+  return node.sourceLayerClass === "group" && node.sourceMeta?.groupBehavior === 1;
 }
 
 function getSketchMaskClip(node: DesignNode, inheritedClip?: SketchActiveClip): SketchActiveClip {
@@ -6166,6 +6177,7 @@ function shouldAllowDesignNodeOverflow(node: DesignNode) {
 
 function shouldClipDesignNode(node: DesignNode) {
   return node.sourceMeta?.hasClippingMask === true
+    || isSketchGroupBehaviorClipNode(node)
     || node.sourceMeta?.activeClippingMask?.hasClippingMask === true
     || Boolean(node.clipBounds || node.clipPath);
 }

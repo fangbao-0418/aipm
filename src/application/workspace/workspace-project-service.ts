@@ -4643,6 +4643,10 @@ function convertSketchLayer(
   const transformedCenter = applySketchTransform(parentTransform, localNodeX + nodeWidth / 2, localNodeY + nodeHeight / 2);
   const nodeX = Math.round(transformedCenter.x - nodeWidth / 2);
   const nodeY = Math.round(transformedCenter.y - nodeHeight / 2);
+  const groupClipBounds = isSketchClippingGroupLayer(layerObject)
+    ? intersectDesignRects(context.clipBounds, { x: nodeX, y: nodeY, width: nodeWidth, height: nodeHeight })
+    : undefined;
+  const nodeClipBounds = groupClipBounds ?? context.clipBounds;
   const layerOpacity = readSketchOpacity(layerObject);
   const inheritedOpacity = context.inheritedOpacity ?? 1;
   const effectiveOpacity = clampSketchAlpha(inheritedOpacity * layerOpacity);
@@ -4707,7 +4711,7 @@ function convertSketchLayer(
     flippedVertical: layerObject.isFlippedVertical === true,
     shadow: readSketchShadow(layerObject),
     innerShadow: readSketchInnerShadow(layerObject),
-    clipBounds: context.clipBounds,
+    clipBounds: nodeClipBounds,
     clipPath: context.clipPath,
     ...(hasChildClippingMask || shouldRenderLayerAsPaintedBox ? {} : readSketchVectorMeta(layerObject, nodeWidth, nodeHeight, {
       scaleX: layoutScaleX,
@@ -4745,7 +4749,8 @@ function convertSketchLayer(
     transform: multiplySketchTransforms(parentTransform, sketchRotationTransform(localNodeX + nodeWidth / 2, localNodeY + nodeHeight / 2, layerRotation)),
     inheritedShapeStyle: getSketchChildInheritedShapeStyle(layerObject, context.inheritedShapeStyle),
     scaleX: layoutScaleX,
-    scaleY: layoutScaleY
+    scaleY: layoutScaleY,
+    clipBounds: nodeClipBounds
   });
   return [...(shouldReturnLayerNodeCandidate ? [renderNode] : []), ...symbolChildren, ...children];
 }
@@ -4892,6 +4897,10 @@ function shouldPreserveSketchSymbolChildAxis(
   }
   const sizingKey = axis === "x" ? "horizontalSizing" : "verticalSizing";
   return toNumber(layer[sizingKey], 0) === 1;
+}
+
+function isSketchClippingGroupLayer(layer: Record<string, unknown>) {
+  return getStringProp(layer, "_class") === "group" && toNumber(layer.groupBehavior, 0) === 1;
 }
 
 function convertSketchChildLayers(
@@ -8534,6 +8543,7 @@ function readSketchSourceMeta(
     isFlippedVertical: booleanOrUndefined(layer.isFlippedVertical),
     resizingConstraint: numberOrUndefined(layer.resizingConstraint),
     resizingType: numberOrUndefined(layer.resizingType),
+    groupBehavior: numberOrUndefined(layer.groupBehavior),
     sharedStyleID: getStringProp(layer, "sharedStyleID") || undefined,
     symbolID: getStringProp(layer, "symbolID") || undefined,
     overrideValues: readSketchOverrideValues(layer),
