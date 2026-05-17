@@ -4664,7 +4664,7 @@ function convertSketchLayer(
     letterSpacing: readSketchLetterSpacing(layerObject),
     underline: readSketchTextUnderline(layerObject),
     strikethrough: readSketchTextStrikethrough(layerObject),
-    visible: layerObject.isVisible !== false,
+    visible: includeAllSketchImportLayers ? true : layerObject.isVisible !== false,
     locked: layerObject.isLocked === true,
     sourceLayerId: getStringProp(layerObject, "do_objectID"),
     sourceLayerClass: layerClass,
@@ -4743,6 +4743,8 @@ type SketchTransformMatrix = {
   f: number;
 };
 
+const includeAllSketchImportLayers = true;
+
 function identitySketchTransform(): SketchTransformMatrix {
   return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 }
@@ -4795,10 +4797,17 @@ function normalizeSketchRotation(rotation: number) {
 }
 
 function shouldSkipSketchLayer(layer: Record<string, unknown>) {
+  if (includeAllSketchImportLayers) {
+    return false;
+  }
   const layerClass = getStringProp(layer, "_class").toLowerCase();
   const layerName = getStringProp(layer, "name").toLowerCase();
   const ignoredTokens = ["guide", "prototype", "flow", "selection"];
   return ignoredTokens.some((token) => layerClass.includes(token) || layerName.includes(token));
+}
+
+function isSketchLayerIncludedForImport(layer: Record<string, unknown>) {
+  return (includeAllSketchImportLayers || layer.isVisible !== false) && !shouldSkipSketchLayer(layer);
 }
 
 function shouldRenderSketchLayerAsPaintedBox(layer: Record<string, unknown>) {
@@ -4812,7 +4821,7 @@ function shouldRenderSketchLayerAsPaintedBox(layer: Record<string, unknown>) {
   if (layerClass !== "shapeGroup") {
     return false;
   }
-  const children = getSketchLayers(layer).map(safeObject).filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child));
+  const children = getSketchLayers(layer).map(safeObject).filter(isSketchLayerIncludedForImport);
   return children.length === 1 && getStringProp(children[0], "_class") === "rectangle";
 }
 
@@ -7705,7 +7714,7 @@ function collectMissingSketchGradientNodes(
     layer: Record<string, unknown>,
     state: { parentX: number; parentY: number; depth: number; parentZIndex: number }
   ) => {
-    if (layer.isVisible === false || shouldSkipSketchLayer(layer)) {
+    if ((!includeAllSketchImportLayers && layer.isVisible === false) || shouldSkipSketchLayer(layer)) {
       return;
     }
     const layerId = getStringProp(layer, "do_objectID");
@@ -7734,7 +7743,7 @@ function collectMissingSketchGradientNodes(
           strokeWidth: readSketchStrokeWidth(layer),
           strokePosition: readSketchStrokePosition(layer),
           radius: readSketchRadius(layer, nodeType),
-          visible: true,
+          visible: includeAllSketchImportLayers ? true : layer.isVisible !== false,
           locked: layer.isLocked === true,
           sourceLayerId: layerId,
           sourceLayerClass: layerClass,
@@ -7764,7 +7773,7 @@ function collectMissingSketchGradientNodes(
 }
 
 function hasRenderableSketchPaint(layer: Record<string, unknown>) {
-  if (layer.isVisible === false) {
+  if (!includeAllSketchImportLayers && layer.isVisible === false) {
     return false;
   }
   if (getStringProp(layer, "_class") === "artboard" && layer.hasBackgroundColor === true) {
@@ -8580,7 +8589,7 @@ function readSketchShapeGroupVectorMeta(
   height: number,
   scale: { scaleX: number; scaleY: number }
 ): Partial<WorkspaceDesignNode> {
-  const children = getSketchLayers(layer).map(safeObject).filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child));
+  const children = getSketchLayers(layer).map(safeObject).filter(isSketchLayerIncludedForImport);
   if (children.length === 0 || !children.every(isSketchShapeVectorChild)) {
     return {};
   }
@@ -8628,7 +8637,7 @@ function buildSketchSvgTree(
   const frame = readSketchFrame(layer);
   const children = getSketchLayers(layer)
     .map(safeObject)
-    .filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child))
+    .filter(isSketchLayerIncludedForImport)
     .map((child) => {
       if (isSketchVectorContainerLayer(child)) {
         return buildSketchSvgTree(child, { ...context, root: false });
@@ -8990,7 +8999,7 @@ function collectSketchShapeGroupPaths(
   const groupStyle = mergeSketchStyles(context.inheritedStyle, safeObject(layer.style));
   return getSketchLayers(layer)
     .map(safeObject)
-    .filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child))
+    .filter(isSketchLayerIncludedForImport)
     .flatMap((child) => convertSketchShapeChildToPath(child, {
       ...context,
       inheritedStyle: groupStyle
@@ -9073,7 +9082,7 @@ function isSketchShapeVectorChild(layer: Record<string, unknown>): boolean {
 function hasSketchClippingMaskDescendant(layer: Record<string, unknown>): boolean {
   return getSketchLayers(layer)
     .map(safeObject)
-    .filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child))
+    .filter(isSketchLayerIncludedForImport)
     .some((child) => child.hasClippingMask === true || hasSketchClippingMaskDescendant(child));
 }
 
@@ -9088,7 +9097,7 @@ function isSketchVectorContainerLayer(layer: Record<string, unknown>): boolean {
   if (hasRenderableSketchStyle(safeObject(layer.style))) {
     return false;
   }
-  const children = getSketchLayers(layer).map(safeObject).filter((child) => child.isVisible !== false && !shouldSkipSketchLayer(child));
+  const children = getSketchLayers(layer).map(safeObject).filter(isSketchLayerIncludedForImport);
   return children.length > 0 && children.every(isSketchShapeVectorChild);
 }
 
@@ -9105,7 +9114,7 @@ function hasRenderableSketchStyle(style: Record<string, unknown>) {
 }
 
 function shouldRenderSketchClippingMaskLayer(layer: Record<string, unknown>): boolean {
-  if (layer.isVisible === false) {
+  if (!includeAllSketchImportLayers && layer.isVisible === false) {
     return false;
   }
   if (normalizeSketchImageRef(layer.image)) {
@@ -9120,7 +9129,7 @@ function shouldRenderSketchClippingMaskLayer(layer: Record<string, unknown>): bo
     .some((fill) => fill.isEnabled !== false && normalizeSketchImageRef(fill.image))
     || getSketchLayers(layer)
       .map(safeObject)
-      .some((child) => child.isVisible !== false && !shouldSkipSketchLayer(child) && (
+      .some((child) => (includeAllSketchImportLayers || child.isVisible !== false) && !shouldSkipSketchLayer(child) && (
         hasRenderableSketchPaint(child)
         || hasRenderableSketchStyle(safeObject(child.style))
         || shouldRenderSketchClippingMaskLayer(child)
