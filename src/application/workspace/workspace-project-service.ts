@@ -4400,10 +4400,14 @@ async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<
     const assetByRef = new Map(assets.map((asset) => [asset.sourceRef, asset]));
     const symbolById = buildSketchSymbolMap(sourcePages, document);
     const sharedStyleMaps = buildSketchSharedStyleMaps(document);
-    const pages = sourcePages.map((pageLike, pageIndex) => {
+    const pages = sourcePages.flatMap((pageLike, pageIndex) => {
       const zIndexRef = { current: 0 };
       const pageName = getStringProp(pageLike, "name") || `Sketch 页面 ${pageIndex + 1}`;
-      const rawNodes = getSketchRenderableLayers(pageLike).flatMap((renderLayer, renderIndex) => (
+      const pageLayers = getSketchPageRenderableLayers(pageLike);
+      if (pageLayers.length === 0 && getSketchRenderableLayers(pageLike).length > 0) {
+        return [];
+      }
+      const rawNodes = pageLayers.flatMap((renderLayer, renderIndex) => (
         convertSketchLayer(renderLayer, {
           depth: 0,
           index: renderIndex,
@@ -4425,7 +4429,7 @@ async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<
         ...collectMissingSketchGradientNodes(pageLike, rawNodes, { assetByRef })
       ]);
 
-      return {
+      return [{
         id: createDesignId("import-page"),
         name: pageName,
         nodes: normalizedNodes.length > 0 ? normalizedNodes : [
@@ -4442,7 +4446,7 @@ async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<
             sourceMeta: readSketchSourceMeta(safeObject(pageLike))
           })
         ]
-      } satisfies WorkspaceDesignPage;
+      } satisfies WorkspaceDesignPage];
     });
 
     if (pages.length === 0) {
@@ -4613,12 +4617,20 @@ function convertSketchLayer(
   if (shouldSkipSketchLayer(layerObject)) {
     return [];
   }
+  if (!includeAllSketchImportLayers && layerObject.isVisible === false) {
+    return [];
+  }
   const nodeType = mapSketchLayerType(layerClass, getStringProp(layerObject, "name"));
   const shouldUseParentShapeBounds = context.parentShapeGroupBounds && isSketchPathLayer(layerObject);
-  const localNodeX = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.x : context.parentX + frame.x * context.scaleX;
+  let localNodeX = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.x : context.parentX + frame.x * context.scaleX;
   const localNodeY = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.y : context.parentY + frame.y * context.scaleY;
-  const nodeWidth = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.width : Math.max(1, Math.round(frame.width * context.scaleX));
+  const originalNodeWidth = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.width : Math.max(1, Math.round(frame.width * context.scaleX));
+  let nodeWidth = originalNodeWidth;
   const nodeHeight = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.height : Math.max(1, Math.round(frame.height * context.scaleY));
+  if (nodeType === "text" && toNumber(layerObject.horizontalSizing, 0) === 1) {
+    nodeWidth = Math.max(nodeWidth, estimateSketchTextWidth(layerObject));
+    localNodeX -= (nodeWidth - originalNodeWidth) / 2;
+  }
   const hasInvalidClippingMask = layerObject.hasClippingMask === true && (frame.width <= 0 || frame.height <= 0);
   const parentTransform = context.transform ?? identitySketchTransform();
   const transformedCenter = applySketchTransform(parentTransform, localNodeX + nodeWidth / 2, localNodeY + nodeHeight / 2);
@@ -4746,7 +4758,7 @@ type SketchTransformMatrix = {
   f: number;
 };
 
-const includeAllSketchImportLayers = true;
+const includeAllSketchImportLayers = false;
 
 function identitySketchTransform(): SketchTransformMatrix {
   return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
@@ -4813,6 +4825,10 @@ function isSketchLayerIncludedForImport(layer: Record<string, unknown>) {
   return (includeAllSketchImportLayers || layer.isVisible !== false) && !shouldSkipSketchLayer(layer);
 }
 
+function getSketchPageRenderableLayers(pageLike: unknown): AnyLayer[] {
+  return getSketchRenderableLayers(pageLike).filter((layer) => getStringProp(safeObject(layer), "_class") !== "symbolMaster");
+}
+
 function hasRenderableSketchFill(layer: Record<string, unknown>) {
   return toArray(safeObject(layer.style).fills)
     .map(safeObject)
@@ -4876,6 +4892,9 @@ function convertSketchChildLayers(
   return getSketchRenderableLayers(parentLayer).flatMap((child, index) => {
     const childObject = safeObject(child);
     if (shouldSkipSketchLayer(childObject)) {
+      return [];
+    }
+    if (!includeAllSketchImportLayers && childObject.isVisible === false) {
       return [];
     }
     if (childObject.shouldBreakMaskChain === true) {
@@ -7779,7 +7798,7 @@ function collectMissingSketchGradientNodes(
       });
     });
   };
-  getSketchRenderableLayers(pageLike).map(safeObject).forEach((layer, index) => {
+  getSketchPageRenderableLayers(pageLike).map(safeObject).forEach((layer, index) => {
     visit(layer, { parentX: 0, parentY: 0, depth: 0, parentZIndex: index });
   });
   return fallbackNodes;
@@ -8619,12 +8638,16 @@ function readSketchShapeGroupVectorMeta(
 
   const hasPathTransform = visiblePaths.some((path) => path.transform);
   const combinedPath = visiblePaths.map((path) => path.d).join(" ");
-  const hasBooleanPath = visiblePaths.some((path) => path.booleanOperation === 1 || path.booleanOperation === 3);
+  const hasEvenOddPath = visiblePaths.some((path) => (
+    path.fillRule === "evenodd" || path.booleanOperation === 1 || path.booleanOperation === 3
+  ));
   const windingRule = toNumber(safeObject(layer.style).windingRule, 0);
-  const fillRule = windingRule === 1 || hasBooleanPath ? "evenodd" : "nonzero";
+  const fillRule: "nonzero" | "evenodd" = windingRule === 1 || hasEvenOddPath ? "evenodd" : "nonzero";
+  const fill = visiblePaths.find((path) => path.fill)?.fill ?? readSketchFill(layer, "container");
   const svgPaths = [{
     d: combinedPath,
-    // fillRule
+    fill,
+    fillRule
   }]
   return {
     svgPath: combinedPath,
@@ -8712,6 +8735,13 @@ function isLikelySketchCompoundCutout(layer: Record<string, unknown>, children: 
     return true;
   }
   if (children.some((child) => child.type === "path" && child.fillRule === "evenodd")) {
+    return true;
+  }
+  if (
+    getStringProp(layer, "_class") === "shapeGroup"
+    && children.length > 1
+    && children.every((child) => child.type === "path" && child.stroke === undefined && child.transform === undefined)
+  ) {
     return true;
   }
   const layerName = getStringProp(layer, "name").toLowerCase();
@@ -9755,6 +9785,38 @@ function readSketchText(layer: Record<string, unknown>, nodeType: WorkspaceDesig
 
 function normalizeSketchText(value: string) {
   return value.replace(/\u2028/g, "\n").replace(/\u2029/g, "\n");
+}
+
+function estimateSketchTextWidth(layer: Record<string, unknown>) {
+  const text = readSketchText(layer, "text");
+  if (!text) {
+    return 1;
+  }
+  const runs = readSketchTextRuns(layer);
+  if (runs?.length) {
+    return Math.ceil(runs.reduce((width, run) => (
+      width + estimateTextRunWidth(run.text, run.fontSize ?? readSketchFontSize(layer, "text"))
+    ), 0) + 2);
+  }
+  return Math.ceil(estimateTextRunWidth(text, readSketchFontSize(layer, "text")) + 2);
+}
+
+function estimateTextRunWidth(text: string, fontSize: number) {
+  return Array.from(text).reduce((width, char) => {
+    if (char === "\n") {
+      return width;
+    }
+    if (/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(char)) {
+      return width + fontSize;
+    }
+    if (/\s/.test(char)) {
+      return width + fontSize * 0.32;
+    }
+    if (/[A-Z0-9]/.test(char)) {
+      return width + fontSize * 0.62;
+    }
+    return width + fontSize * 0.54;
+  }, 0);
 }
 
 function readSketchTextRuns(layer: Record<string, unknown>): WorkspaceDesignNode["textRuns"] {
