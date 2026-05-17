@@ -4632,7 +4632,9 @@ function convertSketchLayer(
   const effectiveRotation = normalizeSketchRotation(inheritedRotation + layerRotation);
   const hasChildClippingMask = isSketchVectorContainerLayer(layerObject) && hasSketchClippingMaskDescendant(layerObject);
   const shouldRenderLayerAsPaintedBox = shouldRenderSketchLayerAsPaintedBox(layerObject);
+  const shouldReturnLayerNodeCandidate = !isSketchFillRequiredShapeLayer(layerObject) || hasRenderableSketchFill(layerObject);
   const nodeId = createDesignId("import-node");
+  const childParentNodeId = shouldReturnLayerNodeCandidate ? nodeId : context.parentNodeId;
   const node = createDesignNode(nodeType, {
     id: nodeId,
     parentId: context.parentNodeId,
@@ -4698,6 +4700,7 @@ function convertSketchLayer(
   node.zIndex = nextSketchRenderZIndex(context);
   const renderNode = suppressSketchContainerPaint(layerObject, node);
   const shouldRenderShapeGroupAsVector = isSketchVectorContainerLayer(layerObject) && !hasChildClippingMask && Boolean(renderNode.svgPath);
+  const shouldCollapseChildrenIntoCurrentNode = shouldReturnLayerNodeCandidate && (shouldRenderShapeGroupAsVector || shouldRenderLayerAsPaintedBox);
 
   const symbolChildren = layerClass === "symbolInstance"
     ? convertSketchSymbolInstance(layerObject, {
@@ -4706,24 +4709,24 @@ function convertSketchLayer(
         nodeY: localNodeY,
         nodeWidth,
         nodeHeight,
-        parentNodeId: nodeId,
+        parentNodeId: childParentNodeId,
         inheritedOpacity: effectiveOpacity,
         inheritedRotation: effectiveRotation,
         transform: multiplySketchTransforms(parentTransform, sketchRotationTransform(localNodeX + nodeWidth / 2, localNodeY + nodeHeight / 2, layerRotation))
       })
     : [];
-  const children = shouldRenderShapeGroupAsVector || shouldRenderLayerAsPaintedBox ? [] : convertSketchChildLayers(layerObject, {
+  const children = shouldCollapseChildrenIntoCurrentNode ? [] : convertSketchChildLayers(layerObject, {
     ...context,
     parentX: localNodeX,
     parentY: localNodeY,
     depth: context.depth + 1,
-    parentNodeId: nodeId,
+    parentNodeId: childParentNodeId,
     inheritedOpacity: effectiveOpacity,
     inheritedRotation: effectiveRotation,
     transform: multiplySketchTransforms(parentTransform, sketchRotationTransform(localNodeX + nodeWidth / 2, localNodeY + nodeHeight / 2, layerRotation)),
     inheritedShapeStyle: getSketchChildInheritedShapeStyle(layerObject, context.inheritedShapeStyle)
   });
-  return [renderNode, ...symbolChildren, ...children];
+  return [...(shouldReturnLayerNodeCandidate ? [renderNode] : []), ...symbolChildren, ...children];
 }
 
 function nextSketchRenderZIndex(context: { depth: number; index: number; zIndexRef?: { current: number } }) {
@@ -4808,6 +4811,16 @@ function shouldSkipSketchLayer(layer: Record<string, unknown>) {
 
 function isSketchLayerIncludedForImport(layer: Record<string, unknown>) {
   return (includeAllSketchImportLayers || layer.isVisible !== false) && !shouldSkipSketchLayer(layer);
+}
+
+function hasRenderableSketchFill(layer: Record<string, unknown>) {
+  return toArray(safeObject(layer.style).fills)
+    .map(safeObject)
+    .some((fill) => fill.isEnabled !== false && Boolean(getSketchPaintKind(fill)));
+}
+
+function isSketchFillRequiredShapeLayer(layer: Record<string, unknown>) {
+  return ["shapeGroup", "rectangle", "oval", "shapePath", "polygon", "star", "triangle", "line"].includes(getStringProp(layer, "_class"));
 }
 
 function shouldRenderSketchLayerAsPaintedBox(layer: Record<string, unknown>) {
@@ -8560,6 +8573,9 @@ function readSketchVectorMeta(
   scale: { scaleX: number; scaleY: number } = { scaleX: 1, scaleY: 1 }
 ): Partial<WorkspaceDesignNode> {
   const layerClass = getStringProp(layer, "_class");
+  if (layerClass === "group") {
+    return {};
+  }
   if (isSketchVectorContainerLayer(layer)) {
     return readSketchShapeGroupVectorMeta(layer, width, height, scale);
   }
@@ -8721,6 +8737,10 @@ function convertSketchShapeChildToSvgPath(
   if (childClass !== "line" && (childFrame.width <= 0 || childFrame.height <= 0)) {
     return undefined;
   }
+  const childStyle = safeObject(child.style);
+  if (!hasRenderableSketchStyleFill(childStyle) && !hasRenderableSketchStyleBorder(childStyle)) {
+    return undefined;
+  }
 
   const scaledFrame = scaleSketchFrame(childFrame, context.scaleX, context.scaleY);
   const width = Math.max(1, scaledFrame.width);
@@ -8763,13 +8783,13 @@ function readSketchSvgStyleAttributes(
     fillRule: windingRule === 1 || booleanOperation === 1 || booleanOperation === 3 ? "evenodd" : "nonzero"
   };
 
-  if (hasEnabledSketchFills(style)) {
+  if (hasRenderableSketchStyleFill(style)) {
     attributes.fill = readSketchFill(layer, "container");
   } else if (options.defaultFill) {
     attributes.fill = options.defaultFill;
   }
 
-  if (hasEnabledSketchBorders(style)) {
+  if (hasRenderableSketchStyleBorder(style)) {
     attributes.stroke = readSketchStroke(layer);
     attributes.strokeWidth = readSketchStrokeWidth(layer);
     attributes.strokeDashPattern = readSketchStrokeDashPattern(layer);
@@ -9042,6 +9062,9 @@ function convertSketchShapeChildToPath(
     ...child,
     style: childStyle
   };
+  if (!hasRenderableSketchStyleFill(childStyle) && !hasRenderableSketchStyleBorder(childStyle)) {
+    return [];
+  }
   const pathWidth = Math.max(1, childFrame.width || context.width);
   const pathHeight = Math.max(1, childFrame.height || context.height);
   const pathOffsetX = context.offsetX + childFrame.x;
@@ -9055,7 +9078,7 @@ function convertSketchShapeChildToPath(
   const windingRule = toNumber(safeObject(childStyle).windingRule, 0);
   return [{
     d,
-    fill: hasEnabledSketchFills(childStyle) ? readSketchFill(styledChild, "container") : "transparent",
+    fill: hasRenderableSketchStyleFill(childStyle) ? readSketchFill(styledChild, "container") : "transparent",
     stroke: readSketchStroke(styledChild),
     strokeWidth: readSketchStrokeWidth(styledChild),
     strokeDashPattern: readSketchStrokeDashPattern(styledChild),
@@ -9071,8 +9094,20 @@ function hasEnabledSketchFills(style: Record<string, unknown>) {
   return toArray(style.fills).some((fill) => safeObject(fill).isEnabled !== false);
 }
 
+function hasRenderableSketchStyleFill(style: Record<string, unknown>) {
+  return toArray(style.fills)
+    .map(safeObject)
+    .some((fill) => fill.isEnabled !== false && Boolean(getSketchPaintKind(fill)));
+}
+
 function hasEnabledSketchBorders(style: Record<string, unknown>) {
   return toArray(style.borders).some((border) => safeObject(border).isEnabled !== false);
+}
+
+function hasRenderableSketchStyleBorder(style: Record<string, unknown>) {
+  return toArray(style.borders)
+    .map(safeObject)
+    .some((border) => border.isEnabled !== false && Boolean(getSketchPaintKind(border)) && toNumber(border.thickness, 1) > 0);
 }
 
 function isSketchShapeVectorChild(layer: Record<string, unknown>): boolean {
