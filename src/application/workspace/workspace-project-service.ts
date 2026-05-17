@@ -4407,23 +4407,20 @@ async function importSketchDesignFile(file: WorkspaceDesignImportFile): Promise<
       if (pageLayers.length === 0 && getSketchRenderableLayers(pageLike).length > 0) {
         return [];
       }
-      const rawNodes = pageLayers.flatMap((renderLayer, renderIndex) => (
-        convertSketchLayer(renderLayer, {
-          depth: 0,
-          index: renderIndex,
-          zIndexRef,
-          parentX: 0,
-          parentY: 0,
-          scaleX: 1,
-          scaleY: 1,
-          inheritedOpacity: 1,
-          inheritedRotation: 0,
-          transform: identitySketchTransform(),
-          assetByRef,
-          symbolById,
-          sharedStyleMaps
-        })
-      ));
+      const rawNodes = convertSketchChildLayers({ ...safeObject(pageLike), layers: pageLayers }, {
+        depth: 0,
+        zIndexRef,
+        parentX: 0,
+        parentY: 0,
+        scaleX: 1,
+        scaleY: 1,
+        inheritedOpacity: 1,
+        inheritedRotation: 0,
+        transform: identitySketchTransform(),
+        assetByRef,
+        symbolById,
+        sharedStyleMaps
+      });
       const normalizedNodes = normalizeDesignNodesToLocalCanvas([
         ...rawNodes,
         ...collectMissingSketchGradientNodes(pageLike, rawNodes, { assetByRef })
@@ -4628,8 +4625,15 @@ function convertSketchLayer(
   let nodeWidth = originalNodeWidth;
   const nodeHeight = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.height : Math.max(1, Math.round(frame.height * context.scaleY));
   if (nodeType === "text" && toNumber(layerObject.horizontalSizing, 0) === 1) {
-    nodeWidth = Math.max(nodeWidth, estimateSketchTextWidth(layerObject));
-    localNodeX -= (nodeWidth - originalNodeWidth) / 2;
+    const estimatedTextWidth = Math.max(nodeWidth, estimateSketchTextWidth(layerObject));
+    const widthDelta = estimatedTextWidth - originalNodeWidth;
+    nodeWidth = estimatedTextWidth;
+    const textAlign = readSketchTextAlign(layerObject);
+    if (textAlign === "center") {
+      localNodeX -= widthDelta / 2;
+    } else if (textAlign === "right") {
+      localNodeX -= widthDelta;
+    }
   }
   const hasInvalidClippingMask = layerObject.hasClippingMask === true && (frame.width <= 0 || frame.height <= 0);
   const parentTransform = context.transform ?? identitySketchTransform();
@@ -4816,9 +4820,8 @@ function shouldSkipSketchLayer(layer: Record<string, unknown>) {
     return false;
   }
   const layerClass = getStringProp(layer, "_class").toLowerCase();
-  const layerName = getStringProp(layer, "name").toLowerCase();
-  const ignoredTokens = ["guide", "prototype", "flow", "selection"];
-  return ignoredTokens.some((token) => layerClass.includes(token) || layerName.includes(token));
+  const ignoredClassTokens = ["guide", "prototype", "selection"];
+  return ignoredClassTokens.some((token) => layerClass.includes(token));
 }
 
 function isSketchLayerIncludedForImport(layer: Record<string, unknown>) {
@@ -4831,8 +4834,14 @@ function getSketchPageRenderableLayers(pageLike: unknown): AnyLayer[] {
 
 function shouldReturnSketchLayerNode(layer: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
   const layerClass = getStringProp(layer, "_class");
-  if (["page", "group", "symbolMaster", "symbolInstance"].includes(layerClass)) {
+  if (["page", "symbolMaster"].includes(layerClass)) {
     return false;
+  }
+  if (layer.hasClippingMask === true && isPaintedSketchClippingMaskLayer(layer)) {
+    return true;
+  }
+  if (["group", "symbolInstance"].includes(layerClass)) {
+    return true;
   }
   if (layer.hasClippingMask === true && !hasRenderableSketchStyleFill(safeObject(layer.style))) {
     return false;
@@ -4919,7 +4928,7 @@ function convertSketchChildLayers(
 
     if (childObject.hasClippingMask === true) {
       const clip = readSketchLayerClip(childObject, context);
-      const maskNodes = shouldRenderSketchClippingMaskLayer(childObject)
+      const maskNodes = shouldPaintSketchClippingMaskLayer(childObject)
         ? convertSketchLayer(child, {
             depth: context.depth,
             index,
@@ -4995,18 +5004,14 @@ function readSketchLayerClip(
   if (rawWidth <= 0 || rawHeight <= 0) {
     return undefined;
   }
-  const isEmptyMask = isEmptySketchClippingMaskLayer(layer);
-  const width = isEmptyMask ? 0 : Math.max(1, rawWidth);
-  const height = isEmptyMask ? 0 : Math.max(1, rawHeight);
+  const width = Math.max(1, rawWidth);
+  const height = Math.max(1, rawHeight);
   const bounds = {
     x: Math.round(context.parentX + frame.x * context.scaleX),
     y: Math.round(context.parentY + frame.y * context.scaleY),
     width,
     height
   };
-  if (isEmptyMask) {
-    return { bounds };
-  }
   const vector = readSketchVectorMeta(layer, width, height, {
     scaleX: context.scaleX,
     scaleY: context.scaleY
@@ -5023,17 +5028,6 @@ function readSketchLayerClip(
       fillRule: vector.svgFillRule
     } : undefined
   };
-}
-
-function isEmptySketchClippingMaskLayer(layer: Record<string, unknown>) {
-  if (layer.hasClippingMask !== true) {
-    return false;
-  }
-  if (normalizeSketchImageRef(layer.image)) {
-    return false;
-  }
-  const style = safeObject(layer.style);
-  return !hasRenderableSketchStyleFill(style);
 }
 
 function intersectDesignRects(
@@ -9228,6 +9222,27 @@ function shouldRenderSketchClippingMaskLayer(layer: Record<string, unknown>): bo
         || hasRenderableSketchStyle(safeObject(child.style))
         || shouldRenderSketchClippingMaskLayer(child)
       ));
+}
+
+function shouldPaintSketchClippingMaskLayer(layer: Record<string, unknown>): boolean {
+  if (!includeAllSketchImportLayers && layer.isVisible === false) {
+    return false;
+  }
+  if (isPaintedSketchClippingMaskLayer(layer)) {
+    return true;
+  }
+  const nodeType = mapSketchLayerType(getStringProp(layer, "_class"), getStringProp(layer, "name"));
+  return shouldReturnSketchLayerNode(layer, nodeType);
+}
+
+function isPaintedSketchClippingMaskLayer(layer: Record<string, unknown>) {
+  if (layer.hasClippingMask !== true) {
+    return false;
+  }
+  if (normalizeSketchImageRef(layer.image)) {
+    return true;
+  }
+  return hasRenderableSketchStyle(safeObject(layer.style));
 }
 
 function readSketchSvgPath(layer: Record<string, unknown>, width: number, height: number, offsetX = 0, offsetY = 0) {

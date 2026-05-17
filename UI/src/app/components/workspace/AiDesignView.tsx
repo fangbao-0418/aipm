@@ -591,7 +591,8 @@ export function AiDesignView() {
   const selectionBounds = getNodesBoundsForSelection(selectedNodes);
   const hoveredNode = hoveredNodeId ? resolvedSelectedPageNodes.find((node) => node.id === hoveredNodeId) ?? null : null;
   const hoverBounds = hoveredNode && !selectedNodeIds.includes(hoveredNode.id) ? nodeToBounds(hoveredNode) : null;
-  const visibleNodes = resolvedSelectedPageNodes.filter((node) => node.visible !== false);
+  const clippedSelectedPageNodes = useMemo(() => applySketchSiblingClipMasks(resolvedSelectedPageNodes), [resolvedSelectedPageNodes]);
+  const visibleNodes = clippedSelectedPageNodes.filter((node) => node.visible !== false);
   const sceneContentBounds = useMemo(() => expandBounds(getNodesBounds(visibleNodes), 360), [visibleNodes]);
   const visibleSceneBounds = useMemo(() => ({
     x: -pan.x / zoom,
@@ -612,7 +613,7 @@ export function AiDesignView() {
     const movingIds = new Set(dragPreviewNodeIds);
     return visibleNodes.filter((node) => !movingIds.has(node.id) && (selectedNodeIds.includes(node.id) || rectsIntersect(sceneViewport, nodeToBounds(node))));
   }, [dragPreviewNodeIds, selectedNodeIds, visibleNodes, visibleSceneBounds, zoom]);
-  const effectiveRenderedNodes = useMemo(() => applyEffectiveCanvasOpacity(renderedNodes, resolvedSelectedPageNodes), [renderedNodes, resolvedSelectedPageNodes]);
+  const effectiveRenderedNodes = useMemo(() => applyEffectiveCanvasOpacity(renderedNodes, clippedSelectedPageNodes), [renderedNodes, clippedSelectedPageNodes]);
   const hitTestNodes = useMemo(() => effectiveRenderedNodes.filter((node) => isDesignNodeHitTestable(node)), [effectiveRenderedNodes]);
   const canvasRenderedNodes = effectiveRenderedNodes;
   const dragPreviewNodes = useMemo(() => {
@@ -3311,6 +3312,116 @@ function CanvasOutlineBoundsView({ bounds, tone }: { bounds: RectBounds; tone: "
 }
 
 const canvasImageCache = new Map<string, { image: HTMLImageElement; loaded: boolean; failed: boolean }>();
+
+type SketchActiveClip = {
+  bounds?: NonNullable<DesignNode["clipBounds"]>;
+  path?: DesignNode["clipPath"];
+};
+
+function applySketchSiblingClipMasks(nodes: DesignNode[]) {
+  if (nodes.length === 0) {
+    return nodes;
+  }
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const childrenByParentId = new Map<string, DesignNode[]>();
+  const roots: DesignNode[] = [];
+  nodes.forEach((node) => {
+    const parentId = node.parentId && nodeById.has(node.parentId) ? node.parentId : "";
+    if (!parentId) {
+      roots.push(node);
+      return;
+    }
+    const siblings = childrenByParentId.get(parentId) ?? [];
+    siblings.push(node);
+    childrenByParentId.set(parentId, siblings);
+  });
+
+  const clippedById = new Map<string, DesignNode>();
+  const sortByPaintOrder = (items: DesignNode[]) => [...items].sort((first, second) => (first.zIndex ?? 0) - (second.zIndex ?? 0));
+  const visitSiblings = (siblings: DesignNode[], inheritedClip?: SketchActiveClip) => {
+    let activeClip = inheritedClip;
+    sortByPaintOrder(siblings).forEach((node) => {
+      if (node.sourceMeta?.shouldBreakMaskChain === true) {
+        activeClip = inheritedClip;
+      }
+      const clippedNode = applySketchActiveClipToNode(node, activeClip);
+      clippedById.set(node.id, clippedNode);
+      visitSiblings(childrenByParentId.get(node.id) ?? [], getNodeInheritedClip(clippedNode, activeClip));
+      if (node.sourceMeta?.hasClippingMask === true) {
+        activeClip = getSketchMaskClip(node, inheritedClip);
+      }
+    });
+  };
+
+  visitSiblings(roots);
+  return nodes.map((node) => clippedById.get(node.id) ?? node);
+}
+
+function applySketchActiveClipToNode(node: DesignNode, activeClip?: SketchActiveClip) {
+  if (!activeClip?.bounds && !activeClip?.path) {
+    return node;
+  }
+  const clipBounds = activeClip.bounds
+    ? intersectNodeClipBounds(node.clipBounds, activeClip.bounds)
+    : node.clipBounds;
+  const clipPath = activeClip.path ?? node.clipPath;
+  if (clipBounds === node.clipBounds && clipPath === node.clipPath) {
+    return node;
+  }
+  return {
+    ...node,
+    clipBounds,
+    clipPath,
+    sourceMeta: activeClip.path || activeClip.bounds ? {
+      ...node.sourceMeta,
+      activeClippingMask: node.sourceMeta?.activeClippingMask ?? { hasClippingMask: true }
+    } : node.sourceMeta
+  };
+}
+
+function getNodeInheritedClip(node: DesignNode, inheritedClip?: SketchActiveClip): SketchActiveClip | undefined {
+  const bounds = node.clipBounds
+    ? intersectNodeClipBounds(inheritedClip?.bounds, node.clipBounds)
+    : inheritedClip?.bounds;
+  return {
+    bounds,
+    path: node.clipPath ?? inheritedClip?.path
+  };
+}
+
+function getSketchMaskClip(node: DesignNode, inheritedClip?: SketchActiveClip): SketchActiveClip {
+  const maskBounds = { x: node.x, y: node.y, width: node.width, height: node.height };
+  return {
+    bounds: intersectNodeClipBounds(inheritedClip?.bounds, maskBounds) ?? maskBounds,
+    path: node.svgPath ? {
+      x: node.x,
+      y: node.y,
+      width: node.width,
+      height: node.height,
+      svgPath: node.svgPath,
+      fillRule: node.svgFillRule
+    } : inheritedClip?.path
+  };
+}
+
+function intersectNodeClipBounds(
+  first: DesignNode["clipBounds"] | undefined,
+  second: NonNullable<DesignNode["clipBounds"]>
+): DesignNode["clipBounds"] {
+  if (!first) {
+    return second;
+  }
+  const x = Math.max(first.x, second.x);
+  const y = Math.max(first.y, second.y);
+  const right = Math.min(first.x + first.width, second.x + second.width);
+  const bottom = Math.min(first.y + first.height, second.y + second.height);
+  return {
+    x,
+    y,
+    width: Math.max(0, right - x),
+    height: Math.max(0, bottom - y)
+  };
+}
 
 function applyEffectiveCanvasOpacity(nodes: DesignNode[], allNodes: DesignNode[]) {
   if (nodes.length === 0) {
