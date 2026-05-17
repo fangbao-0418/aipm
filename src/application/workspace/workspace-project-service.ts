@@ -4601,6 +4601,7 @@ function convertSketchLayer(
     parentNodeId?: string;
     inheritedShapeStyle?: Record<string, unknown>;
     parentShapeGroupBounds?: { x: number; y: number; width: number; height: number };
+    isSymbolInstanceLayout?: boolean;
   }
 ): WorkspaceDesignNode[] {
   if (!layer || typeof layer !== "object" || context.depth > 30) {
@@ -4619,11 +4620,13 @@ function convertSketchLayer(
   }
   const nodeType = mapSketchLayerType(layerClass, getStringProp(layerObject, "name"));
   const shouldUseParentShapeBounds = context.parentShapeGroupBounds && isSketchPathLayer(layerObject);
-  let localNodeX = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.x : context.parentX + frame.x * context.scaleX;
-  const localNodeY = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.y : context.parentY + frame.y * context.scaleY;
-  const originalNodeWidth = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.width : Math.max(1, Math.round(frame.width * context.scaleX));
+  const layoutScaleX = shouldPreserveSketchSymbolChildAxis(layerObject, context.isSymbolInstanceLayout, "x") ? 1 : context.scaleX;
+  const layoutScaleY = shouldPreserveSketchSymbolChildAxis(layerObject, context.isSymbolInstanceLayout, "y") ? 1 : context.scaleY;
+  let localNodeX = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.x : context.parentX + frame.x * layoutScaleX;
+  const localNodeY = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.y : context.parentY + frame.y * layoutScaleY;
+  const originalNodeWidth = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.width : Math.max(1, Math.round(frame.width * layoutScaleX));
   let nodeWidth = originalNodeWidth;
-  const nodeHeight = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.height : Math.max(1, Math.round(frame.height * context.scaleY));
+  const nodeHeight = shouldUseParentShapeBounds ? context.parentShapeGroupBounds!.height : Math.max(1, Math.round(frame.height * layoutScaleY));
   if (nodeType === "text" && toNumber(layerObject.horizontalSizing, 0) === 1) {
     const estimatedTextWidth = Math.max(nodeWidth, estimateSketchTextWidth(layerObject));
     const widthDelta = estimatedTextWidth - originalNodeWidth;
@@ -4707,8 +4710,8 @@ function convertSketchLayer(
     clipBounds: context.clipBounds,
     clipPath: context.clipPath,
     ...(hasChildClippingMask || shouldRenderLayerAsPaintedBox ? {} : readSketchVectorMeta(layerObject, nodeWidth, nodeHeight, {
-      scaleX: context.scaleX,
-      scaleY: context.scaleY
+      scaleX: layoutScaleX,
+      scaleY: layoutScaleY
     })),
     ...readSketchFillImageMeta(layerObject, context.assetByRef),
     ...readSketchImageMeta(layerObject, context.assetByRef)
@@ -4740,7 +4743,9 @@ function convertSketchLayer(
     inheritedOpacity: effectiveOpacity,
     inheritedRotation: effectiveRotation,
     transform: multiplySketchTransforms(parentTransform, sketchRotationTransform(localNodeX + nodeWidth / 2, localNodeY + nodeHeight / 2, layerRotation)),
-    inheritedShapeStyle: getSketchChildInheritedShapeStyle(layerObject, context.inheritedShapeStyle)
+    inheritedShapeStyle: getSketchChildInheritedShapeStyle(layerObject, context.inheritedShapeStyle),
+    scaleX: layoutScaleX,
+    scaleY: layoutScaleY
   });
   return [...(shouldReturnLayerNodeCandidate ? [renderNode] : []), ...symbolChildren, ...children];
 }
@@ -4877,6 +4882,18 @@ function shouldRenderSketchLayerAsPaintedBox(layer: Record<string, unknown>) {
   return children.length === 1 && getStringProp(children[0], "_class") === "rectangle";
 }
 
+function shouldPreserveSketchSymbolChildAxis(
+  layer: Record<string, unknown>,
+  isSymbolInstanceLayout: boolean | undefined,
+  axis: "x" | "y"
+) {
+  if (!isSymbolInstanceLayout) {
+    return false;
+  }
+  const sizingKey = axis === "x" ? "horizontalSizing" : "verticalSizing";
+  return toNumber(layer[sizingKey], 0) === 1;
+}
+
 function convertSketchChildLayers(
   parentLayer: Record<string, unknown>,
   context: {
@@ -4898,6 +4915,7 @@ function convertSketchChildLayers(
     parentNodeId?: string;
     inheritedShapeStyle?: Record<string, unknown>;
     parentShapeGroupBounds?: { x: number; y: number; width: number; height: number };
+    isSymbolInstanceLayout?: boolean;
   }
 ) {
   let activeClipBounds = context.clipBounds;
@@ -4948,7 +4966,8 @@ function convertSketchChildLayers(
             activeClippingMask: context.activeClippingMask,
             parentNodeId: context.parentNodeId,
             inheritedShapeStyle: context.inheritedShapeStyle,
-            parentShapeGroupBounds
+            parentShapeGroupBounds,
+            isSymbolInstanceLayout: context.isSymbolInstanceLayout
           })
         : [];
       if (!clip) {
@@ -4981,7 +5000,8 @@ function convertSketchChildLayers(
       activeClippingMask,
       parentNodeId: context.parentNodeId,
       inheritedShapeStyle: context.inheritedShapeStyle,
-      parentShapeGroupBounds
+      parentShapeGroupBounds,
+      isSymbolInstanceLayout: context.isSymbolInstanceLayout
     });
   });
 }
@@ -8032,7 +8052,8 @@ function convertSketchSymbolInstance(
       clipBounds: context.clipBounds,
       clipPath: context.clipPath,
       activeClippingMask: context.activeClippingMask,
-      parentNodeId: context.parentNodeId
+      parentNodeId: context.parentNodeId,
+      isSymbolInstanceLayout: true
     })
   ));
 }
