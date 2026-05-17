@@ -84,6 +84,7 @@ interface DesignNode {
   depth?: number;
   type: DesignNodeType;
   name: string;
+  sourceLayerId?: string;
   x: number;
   y: number;
   width: number;
@@ -2957,6 +2958,7 @@ export function AiDesignView() {
               {selectedNode ? (
                 <div className="divide-y divide-[#eeeeef] text-xs">
                   <InspectorSection title="图层">
+                    <div className="mb-1 block text-xs font-medium text-[#777]">{selectedNode.sourceLayerId}</div>
                     <Input value={selectedNode.name} onChange={(event) => updateNode(selectedNode.id, { name: event.target.value })} />
                     <div className="mt-3 flex gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => updateNode(selectedNode.id, { visible: !selectedNode.visible })}>

@@ -4644,7 +4644,7 @@ function convertSketchLayer(
   const effectiveRotation = normalizeSketchRotation(inheritedRotation + layerRotation);
   const hasChildClippingMask = isSketchVectorContainerLayer(layerObject) && hasSketchClippingMaskDescendant(layerObject);
   const shouldRenderLayerAsPaintedBox = shouldRenderSketchLayerAsPaintedBox(layerObject);
-  const shouldReturnLayerNodeCandidate = !isSketchFillRequiredShapeLayer(layerObject) || hasRenderableSketchFill(layerObject);
+  const shouldReturnLayerNodeCandidate = shouldReturnSketchLayerNode(layerObject, nodeType);
   const nodeId = createDesignId("import-node");
   const childParentNodeId = shouldReturnLayerNodeCandidate ? nodeId : context.parentNodeId;
   const node = createDesignNode(nodeType, {
@@ -4731,7 +4731,7 @@ function convertSketchLayer(
     ...context,
     parentX: localNodeX,
     parentY: localNodeY,
-    depth: context.depth + 1,
+    depth: context.depth + (shouldReturnLayerNodeCandidate ? 1 : 0),
     parentNodeId: childParentNodeId,
     inheritedOpacity: effectiveOpacity,
     inheritedRotation: effectiveRotation,
@@ -4829,10 +4829,24 @@ function getSketchPageRenderableLayers(pageLike: unknown): AnyLayer[] {
   return getSketchRenderableLayers(pageLike).filter((layer) => getStringProp(safeObject(layer), "_class") !== "symbolMaster");
 }
 
-function hasRenderableSketchFill(layer: Record<string, unknown>) {
-  return toArray(safeObject(layer.style).fills)
-    .map(safeObject)
-    .some((fill) => fill.isEnabled !== false && Boolean(getSketchPaintKind(fill)));
+function shouldReturnSketchLayerNode(layer: Record<string, unknown>, nodeType: WorkspaceDesignNodeType) {
+  const layerClass = getStringProp(layer, "_class");
+  if (["page", "group", "symbolMaster", "symbolInstance"].includes(layerClass)) {
+    return false;
+  }
+  if (layer.hasClippingMask === true && !hasRenderableSketchStyleFill(safeObject(layer.style))) {
+    return false;
+  }
+  if (nodeType === "text") {
+    return Boolean(readSketchText(layer, nodeType));
+  }
+  if (nodeType === "image" || normalizeSketchImageRef(layer.image)) {
+    return true;
+  }
+  if (isSketchFillRequiredShapeLayer(layer)) {
+    return hasRenderableSketchStyle(safeObject(layer.style));
+  }
+  return hasRenderableSketchStyle(safeObject(layer.style));
 }
 
 function isSketchFillRequiredShapeLayer(layer: Record<string, unknown>) {
@@ -4981,14 +4995,18 @@ function readSketchLayerClip(
   if (rawWidth <= 0 || rawHeight <= 0) {
     return undefined;
   }
-  const width = Math.max(1, rawWidth);
-  const height = Math.max(1, rawHeight);
+  const isEmptyMask = isEmptySketchClippingMaskLayer(layer);
+  const width = isEmptyMask ? 0 : Math.max(1, rawWidth);
+  const height = isEmptyMask ? 0 : Math.max(1, rawHeight);
   const bounds = {
     x: Math.round(context.parentX + frame.x * context.scaleX),
     y: Math.round(context.parentY + frame.y * context.scaleY),
     width,
     height
   };
+  if (isEmptyMask) {
+    return { bounds };
+  }
   const vector = readSketchVectorMeta(layer, width, height, {
     scaleX: context.scaleX,
     scaleY: context.scaleY
@@ -5005,6 +5023,17 @@ function readSketchLayerClip(
       fillRule: vector.svgFillRule
     } : undefined
   };
+}
+
+function isEmptySketchClippingMaskLayer(layer: Record<string, unknown>) {
+  if (layer.hasClippingMask !== true) {
+    return false;
+  }
+  if (normalizeSketchImageRef(layer.image)) {
+    return false;
+  }
+  const style = safeObject(layer.style);
+  return !hasRenderableSketchStyleFill(style);
 }
 
 function intersectDesignRects(
@@ -9172,7 +9201,7 @@ function hasRenderableSketchStyle(style: Record<string, unknown>) {
     .some((fill) => fill.isEnabled !== false && Boolean(getSketchPaintKind(fill)));
   const hasBorder = toArray(style.borders)
     .map(safeObject)
-    .some((border) => border.isEnabled !== false && Boolean(getSketchPaintKind(border)));
+    .some((border) => border.isEnabled !== false && Boolean(getSketchPaintKind(border)) && toNumber(border.thickness, 1) > 0);
   const hasShadow = toArray(style.shadows).some((shadow) => safeObject(shadow).isEnabled !== false);
   const hasInnerShadow = toArray(style.innerShadows).some((shadow) => safeObject(shadow).isEnabled !== false);
   return hasFill || hasBorder || hasShadow || hasInnerShadow;
